@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}{{ template.name }} — {{ rag.process.number }}{% endblock %}
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+  <h2 class="section-title">{{ template.name }}</h2>
+  <div style="display:flex; gap:8px; align-items:center;">
+    {% if template.template_type == 'oficio' %}
+    <a href="#" onclick="navigator.clipboard.writeText('python manage.py expedir_oficio_projudi --processo {{ rag.process.number }}');alert('Comando copiado! Execute no terminal.');return false;" class="btn btn-sm" style="background:#d97706; color:#fff;">📤 Expedir no Projudi</a>
+    {% endif %}
+    <button onclick="window.print()" class="btn btn-sm">🖨 Imprimir</button>
+    <a href="{% url 'processes:compliance_list' %}" class="btn btn-outline btn-sm">← Voltar</a>
+  </div>
+</div>
+
+{% if documents %}
+  {# Multiplos documentos - 1 por parte #}
+  <ul style="margin-bottom:16px; display:flex; gap:8px; flex-wrap:wrap; list-style:none; padding:0;">
+    {% for doc in documents %}
+      <li>
+        <a href="#doc-{{ forloop.counter }}" class="btn btn-sm">{{ doc.parte.name }}</a>
+      </li>
+    {% endfor %}
+  </ul>
+  {% for doc in documents %}
+  <div id="doc-{{ forloop.counter }}" style="background:#fff; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,0.08); padding:24px; margin-bottom:16px; page-break-after:always;">
+    <div style="max-width:800px; margin:0 auto; font-size:12px; line-height:1.6;">
+      {{ doc.html|safe }}
+    </div>
+  </div>
+  {% endfor %}
+{% else %}
+  {# Documento unico #}
+  <div style="background:#fff; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,0.08); padding:24px;">
+    <div style="max-width:800px; margin:0 auto; font-size:12px; line-height:1.6;">
+      {{ html_content|safe }}
+    </div>
+  </div>
+{% endif %}
+{% endblock %}

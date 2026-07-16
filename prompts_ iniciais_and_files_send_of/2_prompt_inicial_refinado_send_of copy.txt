@@ -1,0 +1,335 @@
+Vou desenvolver um Sistema Cartorário de Cumprimentos Judiciais, Análise de Petições
+e Expedição de Documentos para o Sistema Projudi (SCCJ), desenvolvido com
+Python >3.13 e o Framework Django >6.0, Langchain >1.0 e Langgraph,
+BeautifulSoup, Pandas, Spacy, Regex, JSON, Selenium ou Playwright.
+
+
+
+# TECH SPECS DO SISTEMA
+- Use Python >3.13.
+
+- Ambiente virtual em .venv na raiz do projeto.
+
+ - O sistema deve ser capaz de rodar integralmente em ambiente local 
+utilizando Docker Compose, sem depender de serviços externos
+obrigatórios além das APIs de IA configuradas.
+
+- requirements.txt sempre atualizado na raiz do projeto.
+- O sistema só passará a funcionar depois do login no sistema Projudi feito pelo
+usuário. Esse login no Projudi não tem relação com o Django.
+- O sistema deve ser capaz de verificar se o usuário está logado no Projudi,
+e a partir daí perguntar ao usuário se deve começar a executar os cumprimentos
+judiciais, análises de petições e expedição de documentos.
+
+- Deve ser capaz de salvar, manter e reutilizar os cookies de sessão enquanto
+a sessão estiver ativa, bem como evitar que a sessão caia. Melhorias devem ser
+realizadas para obter o real estado do usuário (logado ou não no Projudi).
+
+- O sistema deve evitar colocar dados como CPF, telefone e dados sensíveis
+disponíveis na internet e procurar cumprir todos os requisitos da Lei Geral de
+Proteção de Dados (LGPD).
+
+- O sistema no geral será utilizado inicialmente por um único usuário, mas pode
+eventualmente ser estendido para vários usuários. Neste caso, utilizará o sistema
+nativo de usuários e autenticação do Django.
+
+- Middlewares de proteção a arquivos/media do sistema, com permissão de acesso
+somente por usuários com acesso ao arquivo.
+- O sistema deve ter a arquitetura Multi Tenant, usando o modelo de multi tenant
+compartilhado, ou seja, mais simplificado com campos chaves nos models, filtros,
+permissões e middlewares para separação.
+
+
+- O login de usuários (em caso de sistema multiusuário) deve ser feito através
+do email ao invés do username.
+
+- As entidades/domains do sistema devem ser separadas em apps do Django,
+para isolar as responsabilidades.
+- O código deve ser simples, sempre usar aspas simples e seguir os padrões da
+PEP08.
+- O código do projeto deve ser em inglês.
+- Apps do Django devem ficar na raiz do projeto.
+- O app Django principal deve se chamar "core".
+- O app com recursos base e compartilhados do projeto deve se chamar "base".
+- Toda a informação mostrada na interface do usuário deve ser em português
+brasileiro. Timezone America/Sao_Paulo.
+- Toda tabela/model deve ter os campos created_at e updated_at.
+- Não implementar testes.
+- Credenciais do sistema devem ficar em um arquivo .env na raiz do projeto, e os
+valores importados no settings.py do Django.
+- Mantenha apenas 1 arquivo settings.py do Django.
+- Use banco de dados PostgreSQL no sistema.
+- Implemente o sistema usando Docker e Docker Compose para rodar localmente, e
+Docker com Docker Swarm para o deploy em um servidor VPS (usarei um servidor
+VPS com um domínio configurado no Cloudflare (domínio: sccj.digital)).
+- Para execução de tarefas pesadas assíncronas/em segundo plano, use o Celery
+integrado ao Django (processamento do agente de IA principalmente).
+- Use RabbitMQ como sistema de mensageria do Celery.
+- Use a biblioteca dj-celery-panel para visualização das tasks do Celery no
+admin do Django.
+- Os serviços Docker devem ser: o app django, postgresql do app, celery worker,
+celery beat, rabbitmq para o celery, traefik como web server/load balancer.
+- Use um serviço Redis adicional no stack como result backend do Celery e cache
+do app, além do RabbitMQ que é o broker.
+
+*
+- A imagem da aplicação deve ser publicada em um registry de containers (GHCR,
+em ghcr.io/pycodebr/sccj_v1), e o deploy do stack no Swarm deve usar
+docker stack deploy --with-registry-auth para autenticar o pull da imagem.
+Devem existir volumes nomeados para persistência (postgresql, redis, rabbitmq,
+media, staticfiles e certificados do Let's Encrypt). As redes overlay devem ser
+três: uma pública (traefik_public, external, compartilhada com o Traefik, com
+acesso à internet e usada apenas pelos serviços que precisam receber tráfego
+HTTP externo — app e traefik), uma interna isolada (scsi_v1_internal,
+internal: true, sem acesso à internet, para comunicação entre serviços de
+backend — db, redis, rabbitmq, celery_worker, celery_beat, app) e uma de
+saída (sccj_v1_egress, overlay sem internal, com acesso à internet mas sem
+estar conectada ao Traefik, para os serviços que precisam acessar APIs externas
+como a OpenAI mas não precisam receber tráfego HTTP — celery_worker e
+celery_beat). Serviços que fazem chamadas à API externa (celery_worker,
+celery_beat) devem estar em duas redes: scsi_v1_internal (comunicação com db,
+redis, rabbitmq) e scsi_v1_egress (acesso à internet para APIs). O serviço app
+deve estar em traefik_public e scsi_v1_internal. Serviços puramente internos
+(db, redis, rabbitmq) ficam apenas em sccj_v1_internal. Nunca colocar o
+celery_worker ou celery_beat na rede traefik_public, pois isso expõe
+desnecessariamente serviços que não recebem tráfego HTTP.
+- O Traefik deve emitir certificado TLS wildcard (cobrindo sccj.digital e
+*.sccj.digital) via Let's Encrypt usando o challenge DNS-01 com o provider
+Cloudflare. Para isso é necessário criar um token de API do Cloudflare com
+escopo de DNS (Zone > DNS > Edit) na zona scsi.digital. O challenge DNS-01 é
+obrigatório para certificado wildcard (TLS-01/HTTP-01 não cobrem wildcard);
+não usar tlschallenge e dnschallenge ao mesmo tempo no resolver.
+- O token da API do Cloudflare nunca deve ficar em texto puro no compose/stack
+nem no .env versionado. Ele deve ser armazenado como um Docker Secret do Swarm
+(nome do secret: CLOUDFLARE_DNS_API_TOKEN) e lido pelo Traefik via convenção de
+arquivo CF_DNS_API_TOKEN_FILE=/run/secrets/CLOUDFLARE_DNS_API_TOKEN. As demais
+credenciais sensíveis de produção também devem preferir Docker Secrets.
+- Credenciais e variáveis ficam em um arquivo .env na raiz (gitignored). O .env
+de produção da VPS é separado do .env de desenvolvimento. Os serviços recebem as
+variáveis via env_file no compose/stack (lido diretamente pelo Docker, sem
+shell). Qualquer script que precise ler o .env deve usar um parser seguro de
+KEY=VALUE (nunca usar "source"/"."), pois valores com caracteres especiais
+(& $ * @) quebram o shell.
+- ALLOWED_HOSTS e CSRF_TRUSTED_ORIGINS devem ser lidos do .env como listas
+separadas por vírgula (via django-environ). Padrão de produção:
+ALLOWED_HOSTS=sccj.digital,.scsi.digital,localhost,127.0.0.1 (o ponto inicial
+".sccj.digital" cobre qualquer subdomínio; localhost e 127.0.0.1 são
+obrigatórios para o healthcheck interno do container passar) e
+CSRF_TRUSTED_ORIGINS=https://scsi.digital,https://*.scsi.digital (sempre com o
+esquema https e com suporte a wildcard de subdomínio). Em ALLOWED_HOSTS vai
+apenas o hostname, nunca a URL com esquema.
+- Em produção (DEBUG=False), como o TLS é terminado no Traefik e o app recebe
+HTTP interno com o header X-Forwarded-Proto, o settings.py deve configurar
+SECURE_PROXY_SSL_HEADER=('HTTP_X_FORWARDED_PROTO','https') para evitar loop de
+redirect atrás do proxy, e isentar a rota de healthcheck do redirect HTTPS via
+SECURE_REDIRECT_EXEMPT. O Traefik deve confiar nas faixas de IP do Cloudflare
+(forwardedHeaders trustedIPs) e redirecionar http→https.
+- O app Django deve expor um endpoint leve de healthcheck em /health/ que
+retorna 200 sem acessar o banco e sem exigir autenticação, usado tanto pelo
+HEALTHCHECK do container quanto pelo healthcheck do load balancer do Traefik.
+- Todos os serviços do Swarm devem ter healthcheck: app (HTTP em /health/),
+postgresql (pg_isready), redis (redis-cli ping) e rabbitmq
+(rabbitmq-diagnostics check_port_connectivity), com start_period adequado. Como
+o Swarm ignora depends_on em runtime, a ordem de subida é garantida por
+healthchecks somados a um django command wait_for_db usado nos entrypoints.
+- As migrations devem rodar com segurança mesmo com múltiplas réplicas do app:
+o entrypoint do serviço app aguarda o banco (wait_for_db), aplica as migrations
+usando um advisory lock do PostgreSQL (apenas uma réplica migra por vez) e roda
+o collectstatic com a flag --clear para limpar arquivos estáveis de coletas
+anteriores antes de recriá-los, evitando conflitos de arquivos hash do
+WhiteNoise CompressedStaticFilesStorage em redeploys. Os serviços Celery (worker
+e beat) usam um entrypoint separado que apenas aguarda o banco e NÃO rodam
+migrations nem collectstatic.
+- Deve existir um script de deploy (scripts/deploy.sh) executado na própria VPS
+que faz o ciclo completo: carrega o .env com parser seguro, valida as
+pré-condições (Swarm ativo, secret CLOUDFLARE_DNS_API_TOKEN, redes overlay
+traefik_public e scsi_v1_egress, DEBUG=False e localhost presente em
+ALLOWED_HOSTS), faz git pull, build e push da imagem para o GHCR, executa
+docker stack deploy --with-registry-auth e força o rollout de app, celery
+worker e celery beat. Um modo "--skip-build" deve permitir redeploy de
+configuração sem rebuild. Deve existir também um script de backup
+(scripts/backup.sh) do PostgreSQL e da media, com rotação por tempo.
+- Sempre que possível, o projeto deve usar Class Based Views, classes,
+funções e recursos nativos do Django.
+- Caso use signals no projeto, eles devem ficar em um arquivo signals.py
+dentro da app correspondente do signal.
+- Use Reportlab e PyPDF para relatórios.
+- Pasta docs/ no sistema com toda a documentação sempre atualizada do sistema,
+com MKDocs para servir a documentação online, incluindo suporte a renderizar
+mermaid das documentações.
+- Um django command que faz uma carga inicial de dados fakes no sistema,
+cobrindo múltiplos cenários e use cases, com diversas datas diferentes,
+visando fazer demonstrações do sistema.
+- O design system estará referenciado no arquivo
+@design_system/design-system.html do projeto. Todo design do sistema, cores,
+componentes e tipografias devem sempre respeitar rigorosamente o design system
+definido.
+- Os agentes de IA do sistema devem ser construídos com Langchain >1.0 e
+Langgraph. O sistema deve suportar dois provedores de IA: (1) OpenAI
+(GPT-5.5-mini) para resumos e chat contextual, e (2) modelo local Qwen 2.5 3Q
+quantizado para análise de coerência e comparação vetorial de textos jurídicos.
+
+
+
+# REQUISITOS FUNCIONAIS DO SISTEMA
+- Gestão e cadastro de usuários (servidor, administrador) com autenticação e
+permissões.
+- Cadastro de partes processuais (autor, réu, exequente, executado, terceiro
+interessado), respeitando a LGPD (CPF e dados sensíveis mascarados/ofuscados).
+- Cadastro de tribunais, varas, comarcas e juízes do sistema Projudi.
+- Integração com o sistema Projudi via Selenium/Playwright: login, verificação
+de sessão ativa, cookies de sessão persistentes, detecção de estado logado.
+- Análise de Cumprimentos Judiciais: leitura e interpretação automatizada de
+cumprimentos de sentença, mandados, execuções fiscais, trabalhista, cível.
+- Análise de Petições Judiciais: extração de dados de petições via BeautifulSoup,
+Pandas, Regex e JSON para identificação de tipo, partes, pedidos e prazos.
+- Consulta Processual: busca automatizada de processos no Projudi com extração
+de dados estruturados.
+- Leitura de Emails: integração para leitura de emails relacionados a processos
+(intimações, notificações, comunicações).
+- Envio automatizado de Ofícios por Email: confecção e envio de ofícios judiciais
+conforme realizado no arquivo @enviar.ipynb, com templates personalizáveis.
+- Análise de requisitos para cumprimento de citações e intimações eletrônicas,
+pelo sistema Projudi ou Email.
+- Confecção de Mandados e Ofícios Judiciais: geração automatizada de documentos
+judiciais com base nos dados do processo.
+- Interação com o sistema Projudi para clicar nos botões de intimação, confecção
+de mandados/ofícios e movimentações processuais.
+- Interação com o sistema Projudi para anexar os documentos gerados nas
+confecções de mandados/ofícios e movimentações processuais.
+- Envio dos dados processuais do processo em análise para uma IA local
+(Qwen 2.5 3Q quantizado) para verificar a coerência entre os dados do processo
+e o cumprimento processual que se quer realizar.
+- Banco de dados vetorial dos trechos do cumprimento judicial que se pretende
+cumprir, para fins de comparar o texto e encontrar cumprimentos mais semelhantes,
+fornecendo à IA local Qwen 2.5 3Q contexto suficiente para fácil cumprimento.
+- Gestão de movimentações processuais: petições, despachos, decisões,
+intimações, audiências — tudo vinculado ao processo.
+- Gestão de prazos processuais: prescrição, decadência, audiências, prazos
+recursais, com alertas e controle de vencimento.
+- Gestão de pedidos de levantamento/transferência: solicitar levantamento de
+valores, transferência de bens, alvarás, com status de análise e deferimento.
+- Gestão de alvarás e mandados de levantamento/transferência.
+- Anexo de documentos processuais em partes, processos, movimentações e pedidos
+de levantamento (diversos formatos de arquivos).
+- Relatórios diversos de movimentação processual cumprida, com envios,
+recebimentos, documentos e status se a tarefa foi cumprida ou ficou alguma coisa
+pendente, podendo exportar em PDF e CSV ou auditar.
+- Dashboard completo com visão geral e métricas do cartório/juizado especial:
+carteira de processos, cumprimentos pendentes, prazos críticos, andamento por
+vara/tribunal, ofícios expedidos, insights. O dashboard deve ter diversos
+gráficos, incluindo um gráfico de funil de andamento processual em forma de
+funil com níveis (distribuído → em análise → cumprido → expedido → encerrado).
+- Painel de andamento processual (grid e kanban) para servidores controlarem o
+fluxo dos cumprimentos judiciais. Kanban com pipeline personalizável de etapas,
+cores e nome. Card arrastável entre etapas. Etapas padrão: Distribuído, Em
+Análise, Aguardando Cumprimento, Cumprido, Ofício Expedido, Encerrado.
+- Painel de admin do Django com gestão de todas as entidades do sistema e
+filtros.
+- Uma landing page principal onde tem a apresentação do sistema e onde é possível
+ir para a página de criar uma conta e/ou fazer login. Deve ficar na raiz do
+sistema em scsi.digital. Sistema de recuperação de senha com disparo de email
+usando recursos nativos do Django. Na tela de criar conta, o usuário pode se
+registrar, informar os dados do seu cartório/juizado (CNPJ e Razão Social
+obrigatórios e outros dados de cadastro opcionais) e escolher o plano que deseja
+assinar (apenas free disponível no momento), podendo optar por continuar com o
+plano free sem informar cartão de crédito para já sair usando o sistema e
+experimentar. Os planos na landing page devem ser inicialmente fictícios,
+já que não haverá sistema de pagamentos integrado. Portanto, apenas o botão do
+plano free estará habilitado para clicar e prosseguir para criação de conta.
+Os outros botões devem ter o texto "em breve" e devem ficar desabilitados.
+- Agente de Inteligência Artificial integrado em diversas partes do sistema,
+com os recursos de: resumir processo, resumir petição, resumir cumprimento
+judicial, resumir movimentação, resumir parte processual. Exemplo: quando o
+usuário acessar os dados de um processo, na tela de detalhes e andamento do
+processo, terá um botão "resumir com IA", que irá disparar um agente de IA com
+tools de acesso à base de dados para buscar todos os registros relacionados a
+esse processo (cumprimentos, petições, movimentações, prazos, partes), gerar
+um resumo com insights sobre o processo, e salvar em um campo de texto no
+cadastro desse processo. O mesmo funcionamento serve para outras entidades:
+petições, cumprimentos judiciais, movimentações.
+- Uma tela de Chat com o agente de IA: no menu lateral do sistema, deve ter um
+acesso a uma tela que será um chat com o agente de IA do sistema, onde o usuário
+poderá criar sessões de chats que ficarão salvas por usuário. O agente deve ter
+tools de acesso a toda base de dados do cartório/juizado que o usuário pertence,
+e deve responder com base nos dados do juizado. Chat com resposta efeito stream,
+resposta da IA em markdown e o template adaptado para renderizar markdown da
+resposta para HTML.
+- Compliance com LGPD: os dados devem ser salvos respeitando a Lei Geral de
+Proteção de Dados, sem deixar CPF e dados sensíveis expostos. Campos sensíveis
+devem ser mascarados na interface e criptografados no banco quando aplicável.
+
+
+
+# REQUISITOS NÃO FUNCIONAIS DO SISTEMA
+- O sistema deve ser responsivo e funcionar corretamente em dispositivos de
+todos os tamanhos e dimensões de telas.
+- O sistema deve ser seguro, não expor dados sensíveis, rotas fechadas e ter um
+sistema de permissões e filtros para o multi tenant que garanta a segurança dos
+dados, incluindo permissões de arquivos e anexos de media do sistema, que devem
+ficar visíveis apenas para os usuários com permissões nesses arquivos e não
+ficar expostos.
+- Compliance LGPD: dados sensíveis (CPF, telefone, endereço) devem ser
+mascarados na interface e protegidos no banco. Logs não devem conter dados
+sensíveis em texto puro.
+- UI/UX excelente, com base no design system do projeto, pensada sempre na
+fluidez das jornadas do usuário. Bom contraste entre elementos e fontes, e fundo
+das telas.
+- A experiência do usuário ao disparar tasks em segundo plano (resumos de IA,
+análise de petições, por exemplo) deve ser um loading no botão e um aviso de
+que será notificado quando a análise ficar pronta. Não deve ser bloqueante de
+maneira alguma. Quando a task em segundo plano finalizar, o usuário deve receber
+uma notificação na interface.
+- Ótimo desempenho de filtros, telas e processos. Nada bloqueante.
+- O deploy em Docker Swarm deve ser resiliente: cada serviço deve ter
+restart_policy (condition on-failure, com delay, max_attempts e window) e
+resource limits (limits e reservations de CPU e memória) para evitar starvation
+dos recursos da VPS.
+- A atualização do serviço web (app) deve ocorrer sem downtime: update_config
+com order start-first e failure_action rollback (sobe a réplica nova saudável
+antes de derrubar a antiga e faz rollback automático se o healthcheck falhar).
+
+- O sistema deve subir de forma ordenada e auto-recuperável: nenhum serviço pode
+entrar em crash-loop por causa de uma dependência ainda não pronta (banco ou
+broker) — isso deve ser garantido por healthchecks, pelo wait_for_db nos
+entrypoints e pelas restart_policy com delay.
+
+- Os serviços Celery que fazem chamadas à API externa (OpenAI, etc.) devem ter
+acesso à internet para resolver DNS e conectar a APIs externas. Isso deve ser
+garantido colocando celery_worker e celery_beat na rede sccj_v1_egress (overlay,
+com acesso à internet) além da rede scsi_v1_internal (sem acesso à internet).
+Nunca colocar serviços Celery na rede traefik_public, pois isso os exporia
+desnecessariamente ao roteamento HTTP do Traefik. A separação em três redes
+(traefik_public para ingress, scsi_v1_internal para comunicação entre serviços,
+scsi_v1_egress para saída de API) segue o princípio de menor privilégio: cada
+serviço acessa apenas o que precisa.
+- Na execução do collectstatic no entrypoint, sempre usar a flag --clear para
+remover arquivos estáticos de coletas anteriores antes de recriá-los. Isso
+evita FileNotFoundError causado por arquivos hash obsoletos do
+WhiteNoise CompressedStaticFilesStorage em redeploys, e garante que o
+diretório STATIC_ROOT esteja limpo a cada início do container.
+- Segredos de produção (token do Cloudflare, senhas de banco/broker) não podem
+ser expostos em texto puro em arquivos versionados, devendo usar Docker Secrets
+e/ou o .env gitignored da VPS.
+
+
+
+# TAREFA
+Gere o PRD desse projeto (Product Requirement Document), em formato de arquivo
+markdown. O PRD será usado como guia do projeto posteriormente no
+desenvolvimento do sistema. Coloque todos os detalhes necessários para o
+desenvolvimento tanto técnico quanto de planejamento. Adicione também uma sessão
+com guia de deploy do sistema em uma VPS Ubuntu do zero, cada comando e passo
+a passo detalhado para deploy em docker com swarm. Esse guia de deploy deve
+incluir: instalação do Docker e inicialização do Swarm (docker swarm init),
+criação das redes overlay (traefik_public external e a rede interna), criação
+do token de API do Cloudflare (escopo DNS na zona scsi.digital) e do Docker Secret
+correspondente (CLOUDFLARE_DNS_API_TOKEN), configuração do .env de produção
+(DEBUG=False, ALLOWED_HOSTS e CSRF_TRUSTED_ORIGINS no padrão definido), criação
+dos demais secrets, deploy do stack com os healthchecks e restart policies,
+verificação da emissão do certificado wildcard via DNS-01 e o uso do script
+scripts/deploy.sh para build, push e deploy.
+Adicione no PRD uma sessão com as sprints de implementações/desenvolvimento
+do sistema, com tarefas pequenas e bem detalhadas, seguindo uma ordem lógica
+de desenvolvimento. As sprints e tarefas devem ter o espaço " " para marcação
+de "X" quando concluídas, em forma de checklist/to-do.

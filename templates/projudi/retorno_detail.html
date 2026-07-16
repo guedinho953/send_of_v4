@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}Retorno {{ oficio.numero_oficio }} — Send of v4{% endblock %}
+
+{% block extra_css %}
+<style>
+    .detalhe-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .detalhe-card { background: #fff; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .detalhe-card dt { font-size: 11px; color: #6b7280; text-transform: uppercase; margin-bottom: 4px; }
+    .detalhe-card dd { margin: 0 0 12px; font-size: 14px; color: #1f2937; }
+    .detalhe-card dd:last-child { margin-bottom: 0; }
+    .tag-retorno { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; }
+    .tag-sem_retorno { background: #e5e7eb; color: #374151; }
+    .tag-recebido { background: #fef3c7; color: #92400e; }
+    .tag-lido { background: #dbeafe; color: #1e40af; }
+    .tag-processado { background: #d1fae5; color: #065f46; }
+    .tag-pendente_acao { background: #fee2e2; color: #991b1b; }
+    .tag-status { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; }
+    .tag-pendente { background: #fef3c7; color: #92400e; }
+    .tag-enviado { background: #d1fae5; color: #065f46; }
+    .tag-juntado { background: #dbeafe; color: #1e40af; }
+    .btn-purple { background: #7c3aed; }
+    .btn-purple:hover { background: #6d28d9; }
+    textarea { width: 100%; min-height: 80px; padding: 10px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 14px; }
+    .obs-box { background: #f9fafb; border-left: 4px solid #7c3aed; padding: 12px; border-radius: 6px; white-space: pre-wrap; font-size: 13px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<h1 class="section-title">
+    Retorno — Oficio {{ oficio.numero_oficio }}
+    <span class="tag-retorno tag-{{ oficio.status_retorno }}">{{ oficio.get_status_retorno_display }}</span>
+</h1>
+
+<div style="margin-bottom: 16px;">
+    <a href="{% url 'projudi:retorno_dashboard' %}" class="btn btn-outline">&larr; Dashboard Retornos</a>
+    <a href="{% url 'projudi:retorno_list' %}" class="btn btn-outline">Lista</a>
+    <a href="{% url 'projudi:oficio_detail' oficio.pk %}" class="btn btn-outline">Ver Oficio (Envio)</a>
+</div>
+
+<div class="detalhe-grid">
+    <div class="detalhe-card">
+        <dl>
+            <dt>Nº Oficio</dt>
+            <dd>{{ oficio.numero_oficio }}</dd>
+
+            <dt>Processo</dt>
+            <dd>
+                {% if oficio.numero_processo_cnj %}
+                    {{ oficio.numero_processo_cnj }}
+                {% else %}
+                    {{ oficio.processo }}
+                {% endif %}
+            </dd>
+
+            <dt>E-mail Destino (original)</dt>
+            <dd>{{ oficio.email_destino|default:"N/D" }}</dd>
+
+            <dt>Status do Envio</dt>
+            <dd><span class="tag-status tag-{{ oficio.status }}">{{ oficio.get_status_display }}</span></dd>
+        </dl>
+    </div>
+    <div class="detalhe-card">
+        <dl>
+            <dt>Assunto do Retorno</dt>
+            <dd>{{ oficio.assunto_retorno|default:"-" }}</dd>
+
+            <dt>Remetente do Retorno</dt>
+            <dd>{{ oficio.remetente_retorno|default:"-" }}</dd>
+
+            <dt>Data do Retorno</dt>
+            <dd>{{ oficio.data_retorno|date:"d/m/Y H:i"|default:"-" }}</dd>
+
+            <dt>Anexos</dt>
+            <dd>{{ oficio.anexos_retorno|default:"-" }}</dd>
+        </dl>
+    </div>
+</div>
+
+{% if oficio.conteudo_retorno %}
+<div class="card" style="margin-top: 20px;">
+    <h3 style="margin-top:0; margin-bottom:14px; color:#374151;">Conteudo do Retorno</h3>
+    <div style="font-size:13px; line-height:1.6; color:#374151; white-space: pre-wrap;">
+        {{ oficio.conteudo_retorno }}
+    </div>
+</div>
+{% endif %}
+
+{% if oficio.observacao_retorno %}
+<div class="card" style="margin-top: 20px;">
+    <h3 style="margin-top:0; margin-bottom:14px; color:#374151;">Observacoes</h3>
+    <div class="obs-box">{{ oficio.observacao_retorno }}</div>
+</div>
+{% endif %}
+
+<div style="margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
+    {% if oficio.status_retorno != 'sem_retorno' and oficio.status_retorno != 'processado' %}
+        <form method="post" action="{% url 'projudi:retorno_juntar_resposta' oficio.pk %}" style="display:inline;">
+            {% csrf_token %}
+            <button type="submit" class="btn" style="background: #059669; color: white;">
+                📎 Juntar Resposta no Projudi
+            </button>
+        </form>
+    {% endif %}
+    {% if oficio.status_retorno == 'processado' %}
+        <span style="padding: 8px 16px; background: #d1fae5; color: #065f46; border-radius: 6px; font-size: 14px;">
+            ✅ Resposta ja juntada no Projudi
+        </span>
+    {% endif %}
+    {% if oficio.status != 'dispensado' %}
+        <form method="post" action="{% url 'projudi:oficio_dispensar' oficio.pk %}" style="display:inline;" onsubmit="return confirm('Dispensar oficio {{ oficio.numero_oficio }}? (enviado fora deste sistema)')">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline" style="color:#6b21a8;">🚫 Dispensar</button>
+        </form>
+    {% endif %}
+</div>
+
+<div class="card" style="margin-top: 20px;">
+    <h3 style="margin-top:0; margin-bottom:14px; color:#374151;">Processar Retorno</h3>
+    <form method="post" action="{% url 'projudi:retorno_processar' oficio.pk %}">
+        {% csrf_token %}
+        <div style="margin-bottom: 12px;">
+            <label style="font-size: 12px; color: #6b7280; text-transform: uppercase;">Novo Status</label>
+            <select name="status_retorno" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #e5e7eb; margin-top: 4px;">
+                <option value="recebido" {% if oficio.status_retorno == 'recebido' %}selected{% endif %}>Recebido</option>
+                <option value="lido" {% if oficio.status_retorno == 'lido' %}selected{% endif %}>Lido</option>
+                <option value="processado" {% if oficio.status_retorno == 'processado' %}selected{% endif %}>Processado</option>
+                <option value="pendente_acao" {% if oficio.status_retorno == 'pendente_acao' %}selected{% endif %}>Pendente de Acao</option>
+                <option value="sem_retorno" {% if oficio.status_retorno == 'sem_retorno' %}selected{% endif %}>Sem Retorno</option>
+            </select>
+        </div>
+        <div style="margin-bottom: 12px;">
+            <label style="font-size: 12px; color: #6b7280; text-transform: uppercase;">Observacao</label>
+            <textarea name="observacao_retorno" placeholder="Digite sua observacao sobre este retorno..."></textarea>
+        </div>
+        <button type="submit" class="btn btn-purple">Salvar</button>
+    </form>
+</div>
+
+{% endblock %}

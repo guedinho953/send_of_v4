@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Processos{% endblock %}
+
+{% block extra_css %}
+<style>
+  .process-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+  .process-card { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-left: 4px solid #2563eb; transition: transform .15s; }
+  .process-card:hover { transform: translateY(-2px); }
+  .process-card h3 { font-size: 16px; font-weight: 600; color: #1f2937; margin-bottom: 6px; word-break: break-all; }
+  .process-card p { font-size: 13px; color: #6b7280; margin-bottom: 14px; }
+  .process-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+  .status-badge { font-size: 11px; padding: 2px 8px; border-radius: 12px; font-weight: 500; }
+  .status-distributed { background: #e5e7eb; color: #374151; }
+  .status-analyzing { background: #fef3c7; color: #92400e; }
+  .status-pending_compliance { background: #fee2e2; color: #991b1b; }
+  .status-complied { background: #dcfce7; color: #166534; }
+  .status-document_sent { background: #dbeafe; color: #1e40af; }
+  .status-closed { background: #f3f4f6; color: #6b7280; }
+  .btn-group { display: flex; gap: 8px; }
+  .btn-group .btn { flex: 1; text-align: center; }
+</style>
+{% endblock %}
+
+{% block content %}
+<h2 class="section-title">Processos</h2>
+
+<div class="process-grid">
+  {% for p in processes %}
+  <div class="process-card">
+    <h3>{{ p.number }}</h3>
+    <div class="process-meta">
+      <span class="status-badge status-{{ p.status }}">{{ p.get_status_display }}</span>
+      {% if p.vara %}<span class="tag">{{ p.vara.name|default:p.vara }}</span>{% endif %}
+      {% if p.class_processual %}<span class="tag">{{ p.class_processual }}</span>{% endif %}
+    </div>
+    <p>
+      {% if p.summary %}
+        {{ p.summary.total_movements }} movimentações •
+        {{ p.summary.completable_commands }} cumpriveis
+      {% else %}
+        Nenhuma análise ainda
+      {% endif %}
+    </p>
+    <div class="btn-group">
+      <a href="{% url 'processes:movimentacoes' p.pk %}" class="btn btn-sm">🔍 Analisar Movimentações</a>
+      <a href="{% url 'processes:detail' p.pk %}" class="btn btn-outline btn-sm">Detalhes</a>
+    </div>
+  </div>
+  {% empty %}
+  <div class="card" style="grid-column: 1 / -1; text-align: center; padding: 40px;">
+    <p style="color: #6b7280;">Nenhum processo cadastrado.</p>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

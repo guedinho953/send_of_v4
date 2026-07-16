@@ -1,0 +1,33 @@
+## Inteligência Artificial
+
+### Objetivo
+
+Auxiliar servidores na análise de processos e cumprimentos judiciais.
+
+### Implementado
+
+- Protótipos de prompts.
+- Testes de sumarização.
+- Testes de classificação.
+
+### Funcionamento Atual
+
+A IA recebe:
+
+- texto do processo;
+- texto da petição;
+- texto do cumprimento.
+
+E gera:
+
+- resumo;
+- classificação;
+- sugestões.
+
+### Pendências
+
+- Integração LangGraph.
+- Ferramentas (tools) de acesso ao banco.
+- Chat persistente.
+- Memória de conversação.
+- Embeddings vetoriais.

@@ -1,0 +1,48 @@
+## @projudi_client
+
+### Objetivo
+
+Faz a integração e interação com o sistema Projudi automaticamente
+a partir dos cookies capturados e mantidos da sessão para:
+
+- consulta processual;
+- captura os links importantes;
+- leitura de movimentações;
+- cumprimento de tarefas;
+- expedição de documentos;
+- anexação de arquivos.
+
+### Implementado
+
+- integração automática no Projudi via cookies obtidos com @projudi_bot;
+- Reutilização dos cookies de sessão;
+- Obtenção dos links importantes para navegação posterior;
+- Links das movimentações, ofícios e petições;
+- Inicialização do driver no Selenium;
+- Obtenção da sopa por meio do BeautifulSoup dos urls de interesse;
+- Obtenção da quantidade de páginas para extração dos dados;
+#########
+- Consulta de processos.
+- Leitura de páginas processuais.
+- Notebook funcional:
+  - enviar.ipynb
+
+### Funcionamento Atual
+
+Após a autenticação:
+
+- Mediante a captura dos cookies conseguimos obter dados de páginas
+de movimentações processuais, ofícios e petições de forma organizada.
+
+- Por meio dessas páginas quando necessário conseguimos obter dados processuais
+como partes, numero de processo, links do processo e extração dos atos processuais;
+
+
+
+### Limitações Atuais
+
+- Ainda não utilizo os linis de petições
+
+### Pendências
+
+- Migrar gradualmente para Playwright.

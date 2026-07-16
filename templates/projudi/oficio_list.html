@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}Lista de Oficios — Send of v4{% endblock %}
+
+{% block extra_css %}
+<style>
+    .tag-status { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; }
+    .tag-pendente { background: #fef3c7; color: #92400e; }
+    .tag-enviado { background: #d1fae5; color: #065f46; }
+    .tag-juntado { background: #dbeafe; color: #1e40af; }
+    .tag-falhou_email { background: #fee2e2; color: #991b1b; }
+    .tag-falhou_juntada { background: #fce7f3; color: #9d174d; }
+    .tag-ignorado { background: #e5e7eb; color: #374151; }
+    .oficio-row:hover { background: #f9fafb; }
+    .btn-green { background: #059669; }
+    .btn-green:hover { background: #047857; }
+    .btn-orange { background: #ea580c; }
+    .btn-orange:hover { background: #c2410c; }
+    .paginacao { display: flex; gap: 8px; justify-content: center; margin-top: 20px; }
+    .paginacao a, .paginacao span { padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 13px; }
+    .paginacao a { background: #2563eb; color: #fff; }
+    .paginacao a:hover { background: #1d4ed8; }
+    .paginacao .atual { background: #e5e7eb; color: #374151; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<h1 class="section-title">Todos os Oficios</h1>
+
+<div style="margin-bottom:16px;">
+    <a href="{% url 'projudi:oficio_dashboard' %}" class="btn btn-outline">&larr; Voltar ao Dashboard</a>
+    <form method="post" action="{% url 'projudi:oficio_sync' %}" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-orange">Sincronizar</button>
+    </form>
+</div>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Nº Oficio</th>
+                <th>Processo</th>
+                <th>Destino</th>
+                <th>Status</th>
+                <th>Data Importacao</th>
+                <th>Acao</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for o in oficios %}
+            <tr class="oficio-row">
+                <td><strong>{{ o.numero_oficio }}</strong></td>
+                <td>
+                    {% if o.numero_processo_cnj %}
+                        {{ o.numero_processo_cnj }}
+                    {% else %}
+                        {{ o.processo }}
+                    {% endif %}
+                </td>
+                <td>{{ o.email_destino|default:"N/D" }}</td>
+                <td>
+                    <span class="tag-status tag-{{ o.status }}">{{ o.get_status_display }}</span>
+                </td>
+                <td>{{ o.created_at|date:"d/m/Y H:i" }}</td>
+                <td>
+                    <a href="{% url 'projudi:oficio_detail' o.pk %}" class="btn btn-sm btn-outline">Abrir</a>
+                    {% if o.pode_enviar %}
+                        <form method="post" action="{% url 'projudi:oficio_send' o.pk %}" style="display:inline;">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-green">Enviar</button>
+                        </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="6" style="text-align:center; color:#6b7280; padding:30px;">
+                    Nenhum oficio encontrado.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if is_paginated %}
+<div class="paginacao">
+    {% if page_obj.has_previous %}
+        <a href="?page=1">Primeira</a>
+        <a href="?page={{ page_obj.previous_page_number }}">Anterior</a>
+    {% endif %}
+    <span class="atual">Pagina {{ page_obj.number }} de {{ paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}">Proxima</a>
+        <a href="?page={{ paginator.num_pages }}">Ultima</a>
+    {% endif %}
+</div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Ofícios Projudi</title>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #f3f4f6; padding: 20px; }
+        .container { max-width: 1000px; margin: 0 auto; background: #fff; padding: 24px; border-radius: 8px; }
+        h1 { color: #1e3a5f; margin-top: 0; }
+        .alert { padding: 12px 16px; border-radius: 6px; margin-bottom: 16px; }
+        .alert-error { background: #fee2e2; color: #991b1b; border-left: 4px solid #ef4444; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th, td { text-align: left; padding: 10px; border-bottom: 1px solid #e5e7eb; }
+        th { background: #f9fafb; font-weight: 600; }
+        .empty { text-align: center; color: #6b7280; padding: 40px; }
+        .back { display: inline-block; margin-top: 20px; color: #2563eb; text-decoration: none; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Ofícios</h1>
+
+    {% if not session_active %}
+        <div class="alert alert-error">
+            Nenhuma sessão ativa. <a href="{% url 'projudi:sync_session' %}">Sincronize primeiro</a>.
+        </div>
+    {% endif %}
+
+    {% if oficios %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Número</th>
+                    <th>Tipo</th>
+                    <th>Destinatário</th>
+                    <th>Data</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for o in oficios %}
+                <tr>
+                    <td>{{ o.numero }}</td>
+                    <td>{{ o.tipo }}</td>
+                    <td>{{ o.destinatario }}</td>
+                    <td>{{ o.data }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <div class="empty">
+            Nenhum ofício encontrado.
+        </div>
+    {% endif %}
+
+    <a href="{% url 'dashboard' %}" class="back">&larr; Dashboard</a>
+</div>
+</body>
+</html>

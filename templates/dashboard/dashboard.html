@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard — Send of v4{% endblock %}
+
+{% block extra_css %}
+<style>
+    .dashboard-header { margin-bottom: 24px; }
+    .dashboard-header h1 { font-size: 24px; font-weight: 700; color: #1e3a5f; }
+    .dashboard-header p { color: #6b7280; margin-top: 4px; }
+    .cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .area-card { background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.06); border-left: 4px solid; transition: transform .15s; }
+    .area-card:hover { transform: translateY(-2px); }
+    .area-card.oficios { border-left-color: #d97706; }
+    .area-card.retornos { border-left-color: #2563eb; }
+    .area-card.processos { border-left-color: #059669; }
+    .area-card.documentos { border-left-color: #7c3aed; }
+    .area-card h3 { font-size: 16px; color: #374151; margin-bottom: 6px; }
+    .area-card p { font-size: 13px; color: #6b7280; margin-bottom: 14px; }
+    .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; }
+    .stat-box { background: #fff; border-radius: 10px; padding: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.06); text-align: center; }
+    .stat-box h4 { margin: 0; font-size: 28px; font-weight: 700; color: #1e3a5f; }
+    .stat-box p { margin: 4px 0 0; font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; }
+    .oficio-mini { background: #fff; border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border-left: 3px solid #d97706; display: flex; justify-content: space-between; align-items: center; }
+    .oficio-mini.enviado { border-left-color: #059669; }
+    .oficio-mini.juntado { border-left-color: #2563eb; }
+    .oficio-mini.falha { border-left-color: #dc2626; }
+    .oficio-mini-info { flex: 1; }
+    .oficio-mini-numero { font-size: 14px; font-weight: 600; color: #1e3a5f; }
+    .oficio-mini-processo { font-size: 12px; color: #6b7280; font-family: monospace; }
+    .oficio-mini-status { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+    .status-pendente { background: #fef3c7; color: #92400e; }
+    .status-enviado { background: #d1fae5; color: #065f46; }
+    .status-juntado { background: #dbeafe; color: #1e40af; }
+    .status-falhou_email { background: #fee2e2; color: #991b1b; }
+    .btn-orange { background: #ea580c; color: white; }
+    .btn-orange:hover { background: #c2410c; }
+    .btn-green { background: #059669; color: white; }
+    .btn-green:hover { background: #047857; }
+    .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .section-header h3 { font-size: 16px; font-weight: 600; color: #374151; margin: 0; }
+    .section-header a { font-size: 13px; color: #2563eb; text-decoration: none; }
+    .section-header a:hover { text-decoration: underline; }
+    .two-columns { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+    @media (max-width: 768px) { .two-columns { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="dashboard-header">
+    <h1>🏢 Dashboard do Cartório</h1>
+    <p>Bem-vindo, {{ request.user.full_name|default:request.user.email }}. Aqui está o resumo do sistema.</p>
+</div>
+
+<!-- Areas Principais -->
+<div class="cards-grid">
+    <div class="area-card oficios">
+        <h3>Oficios Judiciais</h3>
+        <p>Envie oficios por e-mail e acompanhe juntadas no Projudi automaticamente.</p>
+        <a href="{% url 'projudi:oficio_dashboard' %}" class="btn btn-orange">Acessar Oficios</a>
+    </div>
+    <div class="area-card retornos">
+        <h3>Retornos por E-mail</h3>
+        <p>Gerencie as respostas recebidas dos oficios enviados.</p>
+        <a href="{% url 'projudi:retorno_dashboard' %}" class="btn">Acessar Retornos</a>
+    </div>
+    <div class="area-card processos">
+        <h3>Processos</h3>
+        <p>Consulta e gerenciamento de processos judiciais.</p>
+        <a href="{% url 'processes:list' %}" class="btn btn-green">Ver Processos</a>
+    </div>
+    <div class="area-card documentos">
+        <h3>Documentos</h3>
+        <p>Gerencie documentos e arquivos do cartorio.</p>
+        <a href="{% url 'documents:list' %}" class="btn">Ver Documentos</a>
+    </div>
+</div>
+
+<!-- Estatisticas de Oficios -->
+{% if oficios_total is not None %}
+<div class="card">
+    <div class="section-header">
+        <h3>📊 Resumo de Ofícios</h3>
+        <a href="{% url 'projudi:oficio_dashboard' %}">Ver detalhes →</a>
+    </div>
+    <div class="stats-row">
+        <div class="stat-box">
+            <h4>{{ oficios_total }}</h4>
+            <p>Total</p>
+        </div>
+        <div class="stat-box">
+            <h4 style="color:#d97706;">{{ oficios_pendentes }}</h4>
+            <p>Pendentes</p>
+        </div>
+        <div class="stat-box">
+            <h4 style="color:#059669;">{{ oficios_enviados }}</h4>
+            <p>Enviados</p>
+        </div>
+        <div class="stat-box">
+            <h4 style="color:#2563eb;">{{ oficios_juntados }}</h4>
+            <p>Juntados</p>
+        </div>
+        <div class="stat-box">
+            <h4 style="color:#dc2626;">{{ oficios_falhas }}</h4>
+            <p>Falhas</p>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Ultimos Oficios + Sincronizacao -->
+<div class="two-columns" style="margin-top: 20px;">
+    <div class="card">
+        <div class="section-header">
+            <h3>📋 Últimos Ofícios</h3>
+            <a href="{% url 'projudi:oficio_list' %}">Ver todos →</a>
+        </div>
+        {% if ultimos_oficios %}
+            {% for o in ultimos_oficios %}
+            <div class="oficio-mini {{ o.status }}">
+                <div class="oficio-mini-info">
+                    <div class="oficio-mini-numero">
+                        {% if o.numero_processo_cnj %}
+                            {{ o.numero_processo_cnj }}
+                        {% else %}
+                            Proc. {{ o.processo }}
+                        {% endif %}
+                    </div>
+                    <div class="oficio-mini-processo">
+                        Oficio {{ o.numero_oficio|default:"Oficio sem numero" }}
+                        {% if o.status == 'pendente' %}<span style="color:#d97706;">- Pendente</span>{% endif %}
+                        {% if o.status == 'enviado' %}<span style="color:#059669;">- Enviado {{ o.data_envio|date:"d/m" }}</span>{% endif %}
+                        {% if o.status == 'juntado' %}<span style="color:#2563eb;">- Juntado</span>{% endif %}
+                    </div>
+                </div>
+                <span class="oficio-mini-status status-{{ o.status }}">{{ o.get_status_display }}</span>
+            </div>
+            {% endfor %}
+        {% else %}
+            <p style="color:#6b7280; text-align:center; padding:20px;">
+                Nenhum ofício registrado. <a href="{% url 'projudi:oficio_dashboard' %}">Sincronize com o Projudi</a>.
+            </p>
+        {% endif %}
+    </div>
+
+    <div>
+        <div class="card" style="margin-bottom: 16px;">
+            <h3 style="margin-top:0; font-size:16px;">⚡ Ações Rápidas</h3>
+            <div style="display:flex; flex-direction:column; gap:8px;">
+                <form method="post" action="{% url 'projudi:oficio_sync' %}" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-orange" style="width:100%;">🔄 Sincronizar com Projudi</button>
+                </form>
+                {% if oficios_pendentes > 0 %}
+                    <form method="post" action="{% url 'projudi:oficio_bulk_send' %}" style="display:inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-green" style="width:100%;">📤 Enviar {{ oficios_pendentes }} Pendentes</button>
+                    </form>
+                {% endif %}
+                <a href="{% url 'projudi:oficio_dashboard' %}" class="btn btn-outline" style="text-align:center;">📋 Gerenciar Ofícios</a>
+                <form method="post" action="{% url 'processes:extrair_todas' %}" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn" style="width:100%; background:#7c3aed; color:white;">
+                    🧠 Extrair Mov. p/ RAG
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3 style="margin-top:0; font-size:16px;">💡 Status do Sistema</h3>
+            <div style="font-size:13px; color:#4b5563;">
+                <p><strong>Projudi:</strong> {% if session_active %}✅ Sessão ativa{% else %}❌ Sessão inativa{% endif %}</p>
+                <p><strong>Usuário:</strong> {{ request.user.email }}</p>
+                <p><strong>Último sync:</strong> {{ ultima_sync|default:"Nunca" }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

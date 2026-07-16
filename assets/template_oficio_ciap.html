@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    @page { margin: 2cm 3cm 1.5cm 3cm; size: A4; }
+    body {
+        font-family: 'Times New Roman', Times, serif;
+        font-size: 11pt;
+        line-height: 1.4;
+        color: #1a1a1a;
+        margin: 1.5cm 2.5cm 1.5cm 2.5cm;
+    }
+
+    .brasao {
+        text-align: center;
+        margin-bottom: 6px;
+    }
+    .brasao img { width: 72px; height: 72px; }
+
+    .header {
+        text-align: center;
+        margin-bottom: 8px;
+        border-bottom: 2px solid #1a3c6e;
+        padding-bottom: 8px;
+    }
+    .header .orgao {
+        font-size: 10pt;
+        font-weight: bold;
+        color: #1a3c6e;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+    .header .comarca {
+        font-size: 9.5pt;
+        color: #2c5282;
+    }
+    .header .secretaria {
+        font-size: 9.5pt;
+        color: #2c5282;
+        font-weight: bold;
+    }
+
+    .num-oficio {
+        text-align: right;
+        font-size: 10pt;
+        font-weight: bold;
+        color: #1a3c6e;
+        margin: 6px 0 10px 0;
+        border-bottom: 1px solid #ddd;
+        padding-bottom: 4px;
+    }
+
+    table.proc {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 8px 0 10px 0;
+        font-size: 10pt;
+        border: 1px solid #b0b0b0;
+    }
+    table.proc td {
+        padding: 3px 8px;
+        border: 1px solid #c0c0c0;
+        vertical-align: top;
+    }
+    table.proc td.label {
+        font-weight: bold;
+        background: #e8edf4;
+        color: #1a3c6e;
+        width: 130px;
+        white-space: nowrap;
+    }
+
+    .endereco {
+        margin: 8px 0 10px 3cm;
+        font-size: 10pt;
+        line-height: 1.3;
+    }
+    .endereco .cargo { font-weight: bold; text-transform: uppercase; }
+    .endereco .nome { font-weight: bold; }
+
+    .assunto {
+        margin: 6px 0 8px 0;
+        font-size: 10pt;
+    }
+    .assunto .label { font-weight: bold; }
+
+    .corpo {
+        text-align: justify;
+        margin: 6px 0;
+        font-size: 11pt;
+    }
+    .corpo p {
+        text-indent: 2cm;
+        margin-bottom: 5px;
+        text-align: justify;
+    }
+
+    .prest {
+        margin: 6px 0;
+        padding: 6px 10px;
+        background: #f5f7fa;
+        border-left: 3px solid #1a3c6e;
+        font-size: 10pt;
+    }
+
+    .data {
+        text-align: center;
+        margin: 24px 0 18px 0;
+        font-style: italic;
+        font-size: 10pt;
+        color: #333;
+    }
+
+    .assinatura {
+        text-align: center;
+        margin-top: 32px;
+    }
+    .assinatura hr {
+        width: 260px;
+        border: none;
+        border-top: 1.5px solid #1a3c6e;
+        margin: 0 auto 6px auto;
+    }
+    .assinatura .cargo {
+        font-weight: bold;
+        font-size: 10pt;
+        color: #1a3c6e;
+        text-transform: uppercase;
+    }
+    .assinatura .sec {
+        font-size: 9pt;
+        color: #555;
+    }
+
+    .rodape {
+        margin-top: 28px;
+        padding-top: 6px;
+        border-top: 1px solid #ccc;
+        font-size: 8pt;
+        color: #888;
+        text-align: center;
+        line-height: 1.3;
+    }
+</style>
+</head>
+<body>
+
+<div class="brasao">
+    <img src="data:image/png;base64,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" alt="Brasão TJBA">
+</div>
+
+<div class="header">
+    <div class="orgao">Poder Judiciário do Estado da Bahia</div>
+    <div class="comarca">Comarca de Salvador</div>
+    <div class="secretaria">Secretaria de Inspeção e Correição da Capital - SEC/RPA</div>
+</div>
+
+<div class="num-oficio">Ofício nº {{ sequential_number }}/{{ year }} - SEC/RPA</div>
+
+<table class="proc">
+    <tr><td class="label">PROCESSO Nº</td><td>{{ process.number }}</td></tr>
+    {% if process.vara %}<tr><td class="label">VARA</td><td>{{ process.vara }}</td></tr>{% endif %}
+    <tr><td class="label">DESTINATÁRIO(A)</td><td>{{ parte.nome }}</td></tr>
+    {% if parte.cpf_cnpj %}<tr><td class="label">CPF/CNPJ</td><td>{{ parte.cpf_cnpj }}</td></tr>{% endif %}
+</table>
+
+{% if destinatario_cargo or parte.nome %}
+<div class="endereco">
+    {% if destinatario_cargo %}<div class="cargo">{{ destinatario_cargo }}</div>{% endif %}
+    {% if parte.nome %}<div class="nome">{{ parte.nome }}</div>{% endif %}
+    {% if parte.endereco %}<div>{{ parte.endereco }}</div>{% endif %}
+</div>
+{% endif %}
+
+<div class="assunto"><span class="label">Assunto:</span> {{ assunto|default:"Solicitação de informações" }}</div>
+
+<div class="corpo">
+    <p>Excelentíssimo(a) Senhor(a),</p>
+
+    {% if despacho_observacao %}
+    <p>Em cumprimento ao despacho proferido nos autos do processo em epígrafe,
+    <em>{{ despacho_observacao }}</em>, <strong>solicito a Vossa Excelência</strong>
+    que se digne a prestar as informações requeridas no prazo legal.</p>
+    {% else %}
+    <p>Com os meus cordiais cumprimentos, sirvo-me do presente para, em cumprimento
+    ao despacho exarado nos autos, <strong>solicitar a Vossa Excelência</strong>
+    que se digne a prestar as informações mencionadas, no prazo legal.</p>
+
+    <p><strong>Informações solicitadas:</strong></p>
+    <p>{{ corpo_texto|default:"Conforme determinação judicial." }}</p>
+    {% endif %}
+
+    {% if tem_prestacao_pecuniaria %}
+    <div class="prest">
+        <strong>Prestação Pecuniária:</strong><br>
+        Prazo: {{ prazo_prestacao_servico }} dias &nbsp;|&nbsp;
+        Valor: R$ {{ valor_prestacao_pecuniaria }} &nbsp;|&nbsp;
+        Parcelas: {{ parcelas }}
+    </div>
+    {% endif %}
+
+    <p>Outrossim, solicito que as informações sejam encaminhadas a esta Secretaria
+    no prazo estabelecido, sob pena das sanções legais cabíveis.</p>
+
+    <p>Atenciosamente,</p>
+</div>
+
+<div class="data">Salvador, {{ data_atual }}</div>
+
+<div class="assinatura">
+    <hr>
+    <div class="cargo">Juiz(a) de Direito</div>
+    <div class="sec">Secretaria de Inspeção e Correição da Capital - SEC/RPA</div>
+    {% if juiz_nome %}<div class="sec" style="margin-top:2px;">{{ juiz_nome }}</div>{% endif %}
+</div>
+
+<div class="rodape">
+    TJBA • SEC/RPA • Fórum Ruy Barbosa, 3º Andar, Sala 301, Nazaré, Salvador/BA, CEP 40050-410
+</div>
+
+</body>
+</html>

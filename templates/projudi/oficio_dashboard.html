@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+{% load processo_filters %}
+
+{% block title %}Oficios — Send of v4{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .stat-card { background: #fff; border-radius: 10px; padding: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.06); border-left: 4px solid; text-align: center; }
+    .stat-card h4 { margin: 0; font-size: 28px; color: #1e3a5f; font-weight: 700; }
+    .stat-card p { margin: 4px 0 0; font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-card.total { border-left-color: #2563eb; }
+    .stat-card.pendentes { border-left-color: #d97706; }
+    .stat-card.enviados { border-left-color: #059669; }
+    .stat-card.juntados { border-left-color: #2563eb; }
+    .stat-card.falhas { border-left-color: #dc2626; }
+    .acao-bar { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+    .btn-orange { background: #ea580c; color: white; }
+    .btn-orange:hover { background: #c2410c; }
+    .btn-green { background: #059669; color: white; }
+    .btn-green:hover { background: #047857; }
+    .btn-outline { background: transparent; border: 1px solid #d1d5db; color: #374151; }
+    .btn-outline:hover { background: #f3f4f6; }
+    .oficio-card { background: #fff; border-radius: 8px; padding: 14px 16px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border-left: 3px solid #d97706; transition: transform 0.1s; }
+    .oficio-card:hover { transform: translateX(4px); }
+    .oficio-card.enviado { border-left-color: #059669; }
+    .oficio-card.juntado { border-left-color: #2563eb; }
+    .oficio-card.falha { border-left-color: #dc2626; }
+    .oficio-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+    .oficio-numero { font-size: 15px; font-weight: 600; color: #1e3a5f; }
+    .oficio-processo { font-size: 13px; color: #6b7280; font-family: monospace; }
+    .oficio-destino { font-size: 12px; color: #6b7280; margin-top: 4px; }
+    .tag-status { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+    .tag-pendente { background: #fef3c7; color: #92400e; }
+    .tag-enviado { background: #d1fae5; color: #065f46; }
+    .tag-juntado { background: #dbeafe; color: #1e40af; }
+    .tag-falhou_email { background: #fee2e2; color: #991b1b; }
+    .tag-falhou_juntada { background: #fce7f3; color: #9d174d; }
+    .tag-ignorado { background: #e5e7eb; color: #374151; }
+    .tag-dispensado { background: #f3e8ff; color: #6b21a8; }
+    .oficio-actions { display: flex; gap: 6px; margin-top: 10px; }
+    .btn-sm { padding: 5px 12px; font-size: 12px; border-radius: 5px; }
+    .bulk-bar { background: #f3f4f6; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; display: flex; gap: 10px; align-items: center; }
+    .filtro-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .filtro-btn { padding: 6px 14px; border-radius: 20px; font-size: 13px; border: 1px solid #e5e7eb; background: #fff; color: #374151; cursor: pointer; text-decoration: none; }
+    .filtro-btn.active { background: #2563eb; color: white; border-color: #2563eb; }
+    .filtro-btn:hover:not(.active) { background: #f9fafb; }
+    .empty-state { text-align: center; padding: 40px 20px; color: #6b7280; }
+    .empty-state svg { width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.4; }
+    .log-entry { font-size: 12px; padding: 8px 12px; border-radius: 6px; margin-bottom: 6px; }
+    .log-info { background: #eff6ff; border-left: 3px solid #3b82f6; }
+    .log-success { background: #f0fdf4; border-left: 3px solid #22c55e; }
+    .log-error { background: #fef2f2; border-left: 3px solid #ef4444; }
+    .log-warning { background: #fffbeb; border-left: 3px solid #f59e0b; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<h1 class="section-title">📋 Oficios Judiciais</h1>
+
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+{% endif %}
+
+<!-- Estatisticas -->
+<div class="stats-grid">
+    <div class="stat-card total">
+        <h4>{{ total }}</h4>
+        <p>Total</p>
+    </div>
+    <div class="stat-card pendentes">
+        <h4>{{ pendentes }}</h4>
+        <p>Pendentes</p>
+    </div>
+    <div class="stat-card enviados">
+        <h4>{{ enviados }}</h4>
+        <p>Enviados</p>
+    </div>
+    <div class="stat-card juntados">
+        <h4>{{ juntados }}</h4>
+        <p>Juntados</p>
+    </div>
+    <div class="stat-card falhas">
+        <h4>{{ falhas }}</h4>
+        <p>Falhas</p>
+    </div>
+    <div class="stat-card" style="border-left-color: #6b21a8;">
+        <h4>{{ dispensados }}</h4>
+        <p>Dispensados</p>
+    </div>
+</div>
+
+<!-- Acoes em massa -->
+<div class="bulk-bar">
+    <form method="post" action="{% url 'projudi:oficio_sync' %}" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-orange">
+            🔄 Sincronizar com Projudi
+        </button>
+    </form>
+    {% if pendentes > 0 %}
+        <form method="post" action="{% url 'projudi:oficio_bulk_send' %}" style="display:inline;">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-green">
+                📤 Enviar {{ pendentes }} Pendentes
+            </button>
+        </form>
+    {% endif %}
+    <!-- Dropdown Expedir -->
+    <div class="dropdown" style="display:inline-block; position:relative;">
+        <button type="button" class="btn" style="background:linear-gradient(135deg,#7c3aed,#a855f7); color:white; font-weight:600; box-shadow:0 2px 8px rgba(124,58,237,0.4);" onclick="toggleExpDropdown()">
+            ⚡ Expedir ▾
+        </button>
+        <div id="expDropdown" style="display:none; position:absolute; background:white; border:1px solid #e5e7eb; border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,0.18); z-index:100; min-width:220px; margin-top:4px; right:0; overflow:hidden;">
+            <div style="padding:6px 12px; font-size:11px; color:#9ca3af; text-transform:uppercase; letter-spacing:0.5px;">Expedição</div>
+            <form method="post" action="{% url 'projudi:oficio_expedir_ciap' %}">
+                {% csrf_token %}
+                <button type="submit" style="display:block; width:100%; padding:10px 16px; border:none; background:none; text-align:left; cursor:pointer; font-size:14px;">
+                    ⚖️ Ofício CIAP
+                </button>
+            </form>
+            <form method="post" action="{% url 'projudi:oficio_rastrear_ciap' %}" style="display:block;">
+                {% csrf_token %}
+                <button type="submit" style="display:block; width:100%; padding:10px 16px; border:none; background:none; text-align:left; cursor:pointer; font-size:14px;">
+                    🔍 Rastrear & Expedir CIAP
+                </button>
+            </form>
+            <form method="post" action="{% url 'projudi:oficio_expedir_ciap_processo' %}" style="display:block;" onsubmit="var cnj=prompt('Digite o número CNJ:'); if(!cnj) return false; this.querySelector('input[name=cnj]').value=cnj; return true;">
+                {% csrf_token %}
+                <input type="hidden" name="cnj" value="">
+                <button type="submit" style="display:block; width:100%; padding:10px 16px; border:none; background:none; text-align:left; cursor:pointer; font-size:14px;">
+                    📁 Expedir por CNJ
+                </button>
+            </form>
+            <hr style="margin:4px 8px; border:none; border-top:1px solid #e5e7eb;">
+        </div>
+    </div>
+    <a href="{% url 'projudi:oficio_list' %}" class="btn btn-outline">📋 Ver Lista Completa</a>
+</div>
+
+<!-- Filtros -->
+<div class="filtro-bar" style="margin-top:24px;">
+    <a href="?status=" class="filtro-btn {% if not request.GET.status %}active{% endif %}">Todos</a>
+    <a href="?status=pendente" class="filtro-btn {% if request.GET.status == 'pendente' %}active{% endif %}">Pendentes</a>
+    <a href="?status=expedido" class="filtro-btn {% if request.GET.status == 'expedido' %}active{% endif %}">Expedidos</a>
+    <a href="?status=enviado" class="filtro-btn {% if request.GET.status == 'enviado' %}active{% endif %}">Enviados</a>
+    <a href="?status=juntado" class="filtro-btn {% if request.GET.status == 'juntado' %}active{% endif %}">Juntados</a>
+    <a href="?status=falhou_email" class="filtro-btn {% if request.GET.status == 'falhou_email' %}active{% endif %}">Falhas</a>
+    <a href="?status=dispensado" class="filtro-btn {% if request.GET.status == 'dispensado' %}active{% endif %}">Dispensados</a>
+</div>
+
+<!-- Lista de Oficios -->
+<div class="card">
+    <h3 style="margin-top:0; margin-bottom:16px; color:#374151; font-size:18px;">
+        {% if request.GET.status == 'pendente' %}⏳ Pendentes
+        {% elif request.GET.status == 'expedido' %}📤 Expedidos
+        {% elif request.GET.status == 'enviado' %}📤 Enviados
+        {% elif request.GET.status == 'juntado' %}✅ Juntados
+        {% elif request.GET.status == 'falhou_email' %}❌ Falhas
+        {% elif request.GET.status == 'dispensado' %}🚫 Dispensados
+        {% else %}📋 Todos os Oficios
+        {% endif %}
+        <span style="font-size:14px; color:#6b7280; font-weight:400;">({{ oficios|length }} exibidos)</span>
+    </h3>
+
+    {% if oficios %}
+        {% for o in oficios %}
+        <div class="oficio-card {{ o.status }}">
+            <div class="oficio-header">
+                <div>
+                    <div class="oficio-numero">
+                        {% if o.numero_processo_cnj %}
+                            {{ o.numero_processo_cnj }}
+                        {% else %}
+                            Proc. {{ o.processo }}
+                        {% endif %}
+                        {% if o.status == 'enviado' %}<span style="color:#059669;">&#9993;</span>{% endif %}
+                        {% if o.status == 'juntado' %}<span style="color:#2563eb;">&#10004;</span>{% endif %}
+                    </div>
+                    <div class="oficio-processo">
+                        {% if o.numero_processo_cnj %}
+                            {{ o.numero_processo_cnj }}
+                        {% else %}
+                            Proc. {{ o.processo }}
+                        {% endif %}
+                    </div>
+                </div>
+                <span class="tag-status tag-{{ o.status }}">{{ o.get_status_display }}</span>
+            </div>
+            <div class="oficio-destino">
+                Para: {{ o.email_destino|default:"E-mail nao definido" }}
+                {% if o.assunto %} | Assunto: {{ o.assunto|truncatechars:50 }}{% endif %}
+            </div>
+            <div style="font-size:11px; color:#9ca3af; margin-top:4px;">
+                {% if o.status == 'pendente' %}
+                    <span style="color:#d97706;">&#9200; Aguardando envio</span>
+                {% elif o.status == 'enviado' %}
+                    <span style="color:#059669;">&#9993; Enviado em {{ o.data_envio|date:"d/m/Y" }} {{ o.hora_envio|date:"H:i" }}</span>
+                {% elif o.status == 'juntado' %}
+                    <span style="color:#2563eb;">&#10004; Juntado em {{ o.data_envio|date:"d/m/Y" }} {{ o.hora_envio|date:"H:i" }}</span>
+                {% elif o.status == 'falhou_email' %}
+                    <span style="color:#dc2626;">&#9888; Falha no envio de e-mail</span>
+                {% elif o.status == 'falhou_juntada' %}
+                    <span style="color:#9d174d;">&#9888; Enviado mas nao juntado</span>
+                {% endif %}
+                {% if o.msg_id %}<br><small>ID: {{ o.msg_id|slice:":30" }}</small>{% endif %}
+            </div>
+            <div class="oficio-actions">
+                <a href="{% url 'projudi:oficio_detail' o.pk %}" class="btn btn-sm btn-outline">🔍 Detalhes</a>
+                {% if o.pode_enviar %}
+                    <form method="post" action="{% url 'projudi:oficio_send' o.pk %}" style="display:inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-green">📤 Enviar</button>
+                    </form>
+                {% endif %}
+                {% if o.status == 'enviado' and not o.juntado %}
+                    <form method="post" action="{% url 'projudi:oficio_juntar' o.pk %}" style="display:inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-orange">📎 Juntar</button>
+                    </form>
+                {% endif %}
+                {% if o.status != 'dispensado' %}
+                    <form method="post" action="{% url 'projudi:oficio_dispensar' o.pk %}" style="display:inline;" onsubmit="return confirm('Dispensar oficio {{ o.numero_oficio }}? (enviado fora deste sistema)')">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-outline" style="color:#6b21a8;">🚫 Dispensar</button>
+                    </form>
+                {% endif %}
+            </div>
+            {% if o.logs.exists %}
+                <div style="margin-top:10px;">
+                    {% for log in o.logs.all|slice:":2" %}
+                        <div class="log-entry log-{{ log.tipo }}">
+                            <strong>{{ log.get_tipo_display }}</strong>: {{ log.mensagem|truncatechars:120 }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="empty-state">
+            <p style="font-size:16px;">📭 Nenhum oficio encontrado</p>
+            <p>Clique em <strong>"Sincronizar com Projudi"</strong> para buscar oficios do sistema.</p>
+        </div>
+    {% endif %}
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleExpDropdown() {
+    var d = document.getElementById('expDropdown');
+    d.style.display = d.style.display === 'none' ? 'block' : 'none';
+}
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.dropdown')) {
+        var d = document.getElementById('expDropdown');
+        if (d) d.style.display = 'none';
+    }
+});
+</script>
+{% endblock %}

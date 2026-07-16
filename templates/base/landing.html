@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block title %}Send of v4 — Cartório Judicial{% endblock %}
+{% block content %}
+
+<div class="card" style="text-align: center; padding: 48px 24px; margin-top: 40px;">
+    <h1 style="font-size: 32px; color: #1e3a5f; margin-bottom: 12px;">Send of v4</h1>
+    <p style="font-size: 16px; color: #6b7280; max-width: 520px; margin: 0 auto 28px;">
+        Sistema de Cumprimento de Sentenças e Comunicações Judiciais.<br>
+        Automação inteligente para cartórios de vara de juizados especiais.
+    </p>
+    <div>
+        <a href="{% url 'accounts:login' %}" class="btn" style="padding: 12px 24px; font-size: 14px;">Entrar no Sistema</a>
+    </div>
+    <div style="margin-top: 32px; font-size: 13px; color: #9ca3af;">
+        <p>Requer autenticação. Contate o administrador para acesso.</p>
+    </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Sincronizar Sessão Projudi</title>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #f3f4f6; padding: 20px; }
+        .container { max-width: 700px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        h1 { color: #1e3a5f; margin-top: 0; }
+        .alert { padding: 16px; border-radius: 6px; margin-bottom: 20px; }
+        .alert-success { background: #dcfce7; color: #166534; border-left: 4px solid #22c55e; }
+        .alert-error { background: #fee2e2; color: #991b1b; border-left: 4px solid #ef4444; }
+        .alert-info { background: #dbeafe; color: #1e40af; border-left: 4px solid #3b82f6; }
+        .steps { margin: 20px 0; }
+        .step { display: flex; align-items: flex-start; margin: 12px 0; padding: 12px; background: #f9fafb; border-radius: 6px; }
+        .step-num { background: #2563eb; color: #fff; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; margin-right: 12px; flex-shrink: 0; }
+        .step-text { font-size: 14px; color: #374151; }
+        .step-text strong { color: #1f2937; }
+        .step-text code { background: #e5e7eb; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+        .btn { display: inline-block; padding: 12px 24px; background: #2563eb; color: #fff; text-decoration: none; border-radius: 6px; font-weight: 500; border: none; cursor: pointer; font-size: 15px; }
+        .btn:hover { background: #1d4ed8; }
+        .btn:disabled { background: #9ca3af; cursor: not-allowed; }
+        .status-box { background: #f9fafb; padding: 16px; border-radius: 6px; margin-top: 20px; }
+        .status-label { font-size: 12px; color: #6b7280; text-transform: uppercase; font-weight: 600; }
+        .status-value { font-size: 16px; color: #1f2937; margin-top: 4px; }
+        .status-active { color: #059669; font-weight: 600; }
+        .status-inactive { color: #dc2626; font-weight: 600; }
+        .back { display: inline-block; margin-top: 20px; color: #2563eb; text-decoration: none; font-size: 14px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Sincronizar Sessão Projudi</h1>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="steps">
+        <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-text">
+                <strong>Abra o Firefox</strong> (no Windows) e acesse:<br>
+                <code>https://projudi.tjba.jus.br/projudi/</code>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-text">
+                <strong>Faça login</strong> com seu usuário e senha do tribunal.
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-text">
+                <strong>Clique no botão abaixo</strong> para capturar a sessão ativa do Firefox.
+            </div>
+        </div>
+    </div>
+
+    <form action="{% url 'projudi:sync' %}" method="get">
+        <button type="submit" class="btn">Sincronizar Sessão com Firefox</button>
+    </form>
+
+    <div class="status-box">
+        <div class="status-label">Status da Sessão</div>
+        <div class="status-value">
+            {% if session %}
+                {% if session.status == 'active' %}
+                    <span class="status-active">Ativa</span> (última atividade: {{ session.last_activity|date:"d/m/Y H:i" }})
+                {% else %}
+                    <span class="status-inactive">{{ session.get_status_display }}</span>
+                {% endif %}
+            {% else %}
+                <span class="status-inactive">Nenhuma sessão sincronizada</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <p style="margin-top: 16px; font-size: 13px; color: #6b7280;">
+        O sistema lê os cookies do Firefox automaticamente pelo perfil do Windows (via WSL).<br>
+        Não precisa digitar login/senha aqui.
+    </p>
+
+    <a href="{% url 'dashboard' %}" class="back">&larr; Voltar ao Dashboard</a>
+</div>
+</body>
+</html>

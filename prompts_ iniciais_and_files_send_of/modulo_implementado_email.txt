@@ -1,0 +1,25 @@
+## Emails
+
+### Implementado
+
+- Notebook enviar.ipynb.
+- Envio de ofícios por email.
+- Templates básicos.
+
+### Funcionamento Atual
+
+O usuário informa:
+
+- destinatário;
+- processo;
+- modelo.
+
+O notebook gera e envia o email.
+
+### Pendências
+
+- Transformar notebook em app Django.
+- Histórico de envios.
+- Reenvio.
+- Logs.
+- Filas Celery.

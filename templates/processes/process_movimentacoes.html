@@ -1,0 +1,531 @@
+{% extends "base.html" %}
+
+{% block title %}Movimentações — {{ process.number }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* Cards de estatísticas */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .stat-card { background: #fff; border-radius: 8px; padding: 16px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-top: 4px solid #2563eb; }
+  .stat-card.bloqueado { border-top-color: #ef4444; }
+  .stat-card.sucesso { border-top-color: #22c55e; }
+  .stat-card.aviso { border-top-color: #f59e0b; }
+  .stat-card h4 { font-size: 28px; font-weight: 700; color: #1f2937; margin: 0; }
+  .stat-card p { font-size: 12px; color: #6b7280; margin: 4px 0 0; }
+
+  /* Layout em duas colunas */
+  .two-col { display: grid; grid-template-columns: 1fr 340px; gap: 20px; }
+  @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+
+  /* Lista de movimentações */
+  .mov-card { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-left: 4px solid #9ca3af; }
+  .mov-card.sentenca { border-left-color: #7c3aed; }
+  .mov-card.despacho { border-left-color: #2563eb; }
+  .mov-card.intimacao { border-left-color: #f59e0b; }
+  .mov-card.decisao { border-left-color: #8b5cf6; }
+  .mov-card.citacao { border-left-color: #ef4444; }
+  .mov-card.certidao { border-left-color: #10b981; }
+  .mov-card.mandado { border-left-color: #6366f1; }
+  .mov-card.audiencia { border-left-color: #ec4899; }
+  .mov-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .mov-header h4 { font-size: 14px; font-weight: 600; color: #374151; margin: 0; }
+  .mov-meta { font-size: 12px; color: #9ca3af; }
+  .mov-ato { font-size: 13px; color: #4b5563; line-height: 1.5; margin-top: 8px; }
+
+  /* Comandos */
+  .commands { margin-top: 12px; padding-top: 12px; border-top: 1px dashed #e5e7eb; }
+  .cmd-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; margin-bottom: 6px; background: #f9fafb; font-size: 13px; }
+  .cmd-row.ok { background: #dcfce7; border: 1px solid #86efac; }
+  .cmd-row.blocked { background: #fee2e2; border: 1px solid #fca5a5; }
+  .cmd-status { font-weight: 600; font-size: 11px; padding: 2px 8px; border-radius: 12px; }
+  .cmd-status.ok { background: #22c55e; color: #fff; }
+  .cmd-status.blocked { background: #ef4444; color: #fff; }
+  .cmd-details { color: #6b7280; font-size: 12px; margin-left: auto; }
+  .cmd-toggle { cursor: pointer; color: #2563eb; font-size: 12px; margin-top: 8px; }
+  .cmd-raw { display: none; background: #f3f4f6; padding: 10px; border-radius: 6px; font-size: 12px; font-family: monospace; color: #4b5563; margin-top: 8px; white-space: pre-wrap; }
+
+  /* Comunicações */
+  .comm-grid { display: grid; gap: 8px; }
+  .comm-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: #fff; border-radius: 6px; font-size: 13px; }
+  .comm-status { font-size: 11px; padding: 2px 8px; border-radius: 12px; font-weight: 500; }
+  .comm-status.lida { background: #dcfce7; color: #166534; }
+  .comm-status.pendente { background: #fef3c7; color: #92400e; }
+  .comm-status.devolvida_sem_leitura { background: #fee2e2; color: #991b1b; }
+  .comm-status.ar_juntado { background: #dbeafe; color: #1e40af; }
+
+  /* Painel lateral */
+  .sidebar { display: flex; flex-direction: column; gap: 16px; }
+  .panel { background: #fff; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .panel h3 { font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 12px; }
+  .panel textarea { width: 100%; min-height: 120px; border: 1px solid #d1d5db; border-radius: 6px; padding: 10px; font-size: 12px; font-family: monospace; resize: vertical; }
+  .panel .btn { width: 100%; margin-top: 10px; text-align: center; }
+
+  /* Tags de categoria */
+  .cat-tag { display: inline-block; font-size: 10px; font-weight: 600; text-transform: uppercase; padding: 2px 8px; border-radius: 4px; color: #fff; }
+  .cat-tag.sentenca { background: #7c3aed; }
+  .cat-tag.despacho { background: #2563eb; }
+  .cat-tag.intimacao { background: #f59e0b; }
+  .cat-tag.decisao { background: #8b5cf6; }
+  .cat-tag.citacao { background: #ef4444; }
+  .cat-tag.certidao { background: #10b981; }
+  .cat-tag.mandado { background: #6366f1; }
+  .cat-tag.audiencia { background: #ec4899; }
+  .cat-tag.outro { background: #9ca3af; }
+
+  /* Resumo automatizacao */
+  .auto-status { display: flex; align-items: center; gap: 8px; padding: 12px; border-radius: 6px; margin-top: 8px; }
+  .auto-status.automatizar { background: #dcfce7; color: #166534; }
+  .auto-status.bloqueado { background: #fee2e2; color: #991b1b; }
+  .auto-status.pendente { background: #fef3c7; color: #92400e; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+  <h2 class="section-title">Movimentações — <span style="color:#2563eb;">{{ process.number }}</span></h2>
+  <a href="{% url 'processes:detail' process.pk %}" class="btn btn-outline">← Voltar ao processo</a>
+</div>
+
+<!-- Estatísticas -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <h4>{{ stats.total_movimentacoes }}</h4>
+    <p>Movimentações</p>
+  </div>
+  <div class="stat-card">
+    <h4>{{ stats.total_comandos }}</h4>
+    <p>Comandos extraídos</p>
+  </div>
+  <div class="stat-card sucesso">
+    <h4>{{ stats.completaveis }}</h4>
+    <p>Cumpriveis</p>
+  </div>
+  <div class="stat-card bloqueado">
+    <h4>{{ stats.bloqueados }}</h4>
+    <p>Bloqueados</p>
+  </div>
+  <div class="stat-card aviso">
+    <h4>{{ stats.comunicacoes_pendentes }}</h4>
+    <p>Comunicações pendentes</p>
+  </div>
+  <div class="stat-card sucesso">
+    <h4>{{ stats.comunicacoes_lidas }}</h4>
+    <p>Comunicações lidas</p>
+  </div>
+</div>
+
+<div class="two-col">
+  <!-- Coluna principal: movimentações -->
+  <div>
+    {% if summary %}
+    <div class="auto-status {% if summary.is_automatable %}automatizar{% else %}bloqueado{% endif %}">
+      <strong>Status:</strong> {{ summary.get_automation_status_display }}
+      {% if summary.is_automatable %}✅ Pronto para automação{% else %}❌ Requer análise humana{% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Movimentações -->
+    <h3 class="section-title" style="margin-top:24px;">
+      🎯 Movimentações (mais recentes primeiro — ações da secretaria no topo)
+    </h3>
+
+    <!-- DESTAQUE: Última movimentação com comando cumprivel + ANÁLISE DE PRONTIDÃO -->
+    {% with ultima_cumprivel=movements|dictsort:"event_number"|last %}
+    {% if ultima_cumprivel.commands.exists %}
+    {% with avaliacao=avaliacao_ultima %}
+    <div style="background: {% if avaliacao.pronto_para_cumprir %}linear-gradient(135deg, #dbeafe 0%, #dcfce7 100%){% else %}linear-gradient(135deg, #fef3c7 0%, #fee2e2 100%){% endif %}; border-radius: 10px; padding: 18px; margin-bottom: 20px; border: 2px solid {% if avaliacao.pronto_para_cumprir %}#22c55e{% else %}#f59e0b{% endif %}; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+      <!-- Status -->
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
+        <div style="display:flex; align-items:center; gap: 10px;">
+          <span style="font-size: 24px;">{% if avaliacao.pronto_para_cumprir %}✅{% else %}⚠️{% endif %}</span>
+          <div>
+            <strong style="font-size: 14px; color: {% if avaliacao.pronto_para_cumprir %}#166534{% else %}#92400e{% endif %};">
+              {% if avaliacao.pronto_para_cumprir %}PRONTO PARA CUMPRIR{% else %}VERIFICAÇÃO NECESSÁRIA{% endif %}
+            </strong>
+            <p style="font-size: 11px; color: #6b7280; margin: 2px 0 0;">Evento {{ ultima_cumprivel.event_number }} • {{ ultima_cumprivel.act_date|default:"—" }}</p>
+          </div>
+        </div>
+        {% if avaliacao.meio_recomendado %}
+        <span style="font-size: 12px; background: {% if avaliacao.pronto_para_cumprir %}#22c55e{% else %}#f59e0b{% endif %}; color: #fff; padding: 4px 12px; border-radius: 20px; font-weight: 600;">
+          {{ avaliacao.meio_recomendado|upper }}
+        </span>
+        {% endif %}
+      </div>
+
+      <!-- Ato -->
+      <p style="font-size: 15px; color: #1f2937; line-height: 1.5; margin: 0;">
+        <strong>{{ ultima_cumprivel.act_description|truncatechars:300 }}</strong>
+      </p>
+
+      <!-- Comando cumprivel -->
+      {% for cmd in ultima_cumprivel.commands.all %}
+        {% if cmd.is_completable %}
+        <div style="margin-top: 12px; padding: 12px 14px; background: #fff; border-radius: 8px; border-left: 4px solid #22c55e;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <strong style="color: #166534; font-size: 14px;">{{ cmd.act_verb|upper }}</strong>
+            <span style="font-size: 11px; color: #6b7280;">Cumprivel ✅</span>
+          </div>
+          <p style="font-size: 12px; color: #4b5563; margin: 6px 0 0;">
+            {% if cmd.recipient %}Destinatário: {{ cmd.recipient|join:", " }}{% endif %}
+            {% if cmd.deadline %} • Prazo: {{ cmd.deadline|join:", " }}{% endif %}
+            {% if cmd.means %} • Meio: {{ cmd.means|join:", " }}{% endif %}
+          </p>
+        </div>
+        {% endif %}
+      {% endfor %}
+
+      <!-- Alertas / Dados faltantes -->
+      {% if avaliacao.alertas %}
+      <div style="margin-top: 12px;">
+        {% for alerta in avaliacao.alertas %}
+        <div style="padding: 8px 12px; background: {% if avaliacao.pronto_para_cumprir %}#fef3c7{% else %}#fee2e2{% endif %}; border-radius: 6px; margin-bottom: 6px; font-size: 12px; color: #92400e; border-left: 3px solid #f59e0b;">
+          ⚠️ {{ alerta }}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if avaliacao.dados_faltantes %}
+      <div style="margin-top: 12px;">
+        <strong style="font-size: 12px; color: #dc2626;">📋 DADOS NECESSÁRIOS (varra outras movimentações):</strong>
+        {% for falta in avaliacao.dados_faltantes %}
+        <div style="padding: 6px 12px; background: #fee2e2; border-radius: 6px; margin-top: 4px; font-size: 12px; color: #991b1b;">
+          → {{ falta }}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <!-- Referência cruzada -->
+      {% if ultima_cumprivel.referenced_event %}
+      <div style="margin-top: 12px; padding: 10px 12px; background: #eff6ff; border-radius: 6px; border-left: 3px solid #2563eb; font-size: 12px;">
+        <strong style="color: #2563eb;">🔗 Referente ao Evento {{ ultima_cumprivel.referenced_event }}</strong>
+        <p style="margin: 4px 0 0; color: #4b5563;">
+          Verifique a movimentação original para contexto completo.
+          {% with ref=ultima_cumprivel.referenced_event_obj %}
+          {% if ref %}
+          <br>Ato original: {{ ref.act_description|truncatechars:100 }}
+          {% endif %}
+          {% endwith %}
+        </p>
+      </div>
+      {% endif %}
+    </div>
+    {% endwith %}
+    {% endif %}
+    {% endwith %}
+
+    <!-- Lista completa (as mais recentes já aparecem primeiro pelo ordering do modelo) -->
+    {% for mov in movements %}
+    <div class="mov-card {{ mov.category }}">
+      <div class="mov-header">
+        <div>
+          <span class="cat-tag {{ mov.category }}">{{ mov.get_category_display|default:mov.category }}</span>
+          <span class="tag" style="margin-left:6px;">Evento {{ mov.event_number }}</span>
+        </div>
+        <div class="mov-meta">{{ mov.act_date|default:"—" }} • {{ mov.author|default:"Sistema" }}</div>
+      </div>
+      <div class="mov-ato">{{ mov.act_description|truncatechars:200 }}</div>
+
+      {% if mov.communication_status %}
+      <div style="margin-top:8px;">
+        <span class="tag">{{ mov.get_communication_status_display|default:mov.communication_status }}</span>
+        {% if mov.communication_means %}<span class="tag">{{ mov.communication_means }}</span>{% endif %}
+        {% if mov.recipient %}<span class="tag">→ {{ mov.recipient|truncatechars:40 }}</span>{% endif %}
+      </div>
+      {% endif %}
+
+      <!-- Referencia cruzada (casamento no tempo) -->
+      {% if mov.referenced_event %}
+      <div style="margin-top:10px; padding:8px 10px; background:#eff6ff; border-radius:6px; border-left:3px solid #2563eb;">
+        <strong style="font-size:11px; color:#2563eb;">🔗 REFERENTE AO EVENTO {{ mov.referenced_event }}</strong>
+        {% with ref=mov.referenced_event_obj %}
+        {% if ref %}
+        <p style="font-size:12px; color:#4b5563; margin:4px 0 0;">
+          <strong>Ato original:</strong> {{ ref.act_description|truncatechars:120 }}<br>
+          <strong>Data:</strong> {{ ref.act_date|default:"—" }}
+          {% if mov.act_date and ref.act_date %}
+            <span style="color:#6b7280;">• {{ mov.act_date|timesince:ref.act_date }} decorridos</span>
+          {% endif %}
+        </p>
+        {% endif %}
+        {% endwith %}
+      </div>
+      {% endif %}
+
+      <!-- Comandos desta movimentação -->
+      {% with mov.commands.all as cmds %}
+      {% if cmds %}
+      <div class="commands">
+        <strong style="font-size:12px; color:#6b7280;">COMANDOS EXTRAÍDOS ({{ cmds|length }}):</strong>
+        {% for cmd in cmds %}
+        <div class="cmd-row {% if cmd.is_completable %}ok{% else %}blocked{% endif %}">
+          <span class="cmd-status {% if cmd.is_completable %}ok{% else %}blocked{% endif %}">
+            {% if cmd.is_completable %}✓{% else %}✕{% endif %}
+          </span>
+          <strong>{{ cmd.act_verb }}</strong>
+          <span class="cmd-details">
+            {% if cmd.recipient %}→ {{ cmd.recipient|join:", "|truncatechars:30 }}{% endif %}
+            {% if cmd.means %}| {{ cmd.means|join:", " }}{% endif %}
+            {% if cmd.deadline %}| prazo: {{ cmd.deadline|join:", " }}{% endif %}
+          </span>
+        </div>
+        <!-- Detalhes brutos -->
+        <div class="cmd-raw" id="raw-{{ cmd.id }}">
+ATO: {{ cmd.act_verb }}
+CUMPRIVEL: {{ cmd.is_completable }}
+DESTINATARIO: {{ cmd.recipient|default:"—" }}
+MEIO: {{ cmd.means|default:"—" }}
+OBJETIVO: {{ cmd.objective|default:"—" }}
+PRAZO: {{ cmd.deadline|default:"—" }}
+CONDIÇÕES: {{ cmd.conditions|default:"—" }}
+TRECHO: {{ cmd.snippet|truncatechars:300 }}
+        </div>
+        <div class="cmd-toggle" onclick="document.getElementById('raw-{{ cmd.id }}').style.display='block'; this.style.display='none';">+ mostrar detalhes brutos</div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% endwith %}
+    </div>
+    {% empty %}
+    <div class="alert alert-info">Nenhuma movimentação processada ainda. Cole o HTML do DadosProcesso no painel lateral →</div>
+    {% endfor %}
+
+    <!-- Comunicações rastreadas -->
+    {% if communications %}
+    <h3 class="section-title" style="margin-top:24px;">Comunicações Rastreadas (Expedidas × Lidas)</h3>
+    <div class="comm-grid">
+      {% for comm in communications %}
+      <div class="comm-row">
+        <span class="comm-status {{ comm.status }}">{{ comm.get_status_display }}</span>
+        <strong style="min-width:90px;">{{ comm.get_type_display }}</strong>
+        <span style="color:#6b7280;">Evento {{ comm.event_expedido }}</span>
+        <span style="color:#6b7280; font-size:11px;">{{ comm.date_expedido|default:"—" }}</span>
+        <span style="flex:1; color:#4b5563;">{{ comm.act_expedido|truncatechars:60 }}</span>
+        <span style="color:#9ca3af; font-size:11px;">{{ comm.recipient|truncatechars:30 }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Painel lateral -->
+  <div class="sidebar">
+    <!-- Formulario de processamento -->
+    <div class="panel">
+      <h3>🔧 Processar Movimentações</h3>
+      <p style="font-size:12px; color:#6b7280; margin-bottom:12px;">
+        Cole o HTML da página <strong>DadosProcesso</strong> do Projudi aqui e clique em processar.
+      </p>
+      <form method="post" action="{% url 'processes:processar_movimentacoes' process.pk %}" id="form-processar">
+        {% csrf_token %}
+        <textarea name="html" placeholder="&lt;!DOCTYPE html&gt;...
+(Cole o HTML completo da página DadosProcesso do Projudi)"></textarea>
+        <button type="submit" class="btn">▶ Processar HTML</button>
+      </form>
+
+      <!-- Botao de baixar automaticamente -->
+      <div style="margin-top:14px; padding-top:14px; border-top:1px solid #e5e7eb;">
+        <p style="font-size:11px; color:#6b7280; margin-bottom:8px;">
+          <strong>Ou</strong> busque automaticamente no Projudi (cookies do Firefox):
+        </p>
+        <button type="button" class="btn" style="background:#0d9488; width:100%;" id="btn-buscar-projudi">
+          🔍 Buscar no Projudi
+        </button>
+        <div id="resultado-busca" style="margin-top:8px; font-size:12px;"></div>
+      </div>
+
+      <div id="resultado-processamento" style="margin-top:10px; font-size:12px;"></div>
+    </div>
+
+    <!-- Resumo do processo -->
+    {% if summary %}
+    <div class="panel">
+      <h3>📊 Resumo da Análise</h3>
+      <table style="font-size:13px;">
+        <tr><td style="color:#6b7280;">Status:</td><td><strong>{{ summary.get_automation_status_display }}</strong></td></tr>
+        <tr><td style="color:#6b7280;">Automatizável:</td><td>{% if summary.is_automatable %}Sim ✅{% else %}Não ❌{% endif %}</td></tr>
+        <tr><td style="color:#6b7280;">Movimentações:</td><td>{{ summary.total_movements }}</td></tr>
+        <tr><td style="color:#6b7280;">Comandos:</td><td>{{ summary.total_commands }}</td></tr>
+        <tr><td style="color:#6b7280;">Cumpriveis:</td><td>{{ summary.completable_commands }}</td></tr>
+        <tr><td style="color:#6b7280;">Comunicações:</td><td>{{ summary.tracked_communications }}</td></tr>
+        <tr><td style="color:#6b7280;">Análise:</td><td style="font-size:11px; color:#9ca3af;">{{ summary.last_analysis|date:"d/m/Y H:i" }}</td></tr>
+      </table>
+    </div>
+    {% endif %}
+
+    <!-- Ranqueamento por Facilidade -->
+    <div class="panel">
+      <h3>🎯 Ranqueamento por Facilidade</h3>
+      <p style="font-size:11px; color:#6b7280; margin-bottom:10px;">
+        Despachos ordenados do mais fácil para o mais difícil.
+        Comece pelos verdes ✅
+      </p>
+
+      {% with ranqueamento=ranqueamento %}
+      {% if ranqueamento %}
+        {% for item in ranqueamento|slice:":5" %}
+        <div style="padding:8px 10px; margin-bottom:6px; border-radius:6px; font-size:12px;
+          {% if item.cor == 'verde' %}background:#dcfce7; border-left:3px solid #22c55e;{% endif %}
+          {% if item.cor == 'amarelo' %}background:#fef3c7; border-left:3px solid #f59e0b;{% endif %}
+          {% if item.cor == 'vermelho' %}background:#fee2e2; border-left:3px solid #ef4444;{% endif %}">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <strong>Evento {{ item.evento }}</strong>
+            <span style="font-size:10px; font-weight:600;
+              {% if item.cor == 'verde' %}color:#166534;{% endif %}
+              {% if item.cor == 'amarelo' %}color:#92400e;{% endif %}
+              {% if item.cor == 'vermelho' %}color:#991b1b;{% endif %}">
+              {{ item.pontuacao }}/100
+            </span>
+          </div>
+          <p style="margin:2px 0 0; color:#4b5563;">
+            {{ item.ato|upper }} — {{ item.descricao|truncatechars:50 }}
+          </p>
+          {% if item.dados_necessarios %}
+          <p style="margin:2px 0 0; font-size:10px; color:#6b7280;">
+            ⚠️ {{ item.dados_necessarios|join:" • " }}
+          </p>
+          {% endif %}
+        </div>
+        {% endfor %}
+
+        <!-- Sugestão de próxima ação -->
+        {% with sugestao=sugestao %}
+        {% if sugestao.tem_acao %}
+        <div style="margin-top:12px; padding:10px; background:
+          {% if sugestao.prioridade == 'facil' %}#dcfce7{% endif %}
+          {% if sugestao.prioridade == 'moderado' %}#fef3c7{% endif %}
+          {% if sugestao.prioridade == 'dificil' %}#fee2e2{% endif %};
+          border-radius:8px; text-align:center;">
+          <strong style="font-size:12px;">
+            {% if sugestao.prioridade == 'facil' %}✅ PRÓXIMA AÇÃO (FÁCIL){% endif %}
+            {% if sugestao.prioridade == 'moderado' %}⚠️ PRÓXIMA AÇÃO (MODERADO){% endif %}
+            {% if sugestao.prioridade == 'dificil' %}🚨 PRÓXIMA AÇÃO (DIFÍCIL){% endif %}
+          </strong>
+          <p style="font-size:11px; margin:4px 0 0; color:#4b5563;">
+            {{ sugestao.mensagem }}
+          </p>
+        </div>
+        {% endif %}
+        {% endwith %}
+
+      {% else %}
+        <p style="font-size:12px; color:#6b7280;">Nenhum comando cumprivel encontrado.</p>
+      {% endif %}
+      {% endwith %}
+    </div>
+
+    <!-- Legenda -->
+    <div class="panel">
+      <h3>🏷️ Legenda de Categorias</h3>
+      <div style="display:flex; flex-wrap:wrap; gap:6px; font-size:11px;">
+        <span class="cat-tag sentenca">Sentença</span>
+        <span class="cat-tag despacho">Despacho</span>
+        <span class="cat-tag intimacao">Intimação</span>
+        <span class="cat-tag decisao">Decisão</span>
+        <span class="cat-tag citacao">Citação</span>
+        <span class="cat-tag certidao">Certidão</span>
+        <span class="cat-tag mandado">Mandado</span>
+        <span class="cat-tag audiencia">Audiência</span>
+      </div>
+      <p style="font-size:11px; color:#6b7280; margin-top:10px;">
+        <strong>✓ Cumprivel:</strong> comando pode ser automatizado<br>
+        <strong>✕ Bloqueado:</strong> requer análise humana (condições, ato não permitido)
+      </p>
+    </div>
+
+    <!-- Links API -->
+    <div class="panel">
+      <h3>🔗 Endpoints API</h3>
+      <p style="font-size:11px; color:#6b7280; margin-bottom:8px;">Dados brutos em JSON:</p>
+      <a href="{% url 'processes:resumo_movimentacoes' process.pk %}" class="btn btn-outline btn-sm" style="width:100%; margin-bottom:6px;">📋 Resumo JSON</a>
+      <a href="{% url 'processes:comandos_pendentes' process.pk %}" class="btn btn-outline btn-sm" style="width:100%; margin-bottom:6px;">⚡ Comandos JSON</a>
+      <a href="{% url 'processes:comunicacoes_rastreadas' process.pk %}" class="btn btn-outline btn-sm" style="width:100%;">📨 Comunicações JSON</a>
+    </div>
+  </div>
+</div>
+
+<script>
+// AJAX para processar sem recarregar a pagina
+document.getElementById('form-processar').addEventListener('submit', function(e) {
+  e.preventDefault();
+  var btn = this.querySelector('button');
+  var original = btn.innerHTML;
+  btn.innerHTML = '⏳ Processando...';
+  btn.disabled = true;
+
+  var formData = new FormData(this);
+  fetch(this.action, {
+    method: 'POST',
+    body: formData,
+    headers: {'X-Requested-With': 'XMLHttpRequest'}
+  })
+  .then(r => r.json())
+  .then(data => {
+    var div = document.getElementById('resultado-processamento');
+    if (data.success) {
+      div.innerHTML = '<div class="alert alert-success">✅ Processado! ' +
+        data.movimentacoes + ' movimentações, ' +
+        data.comandos + ' comandos (' + data.completaveis + ' cumpriveis)</div>';
+      setTimeout(() => location.reload(), 1500);
+    } else {
+      div.innerHTML = '<div class="alert alert-error">❌ Erro: ' + data.error + '</div>';
+    }
+  })
+  .catch(err => {
+    document.getElementById('resultado-processamento').innerHTML =
+      '<div class="alert alert-error">❌ Erro de rede: ' + err + '</div>';
+  })
+  .finally(() => {
+    btn.innerHTML = original;
+    btn.disabled = false;
+  });
+});
+
+// Botao: Buscar no Projudi automaticamente
+document.getElementById('btn-buscar-projudi').addEventListener('click', function() {
+  var btn = this;
+  var original = btn.innerHTML;
+  btn.innerHTML = '⏳ Buscando no Projudi...';
+  btn.disabled = true;
+
+  var div = document.getElementById('resultado-busca');
+  div.innerHTML = '<div style="color:#0d9488;">🔍 Tentando capturar cookies do Firefox...</div>';
+
+  fetch('{% url "processes:buscar_dados_processo" process.pk %}', {
+    method: 'POST',
+    headers: {
+      'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+      'X-Requested-With': 'XMLHttpRequest'
+    }
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      div.innerHTML = '<div class="alert alert-success">✅ HTML baixado! (' +
+        data.html_length + ' chars). Agora clique em "▶ Processar HTML".</div>';
+      // Preenche o textarea automaticamente
+      var textarea = document.querySelector('textarea[name="html"]');
+      textarea.value = data.html;
+      // Rolagem para o textarea
+      textarea.scrollIntoView({behavior: 'smooth'});
+      // Destaque visual
+      textarea.style.borderColor = '#22c55e';
+      setTimeout(() => textarea.style.borderColor = '', 2000);
+    } else {
+      div.innerHTML = '<div class="alert alert-error">❌ ' + data.error +
+        '<br><span style="font-size:11px; color:#6b7280;">' +
+        'Dica: abra o Firefox no Windows, faça login no Projudi, ' +
+        'e rode o script scripts/capture_cookies_windows.py</span></div>';
+    }
+  })
+  .catch(err => {
+    div.innerHTML = '<div class="alert alert-error">❌ Erro: ' + err + '</div>';
+  })
+  .finally(() => {
+    btn.innerHTML = original;
+    btn.disabled = false;
+  });
+});
+</script>
+{% endblock %}

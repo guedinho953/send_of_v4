@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% block title %}Retornos — Send of v4{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .stat-card { background: #fff; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-left: 4px solid #2563eb; }
+    .stat-card h4 { margin: 0; font-size: 24px; color: #1e3a5f; }
+    .stat-card p { margin: 4px 0 0; font-size: 12px; color: #6b7280; text-transform: uppercase; }
+    .stat-card.sem { border-left-color: #9ca3af; }
+    .stat-card.recebido { border-left-color: #d97706; }
+    .stat-card.lido { border-left-color: #2563eb; }
+    .stat-card.processado { border-left-color: #059669; }
+    .stat-card.pendente { border-left-color: #dc2626; }
+    .acao-bar { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+    .btn-purple { background: #7c3aed; }
+    .btn-purple:hover { background: #6d28d9; }
+    .retorno-row:hover { background: #f9fafb; }
+    .tag-retorno { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; }
+    .tag-sem_retorno { background: #e5e7eb; color: #374151; }
+    .tag-recebido { background: #fef3c7; color: #92400e; }
+    .tag-lido { background: #dbeafe; color: #1e40af; }
+    .tag-processado { background: #d1fae5; color: #065f46; }
+    .tag-pendente_acao { background: #fee2e2; color: #991b1b; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<h1 class="section-title">Retornos de Oficios</h1>
+
+<div class="alert alert-info">
+    Aqui voce gerencia as <strong>respostas por e-mail</strong> que chegaram referentes aos oficios enviados.
+</div>
+
+<!-- Estatisticas -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <h4>{{ total_enviados }}</h4>
+        <p>Total Enviados</p>
+    </div>
+    <div class="stat-card sem">
+        <h4>{{ sem_retorno }}</h4>
+        <p>Sem Retorno</p>
+    </div>
+    <div class="stat-card recebido">
+        <h4>{{ recebidos }}</h4>
+        <p>Recebidos</p>
+    </div>
+    <div class="stat-card lido">
+        <h4>{{ lidos }}</h4>
+        <p>Lidos</p>
+    </div>
+    <div class="stat-card processado">
+        <h4>{{ processados }}</h4>
+        <p>Processados</p>
+    </div>
+    <div class="stat-card pendente">
+        <h4>{{ pendente_acao }}</h4>
+        <p>Pend. Acao</p>
+    </div>
+</div>
+
+<!-- Acoes -->
+<div class="acao-bar">
+    <a href="{% url 'projudi:retorno_list' %}" class="btn btn-purple">Ver Todos os Retornos</a>
+    <form method="post" action="{% url 'projudi:retorno_importar' %}" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn">Importar do E-mail</button>
+    </form>
+    {% if recebidos > 0 %}
+        <form method="post" action="{% url 'projudi:retorno_juntar_todos' %}" style="display:inline;">
+            {% csrf_token %}
+            <button type="submit" class="btn" style="background:#059669; color:white;">
+                📎 Juntar {{ recebidos }} Retornos Pendentes
+            </button>
+        </form>
+    {% endif %}
+    <a href="{% url 'projudi:oficio_dashboard' %}" class="btn btn-outline">Ir para Envio de Oficios</a>
+</div>
+
+<!-- Ultimos retornos -->
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom:14px;">
+        <h3 style="margin:0; color:#374151;">Retornos Recebidos</h3>
+        <div style="display:flex; gap:8px;">
+            <a href="?filtro=todos" class="btn btn-sm btn-outline {% if filtro == 'todos' %}active{% endif %}">Todos</a>
+            <a href="?filtro=pendentes" class="btn btn-sm btn-outline {% if filtro == 'pendentes' %}active{% endif %}">📋 Pendentes</a>
+            <a href="?filtro=arquivados" class="btn btn-sm btn-outline {% if filtro == 'arquivados' %}active{% endif %}">📦 Arquivados</a>
+        </div>
+    </div>
+    {% if retornos %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Nº Oficio</th>
+                    <th>Processo</th>
+                    <th>Assunto Retorno</th>
+                    <th>Remetente</th>
+                    <th>Status</th>
+                    <th>Data Retorno</th>
+                    <th>Acao</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for o in retornos %}
+                <tr class="retorno-row">
+                    <td><strong>{{ o.numero_oficio }}</strong></td>
+                    <td>
+                        {% if o.numero_processo_cnj %}
+                            {{ o.numero_processo_cnj }}
+                        {% else %}
+                            {{ o.processo }}
+                        {% endif %}
+                    </td>
+                    <td>{{ o.assunto_retorno|default:"-" }}</td>
+                    <td>{{ o.remetente_retorno|default:"-" }}</td>
+                    <td>
+                        <span class="tag-retorno tag-{{ o.status_retorno }}">{{ o.get_status_retorno_display }}</span>
+                    </td>
+                    <td>{{ o.data_retorno|date:"d/m/Y H:i"|default:"-" }}</td>
+                    <td>
+                        <a href="{% url 'projudi:retorno_detail' o.pk %}" class="btn btn-sm btn-outline">Abrir</a>
+                        {% if o.status_retorno != 'sem_retorno' and o.status_retorno != 'processado' %}
+                            <form method="post" action="{% url 'projudi:retorno_juntar_resposta' o.pk %}" style="display:inline;">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm" style="background:#059669; color:white;">📎 Juntar</button>
+                            </form>
+                        {% endif %}
+                        {% if o.status != 'dispensado' %}
+                            <form method="post" action="{% url 'projudi:oficio_dispensar' o.pk %}" style="display:inline;" onsubmit="return confirm('Dispensar oficio {{ o.numero_oficio }}?')">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-outline" style="color:#6b21a8;">🚫</button>
+                            </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p style="color:#6b7280; text-align:center; padding:20px;">
+            Nenhum retorno encontrado.
+        </p>
+    {% endif %}
+
+    {% if log_importacao %}
+    <hr>
+    <div style="font-family:monospace; font-size:12px; white-space:pre-wrap; max-height:400px; overflow-y:auto; padding:8px;">
+{{ log_importacao }}
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}

@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block title %}Oficio {{ oficio.numero_oficio }} — Send of v4{% endblock %}
+
+{% block extra_css %}
+<style>
+    .detail-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+    .detail-title { font-size: 22px; font-weight: 700; color: #1e3a5f; }
+    .detail-subtitle { font-size: 14px; color: #6b7280; margin-top: 4px; }
+    .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .info-card { background: #fff; border-radius: 8px; padding: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+    .info-label { font-size: 11px; color: #9ca3af; text-transform: uppercase; margin-bottom: 4px; }
+    .info-value { font-size: 14px; color: #374151; font-weight: 500; }
+    .tag-status { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; text-transform: uppercase; }
+    .tag-pendente { background: #fef3c7; color: #92400e; }
+    .tag-enviado { background: #d1fae5; color: #065f46; }
+    .tag-juntado { background: #dbeafe; color: #1e40af; }
+    .tag-falhou_email { background: #fee2e2; color: #991b1b; }
+    .tag-falhou_juntada { background: #fce7f3; color: #9d174d; }
+    .tag-ignorado { background: #e5e7eb; color: #374151; }
+    .action-bar { display: flex; gap: 10px; margin: 20px 0; flex-wrap: wrap; }
+    .log-timeline { position: relative; padding-left: 20px; }
+    .log-timeline::before { content: ''; position: absolute; left: 6px; top: 0; bottom: 0; width: 2px; background: #e5e7eb; }
+    .log-entry { position: relative; margin-bottom: 14px; padding-left: 16px; }
+    .log-entry::before { content: ''; position: absolute; left: -20px; top: 4px; width: 10px; height: 10px; border-radius: 50%; }
+    .log-entry.log-info::before { background: #3b82f6; }
+    .log-entry.log-envio::before { background: #22c55e; }
+    .log-entry.log-juntada::before { background: #2563eb; }
+    .log-entry.log-erro_email::before { background: #ef4444; }
+    .log-entry.log-erro_juntada::before { background: #f59e0b; }
+    .log-entry.log-resposta::before { background: #8b5cf6; }
+    .log-entry.log-resumo::before { background: #6b7280; }
+    .log-time { font-size: 11px; color: #9ca3af; }
+    .log-type { font-size: 11px; font-weight: 600; color: #374151; }
+    .log-msg { font-size: 13px; color: #4b5563; margin-top: 2px; }
+    .btn-green { background: #059669; color: white; }
+    .btn-green:hover { background: #047857; }
+    .btn-orange { background: #ea580c; color: white; }
+    .btn-orange:hover { background: #c2410c; }
+    .html-preview { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; max-height: 400px; overflow: auto; font-size: 13px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="detail-header">
+    <div>
+        <div class="detail-title">
+            {% if oficio.numero_processo_cnj %}
+                {{ oficio.numero_processo_cnj }}
+            {% else %}
+                {{ oficio.processo }}
+            {% endif %}
+        </div>
+        <div class="detail-subtitle">Oficio {{ oficio.numero_oficio }}</div>
+    </div>
+    <span class="tag-status tag-{{ oficio.status }}">{{ oficio.get_status_display }}</span>
+</div>
+
+<!-- Acoes -->
+<div class="action-bar">
+    <a href="{% url 'projudi:oficio_dashboard' %}" class="btn btn-outline">⬅️ Voltar</a>
+    {% if oficio.pode_enviar %}
+        <form method="post" action="{% url 'projudi:oficio_send' oficio.pk %}" style="display:inline;">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-green">📤 Enviar por E-mail</button>
+        </form>
+    {% endif %}
+    {% if oficio.status == 'enviado' and not oficio.juntado %}
+        <form method="post" action="{% url 'projudi:oficio_juntar' oficio.pk %}" style="display:inline;">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-orange">📎 Juntar no Projudi</button>
+        </form>
+    {% endif %}
+</div>
+
+<!-- Informacoes -->
+<div class="info-grid">
+    <div class="info-card">
+        <div class="info-label">E-mail Destino</div>
+        <div class="info-value">{{ oficio.email_destino|default:"Nao definido" }}</div>
+    </div>
+    <div class="info-card">
+        <div class="info-label">Assunto</div>
+        <div class="info-value">{{ oficio.assunto|default:"(sem assunto)" }}</div>
+    </div>
+    <div class="info-card">
+        <div class="info-label">Data Envio</div>
+        <div class="info-value">{{ oficio.data_envio|date:"d/m/Y"|default:"Ainda nao enviado" }}</div>
+    </div>
+    <div class="info-card">
+        <div class="info-label">Status Retorno</div>
+        <div class="info-value">{{ oficio.get_status_retorno_display }}</div>
+    </div>
+</div>
+
+<!-- URLs -->
+<div class="card">
+    <h3 style="margin-top:0;">🔗 Links do Projudi</h3>
+    <div style="display:grid; gap:8px;">
+        {% if oficio.url_oficio %}
+            <a href="{{ oficio.url_oficio }}" target="_blank" class="btn btn-sm btn-outline">📋 Ver Oficio no Projudi</a>
+        {% endif %}
+        {% if oficio.url_processo %}
+            <a href="{{ oficio.url_processo }}" target="_blank" class="btn btn-sm btn-outline">📋 Ver Processo</a>
+        {% endif %}
+        {% if oficio.url_recebimento %}
+            <a href="{{ oficio.url_recebimento }}" target="_blank" class="btn btn-sm btn-outline">📎 Pagina de Recebimento</a>
+        {% endif %}
+        {% if oficio.url_baixa %}
+            <a href="{{ oficio.url_baixa }}" target="_blank" class="btn btn-sm btn-outline">📥 Baixa do Oficio</a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Logs -->
+<div class="card">
+    <h3 style="margin-top:0;">📝 Historico / Logs</h3>
+    {% if logs %}
+        <div class="log-timeline">
+            {% for log in logs %}
+                <div class="log-entry log-{{ log.tipo }}">
+                    <div class="log-time">{{ log.data }}</div>
+                    <div class="log-type">{{ log.tipo_label }}</div>
+                    <div class="log-msg">{{ log.mensagem }}</div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p style="color:#6b7280; text-align:center;">Nenhum log registrado ainda.</p>
+    {% endif %}
+</div>
+
+<!-- Preview HTML -->
+{% if oficio.texto_html %}
+<div class="card">
+    <h3 style="margin-top:0;">📹 Conteudo do Oficio</h3>
+    <div class="html-preview">
+        {{ oficio.texto_html|safe }}
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

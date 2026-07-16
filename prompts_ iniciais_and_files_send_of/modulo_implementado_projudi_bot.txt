@@ -1,0 +1,54 @@
+## @projudi_bot
+
+### Objetivo
+
+Permitir que o sistema interaja automaticamente com o Projudi para:
+
+- Após o login manual realizado pelo usuário no sistema projudi;
+
+- obter os cookies da sessão como esses - cookies =  {
+    "ADC_CONN_539B3595F4E": "8E66B677B4AEEDF491665051C8E20D512ABA6ED536F991C4A5C8D9AEC70368DE035E171E9E8FCA29",
+    "ADC_REQ_2E94AF76E7": "3D4A0893D83B695C10D6160C1DB057C3A5DAB58A98F0E52EB048F133A2B004C5AA610C95BEE00E24",
+    "ADRUM": "s~1772057596540&r~aHR0cHMlM0ElMkYlMkZwcm9qdWRpLnRqYmEuanVzLmJyJTJGcHJvanVkaSUyRg==",
+    "JSESSIONID": "795EC02802C7750174D3EE50CB9E34BF.tomcat09-05",
+};
+- manter a sessão ativa;
+- salvar e reutilizar os dados da sessão enquanto o programa estiver funcionando;
+- informar se a sessão está ou não ativa.
+
+### Implementado
+
+
+- Captura de cookies de sessão.
+- Ajuda a manter a sessão ativa.
+- Navegação autenticada.
+- Consulta de processos.
+- Leitura de páginas processuais.
+- Notebook funcional:
+  - enviar.ipynb
+
+### Funcionamento Atual
+
+O usuário realiza login manualmente no Projudi.
+
+Após a autenticação:
+
+- os cookies são capturados;
+- a sessão é mantida pelo Selenium;
+- o sistema navega para as páginas necessárias;
+- os dados são extraídos.
+
+### Limitações Atuais
+
+- Gostaria de saber/e/ou fazer com que o sistema de automação judicial
+detectasse que a sessão do projudi está ativa, capturasse os dados da sessão
+e solicitasse ao usuário logado no Projudi, se deve começar a executar 
+os cumprimentos judiciais, análises de petições, movimentações 
+e expedição de documentos.
+
+- Há falhas no @projudi_bot em informar se a sessão está ativa ou não
+
+### Pendências
+
+- Implementar monitoramento de sessão.
+- Migrar gradualmente para Playwright.

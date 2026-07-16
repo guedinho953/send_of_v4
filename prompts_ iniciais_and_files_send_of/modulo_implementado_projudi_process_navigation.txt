@@ -1,0 +1,73 @@
+## @projudi_ProcessNavigation.py
+
+### Implementado
+
+- Mediante os dados obtidos em @projudi_client.py é realizada a extração dos
+dados do processo mediante BeautifulSoup e regex;
+
+- Extrai-se dados das partes;
+- Extrai-se dados dos atos processuais;
+- Extrai-se links do processo;
+
+### Limitações
+
+- É necessário separar os dados das partes autoras e das partes rés 
+porque ao realizar o cumprimento das decisões judiciais, convém comprender a qual(ais) 
+partes o comando judicial é endereçado e no momento só estou conseguindo cumprir 
+os comandos judiciais que são endereçados a todas as partes 
+porque não consegui realizar uma separação eficiente;
+
+- Em relação aos atos processuais seria interessante 
+realizar uma extração estruturada do ato processual
+tipo expedição da intimação e leitura baseado na data em que o ato foi expedido, 
+conforme os dado da pasta @processos_movs_json, como nesse exemplo:
+
+evento 341
+ato Decorrido prazo de Advogados de MCT MEU TUDO *Referente ao evento Ato ordinatório(06/05/26). Prazo: 5 dias; Último dia de prazo 19/05/26
+ato_normalizado decorrido prazo de advogados de mct meu tudo *referente ao evento ato ordinatório(06/05/26). prazo: 5 dias; último dia de prazo 19/05/26
+data_texto 20/05/26
+data_obj 2026-05-20
+data_leitura_str None
+data_referencia_str 06/05/26
+autor SISTEMA CNJ
+
+evento 17
+ato Intimação lido(a) (Para LUIS ROBSON PEREIRA) em 16/08/23 *Referente ao evento  Proferido despacho de mero expediente(14/08/23)
+ato_normalizado intimação lido(a) (para luis robson pereira) em 16/08/23 *referente ao evento  proferido despacho de mero expediente(14/08/23)
+data_texto 16/08/23
+data_obj 2023-08-16
+data_leitura_str 2023-08-16
+data_referencia_str 14/08/23
+autor LEANA BEZERRA GOMES EVANGELISTA
+
+evento 13
+ato Intimação expedido(a) (P/ Advgs. de LUIS ROBSON PEREIRA) Prazo: 5 dias;
+ato_normalizado intimação expedido(a) (p/ advgs. de luis robson pereira) prazo: 5 dias;
+data_texto 14/08/23
+data_obj 2023-08-14
+data_leitura_str None
+data_referencia_str None
+autor MARTINHO FERRAZ DA NOBREGA JUNIOR
+
+- Essas referencias devem ser realizadas em todos os atos processuais importantes
+citações, intimações, mandados, audiências, sentenças, decursos de prazos e atos ordinatórios
+também é interessante sempre que possível fazer uma tabela tipo pandas estruturada
+relacionando os atos praticados com os atos que lhe deram origem, sobretudos os despachos,
+sentenças e decisões e atas de audiência.
+
+- Outra limitação é conseguir obter os links relacionados aos atos processuais
+alguns links eu consegui obter, mas nem sempre consigo obter todos os links.
+
+- Outra questão importante é a consistência dos meios em que as partes recebem 
+as comunicações processuais, verificar e relacionar de que forma a parte é 
+citada/intimada e atualizar ao longo do processo, porque as vezes a parte é intimada
+por Aviso de Recebimento mas depois constitui advogado e passa a ser intimada por advogado
+mas as vezes o comando judicial determina que a intimação deve ser pessoal, etc;
+
+
+### Pendências
+
+- Separar partes em autores e réus, mantendo também os dados de todas as partes
+- Relacionar de forma eficiente os atos processuais.
+- Realizar quando necessário o salvamento dos dados depois de bem estruturados
+em CSV ou banco de dados se for viável

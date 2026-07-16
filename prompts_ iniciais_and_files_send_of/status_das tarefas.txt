@@ -1,0 +1,23 @@
+# Status Geral do Projeto
+
+## Concluído
+
+- [x] Automação básica Selenium
+- [x] Envio de emails
+- [x] Leitura processual
+- [x] Prototipação IA
+
+## Em andamento
+
+- [ ] Estrutura Django
+- [ ] Docker
+- [ ] PostgreSQL
+
+## Não iniciado
+
+- [ ] LangGraph
+- [ ] pgvector
+- [ ] Chat IA
+- [ ] Dashboard
+- [ ] Multi Tenant
+- [ ] Deploy Swarm

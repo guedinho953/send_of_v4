@@ -1,0 +1,101 @@
+{
+    "partes": [
+        {
+            "nome": "DIODATO OLIVEIRA GAMA",
+            "nome_normalizado": "diodato oliveira gama",
+            "cpf/cnpj": "064.948.115-15",
+            "tipo": "EXEQUENTE",
+            "papel": "PROMOVENTE",
+            "recebe_intimacao_email": false,
+            "domicilio_cnj": false,
+            "tem_advogado": true,
+            "email": null,
+            "tel": null,
+            "revelia": false,
+            "logradouro": "ENDEREÇO AVENIDA GETULIO VARGAS",
+            "numero": "1 111",
+            "complemento": "EDIFICIO ORQUIDEA AP 2003",
+            "bairro": "CENTRO",
+            "cidade": "PAULO AFONSO",
+            "uf": "BA",
+            "cep": "48601001"
+        },
+        {
+            "nome": "MARIA QUITERIA DOS SANTOS",
+            "nome_normalizado": "maria quiteria dos santos",
+            "cpf/cnpj": "070.824.815-27",
+            "tipo": "EXECUTADO",
+            "papel": "PROMOVIDO",
+            "recebe_intimacao_email": false,
+            "domicilio_cnj": false,
+            "tem_advogado": true,
+            "email": null,
+            "tel": "75988620855",
+            "revelia": false,
+            "logradouro": "ENDEREÇO AVENIDA GETULIO VARGAS",
+            "numero": "1",
+            "complemento": "QUIOSQUE 1 EM FRENTE A GALERIA OASIS CENTER 1",
+            "bairro": "CENTRO",
+            "cidade": "PAULO AFONSO",
+            "uf": "BA",
+            "cep": "48601260"
+        }
+    ],
+    "movimentacoes": [
+        {
+            "evento": "29",
+            "ato": "Intimação expedido(a) (P/ Advgs. de MARIA QUITERIA DOS SANTOS) Prazo: 10 dias; Aguardando disponibilização no Diário da Justiça Eletrônico Nacional - DJEN (CNJ)",
+            "ato_normalizado": "intimação expedido(a) (p/ advgs. de maria quiteria dos santos) prazo: 10 dias; aguardando disponibilização no diário da justiça eletrônico nacional - djen (cnj)",
+            "data_texto": "06/10/25",
+            "data_obj": "2025-10-06",
+            "data_leitura_str": null,
+            "data_referencia_str": null,
+            "autor": "MAURO EMILIO VIANA DA SILVA MOREIRA",
+            "observacao": "",
+            "categoria": "intimacao",
+            "meio_comunicacao": "domicilio_cnj",
+            "situacao_comunicacao": "expedida",
+            "destinatario": "maria quiteria dos santos",
+            "links_mov": []
+        },
+        {
+            "evento": "28",
+            "ato": "Intimação expedido(a) (P/ Advgs. de DIODATO OLIVEIRA GAMA) Prazo: 10 dias; Aguardando disponibilização no Diário da Justiça Eletrônico Nacional - DJEN (CNJ)",
+            "ato_normalizado": "intimação expedido(a) (p/ advgs. de diodato oliveira gama) prazo: 10 dias; aguardando disponibilização no diário da justiça eletrônico nacional - djen (cnj)",
+            "data_texto": "06/10/25",
+            "data_obj": "2025-10-06",
+            "data_leitura_str": null,
+            "data_referencia_str": null,
+            "autor": "MAURO EMILIO VIANA DA SILVA MOREIRA",
+            "observacao": "",
+            "categoria": "intimacao",
+            "meio_comunicacao": "domicilio_cnj",
+            "situacao_comunicacao": "expedida",
+            "destinatario": "diodato oliveira gama",
+            "links_mov": []
+        },
+        {
+            "evento": "18",
+            "ato": "Intimação expedido(a) (P/ Advgs. de DIODATO OLIVEIRA GAMA) Prazo: 15 dias; Aguardando disponibilização no Diário da Justiça Eletrônico Nacional - DJEN (CNJ)",
+            "ato_normalizado": "intimação expedido(a) (p/ advgs. de diodato oliveira gama) prazo: 15 dias; aguardando disponibilização no diário da justiça eletrônico nacional - djen (cnj)",
+            "data_texto": "17/07/25",
+            "data_obj": "2025-07-17",
+            "data_leitura_str": null,
+            "data_referencia_str": null,
+            "autor": "ANTONIO JUVENCIO DA SILVA NETO",
+            "observacao": "",
+            "categoria": "intimacao",
+            "meio_comunicacao": "domicilio_cnj",
+            "situacao_comunicacao": "expedida",
+            "destinatario": "diodato oliveira gama",
+            "links_mov": []
+        }
+    ],
+    "links": {
+        "movimentar": "https://projudi.tjba.jus.br/projudi/movimentacao/MovimentarProcessoAvancado?numeroProcesso=41020251964848",
+        "negociacao": "https://projudi.tjba.jus.br/projudi/acoes/RemessaNegociacao?numeroProcesso=41020251964848",
+        "dados_processo": "https://projudi.tjba.jus.br/projudi/listagens/DadosProcesso?numeroProcesso=41020251964848",
+        "peticionar": "https://projudi.tjba.jus.br/projudi/movimentacao/Peticionar?numeroProcesso=41020251964848&ehPeticionar=s",
+        "alterar_partes": "https://projudi.tjba.jus.br/projudi/acoes/AlterarPartesProcesso?numeroProcesso=41020251964848"
+    }
+}

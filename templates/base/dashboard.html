@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard — Send of v4</title>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #f3f4f6; color: #1f2937; margin: 0; padding: 0; }
+        header { background: #1e3a5f; color: #fff; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; height: 56px; }
+        header h1 { font-size: 20px; font-weight: 600; margin: 0; }
+        header nav a { color: #cbd5e1; text-decoration: none; margin-left: 20px; font-size: 14px; }
+        header nav a:hover { color: #fff; }
+        .container { max-width: 1200px; margin: 24px auto; padding: 0 16px; }
+        .alert { background: #eff6ff; border-left: 4px solid #2563eb; padding: 12px 16px; border-radius: 6px; margin-bottom: 20px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 20px; }
+        .card { background: #fff; border-radius: 8px; padding: 20px; border-left: 4px solid #2563eb; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .card h3 { margin-top: 0; color: #374151; font-size: 16px; }
+        .card p { color: #6b7280; font-size: 13px; margin-bottom: 14px; }
+        .btn { display: inline-block; padding: 8px 16px; margin: 4px 4px 0 0; background: #2563eb; color: #fff; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 500; }
+        .btn:hover { background: #1d4ed8; }
+        .btn-outline { background: #fff; color: #2563eb; border: 1px solid #2563eb; }
+        .btn-outline:hover { background: #eff6ff; }
+        .btn-orange { background: #ea580c; }
+        .btn-orange:hover { background: #c2410c; }
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; }
+        th, td { text-align: left; padding: 10px; border-bottom: 1px solid #e5e7eb; }
+        th { background: #f9fafb; font-weight: 600; }
+        .tag { background: #e5e7eb; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-family: monospace; }
+        .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+        .status-active { background: #22c55e; }
+        .status-inactive { background: #ef4444; }
+    </style>
+</head>
+<body>
+<header>
+    <h1>Send of v4</h1>
+    <nav>
+        <a href="{% url 'landing' %}">Inicio</a>
+        <a href="{% url 'dashboard' %}">Dashboard</a>
+        <a href="{% url 'admin:index' %}">Admin</a>
+        <a href="{% url 'accounts:logout' %}">Sair</a>
+    </nav>
+</header>
+
+<div class="container">
+    <div class="alert">
+        Bem-vindo, <strong>{{ request.user.full_name|default:request.user.email|default:"Visitante" }}</strong>!
+        Voce esta no painel principal do sistema.
+    </div>
+
+    <h2 style="color:#1f2937; margin-top:24px;">Modulos do Sistema</h2>
+    <div class="grid">
+        <div class="card" style="border-left-color: #2563eb;">
+            <h3>Contas</h3>
+            <p>Gerenciar usuarios, tenants e perfis de servidores.</p>
+            <a href="{% url 'admin:accounts_user_changelist' %}" class="btn">Usuarios</a>
+            <a href="{% url 'admin:accounts_tenant_changelist' %}" class="btn btn-outline">Tenants</a>
+        </div>
+
+        <div class="card" style="border-left-color: #059669;">
+            <h3>Processos</h3>
+            <p>Cadastro de processos, partes, movimentacoes e prazos.</p>
+            <a href="{% url 'processes:list' %}" class="btn">Ver Processos</a>
+            <a href="{% url 'admin:processes_process_changelist' %}" class="btn btn-outline">Admin</a>
+        </div>
+
+        <div class="card" style="border-left-color: #d97706;">
+            <h3>Projudi</h3>
+            <p>
+                <span class="status-dot status-inactive"></span>
+                Sessao: Nao sincronizada
+            </p>
+            <p>Sessao, movimentacoes e integracao com o Projudi.</p>
+            <a href="{% url 'projudi:sync_session' %}" class="btn btn-orange">Sincronizar Sessao</a>
+            <a href="{% url 'projudi:movimentacoes' %}" class="btn">Movimentacoes</a>
+        </div>
+
+        <div class="card" style="border-left-color: #059669;">
+            <h3>Envio de Oficios</h3>
+            <p>Busca, envia por e-mail e juntar oficios expedidos pelo Projudi.</p>
+            <a href="{% url 'projudi:oficio_dashboard' %}" class="btn">Dashboard Oficios</a>
+            <a href="{% url 'projudi:oficio_list' %}" class="btn btn-outline">Lista</a>
+            <a href="{% url 'projudi:oficio_sync' %}" class="btn btn-green">Sincronizar</a>
+        </div>
+
+        <div class="card" style="border-left-color: #7c3aed;">
+            <h3>Retornos de Oficios</h3>
+            <p>Gerencia as respostas por e-mail recebidas referentes aos oficios enviados.</p>
+            <a href="{% url 'projudi:retorno_dashboard' %}" class="btn">Dashboard Retornos</a>
+            <a href="{% url 'projudi:retorno_list' %}" class="btn btn-outline">Lista</a>
+        </div>
+
+        <div class="card" style="border-left-color: #7c3aed;">
+            <h3>Comandos</h3>
+            <p>Lista de comandos judiciais extraidos dos documentos.</p>
+            <a href="{% url 'admin:index' %}" class="btn">Ver no Admin</a>
+        </div>
+
+        <div class="card" style="border-left-color: #db2777;">
+            <h3>Cumprimentos</h3>
+            <p>Acompanhamento de cumprimentos de decisoes judiciais.</p>
+            <a href="{% url 'admin:index' %}" class="btn">Ver no Admin</a>
+        </div>
+
+        <div class="card" style="border-left-color: #0891b2;">
+            <h3>Documentos</h3>
+            <p>Gerenciamento de documentos e arquivos do processo.</p>
+            <a href="{% url 'admin:index' %}" class="btn">Ver no Admin</a>
+        </div>
+
+        <div class="card" style="border-left-color: #ea580c;">
+            <h3>E-mails</h3>
+            <p>Historico de e-mails enviados e configuracoes.</p>
+            <a href="{% url 'admin:index' %}" class="btn">Ver no Admin</a>
+        </div>
+
+        <div class="card" style="border-left-color: #4f46e5;">
+            <h3>IA / RAG</h3>
+            <p>Curadoria dos cumprimentos que servem de exemplo para o RAG.</p>
+            <form method="post" action="{% url 'processes:extrair_todas' %}" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn" style="background:#7c3aed;">🧠 Extrair Mov. p/ RAG</button>
+            </form>
+            <a href="{% url 'processes:compliance_list' %}" class="btn" style="background:#059669;">📋 Curadoria RAG</a>
+        </div>
+
+        <div class="card" style="border-left-color: #475569;">
+            <h3>Administracao</h3>
+            <p>Painel administrativo completo do Django.</p>
+            <a href="{% url 'admin:index' %}" class="btn">Ir para o Admin</a>
+        </div>
+    </div>
+
+    <h2 style="color:#1f2937; margin-top:32px;">Acesso Rapido</h2>
+    <div class="card">
+        <table>
+            <thead>
+                <tr><th>Recurso</th><th>URL</th><th>Acao</th></tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Painel Admin</td>
+                    <td><span class="tag">/admin/</span></td>
+                    <td><a href="{% url 'admin:index' %}" class="btn">Abrir</a></td>
+                </tr>
+                <tr>
+                    <td>Login</td>
+                    <td><span class="tag">/accounts/login/</span></td>
+                    <td><a href="{% url 'accounts:login' %}" class="btn">Abrir</a></td>
+                </tr>
+                <tr>
+                    <td>Perfil</td>
+                    <td><span class="tag">/accounts/profile/</span></td>
+                    <td><a href="{% url 'accounts:profile' %}" class="btn">Abrir</a></td>
+                </tr>
+                <tr>
+                    <td>Health Check</td>
+                    <td><span class="tag">/health/</span></td>
+                    <td><a href="/health/" class="btn">Abrir</a></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

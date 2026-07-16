@@ -1,0 +1,25 @@
+## Banco Vetorial Jurídico
+
+### Status
+
+Não iniciado.
+
+### Objetivo
+
+Armazenar embeddings de:
+
+- cumprimentos;
+- petições;
+- movimentações.
+
+### Tecnologias
+
+- PostgreSQL
+- pgvector
+
+### Pendências
+
+- Estrutura dos embeddings.
+- Pipeline de indexação.
+- Busca semântica.
+- Integração com Qwen.

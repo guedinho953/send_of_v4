@@ -1,0 +1,30 @@
+ 
+    - Email: admin@example.com - admin@admin.com
+    - Senha: admin123
+
+- powershell do windows
+     No PowerShell ou CMD do Windows, digite:
+    
+    Windows 11:
+    powershell
+    cd \\wsl.localhost\Ubuntu\home\ivan\PythonProjects\send_of_v4
+    python scripts\capture_cookies_windows.py
+    
+    
+    Windows 10:
+    powershell
+    cd \\wsl$\Ubuntu\home\ivan\PythonProjects\send_of_v4
+    python scripts\capture_cookies_windows.py
+    
+    
+    
+    
+    OPÇÃO 2: Comando WSL direto
+    
+    No PowerShell ou CMD do Windows:
+    powershell
+    wsl -d Ubuntu -u ivan -e bash -c "cd /home/ivan/PythonProjects/send_of_v4 && source .venv/bin/activate && python scripts/capture_cookies_windows.py"
+
+    cd /home/ivan/PythonProjects/send_of_v4
+    source .venv/bin/activate
+    python manage.py runserver 0.0.0.0:8000 --noreload

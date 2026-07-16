@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}Lista de Retornos — Send of v4{% endblock %}
+
+{% block extra_css %}
+<style>
+    .tag-retorno { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; }
+    .tag-sem_retorno { background: #e5e7eb; color: #374151; }
+    .tag-recebido { background: #fef3c7; color: #92400e; }
+    .tag-lido { background: #dbeafe; color: #1e40af; }
+    .tag-processado { background: #d1fae5; color: #065f46; }
+    .tag-pendente_acao { background: #fee2e2; color: #991b1b; }
+    .retorno-row:hover { background: #f9fafb; }
+    .btn-purple { background: #7c3aed; }
+    .btn-purple:hover { background: #6d28d9; }
+    .paginacao { display: flex; gap: 8px; justify-content: center; margin-top: 20px; }
+    .paginacao a, .paginacao span { padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 13px; }
+    .paginacao a { background: #2563eb; color: #fff; }
+    .paginacao a:hover { background: #1d4ed8; }
+    .paginacao .atual { background: #e5e7eb; color: #374151; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<h1 class="section-title">Todos os Retornos</h1>
+
+<div style="margin-bottom:16px; display:flex; gap:10px; flex-wrap:wrap;">
+    <a href="{% url 'projudi:retorno_dashboard' %}" class="btn btn-outline">&larr; Voltar ao Dashboard</a>
+    <a href="{% url 'projudi:oficio_dashboard' %}" class="btn btn-outline">Envio de Oficios</a>
+    <form method="post" action="{% url 'projudi:retorno_importar' %}" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn">Importar do E-mail</button>
+    </form>
+    {% if pendentes_juntar > 0 %}
+        <form method="post" action="{% url 'projudi:retorno_juntar_todos' %}" style="display:inline;">
+            {% csrf_token %}
+            <button type="submit" class="btn" style="background:#059669; color:white;">
+                📎 Juntar {{ pendentes_juntar }} Pendentes
+            </button>
+        </form>
+    {% endif %}
+</div>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Nº Oficio</th>
+                <th>Processo</th>
+                <th>Assunto Retorno</th>
+                <th>Remetente</th>
+                <th>Status Retorno</th>
+                <th>Data</th>
+                <th>Acao</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for o in retornos %}
+            <tr class="retorno-row">
+                <td><strong>{{ o.numero_oficio }}</strong></td>
+                <td>
+                    {% if o.numero_processo_cnj %}
+                        {{ o.numero_processo_cnj }}
+                    {% else %}
+                        {{ o.processo }}
+                    {% endif %}
+                </td>
+                <td>{{ o.assunto_retorno|default:"-" }}</td>
+                <td>{{ o.remetente_retorno|default:"-" }}</td>
+                <td>
+                    <span class="tag-retorno tag-{{ o.status_retorno }}">{{ o.get_status_retorno_display }}</span>
+                </td>
+                <td>{{ o.data_retorno|date:"d/m/Y H:i"|default:"-" }}</td>
+                <td style="display:flex; gap:4px; flex-wrap:wrap;">
+                    <a href="{% url 'projudi:retorno_detail' o.pk %}" class="btn btn-sm btn-outline">Abrir</a>
+                    {% if o.status_retorno != 'sem_retorno' and o.status_retorno != 'processado' %}
+                        <form method="post" action="{% url 'projudi:retorno_juntar_resposta' o.pk %}" style="display:inline;">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm" style="background:#059669; color:white;">📎 Juntar</button>
+                        </form>
+                    {% endif %}
+                    {% if o.status != 'dispensado' %}
+                        <form method="post" action="{% url 'projudi:oficio_dispensar' o.pk %}" style="display:inline;" onsubmit="return confirm('Dispensar oficio {{ o.numero_oficio }}?')">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-outline" style="color:#6b21a8;">🚫</button>
+                        </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="7" style="text-align:center; color:#6b7280; padding:30px;">
+                    Nenhum retorno encontrado.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if is_paginated %}
+<div class="paginacao">
+    {% if page_obj.has_previous %}
+        <a href="?page=1">Primeira</a>
+        <a href="?page={{ page_obj.previous_page_number }}">Anterior</a>
+    {% endif %}
+    <span class="atual">Pagina {{ page_obj.number }} de {{ paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}">Proxima</a>
+        <a href="?page={{ paginator.num_pages }}">Ultima</a>
+    {% endif %}
+</div>
+{% endif %}
+
+{% endblock %}
