@@ -24,6 +24,7 @@ urlpatterns = [
     path('oficios/expedir-ciap/', oficio_views.OficioExpedirCiapView.as_view(), name='oficio_expedir_ciap'),
     path('oficios/rastrear-ciap/', oficio_views.OficioRastrearCiapView.as_view(), name='oficio_rastrear_ciap'),
     path('oficios/expedir-ciap-proc/', oficio_views.OficioExpedirCiapProcessoView.as_view(), name='oficio_expedir_ciap_processo'),
+    path('oficios/processar-pendentes/', oficio_views.OficioProcessarPendentesView.as_view(), name='oficio_processar_pendentes'),
 
     # Aba Retornos (GERENCIAMENTO DE RESPOSTAS)
     path('retornos/dashboard/', oficio_views.RetornoDashboardView.as_view(), name='retorno_dashboard'),

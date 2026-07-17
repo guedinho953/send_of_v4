@@ -276,7 +276,7 @@ class OficioService:
         record.save()
         return False
 
-    def _juntar_via_requests(self, record: OficioRecord, codigo_movimentacao: str = '11383') -> Tuple[bool, str, str]:
+    def _juntar_via_requests(self, record: OficioRecord, codigo_movimentacao: str = '11383', observacao: str = None) -> Tuple[bool, str, str]:
         """
         Juntada via requests usando multipart/form-data (exigido pelo Projudi).
         Tenta codigo 11383 (Cumprimento de Oficio) primeiro,
@@ -352,14 +352,15 @@ class OficioService:
         payload['Concluir.x'] = '10'
         payload['Concluir.y'] = '10'
 
-        # 6. Observacao com link do oficio
-        data_envio = record.data_envio.strftime('%d/%m/%Y') if record.data_envio else ''
-        hora_envio = record.hora_envio.strftime('%H:%M') if record.hora_envio else ''
-        observacao = (
-            f"E-mail enviado com sucesso para {record.email_destino} "
-            f"em {data_envio} as {hora_envio}. "
-            f"Link do oficio: {record.url_oficio}"
-        )
+        # 6. Observacao (personalizada ou padrao)
+        if observacao is None:
+            data_envio = record.data_envio.strftime('%d/%m/%Y') if record.data_envio else ''
+            hora_envio = record.hora_envio.strftime('%H:%M') if record.hora_envio else ''
+            observacao = (
+                f"E-mail enviado com sucesso para {record.email_destino} "
+                f"em {data_envio} as {hora_envio}. "
+                f"Link do oficio: {record.url_oficio}"
+            )
         payload['observacao'] = observacao
         payload['observacaoDiligencia'] = ''
 
@@ -620,8 +621,30 @@ class OficioService:
             resultado['juntado'] = self.juntar_cumprimento(record)
         else:
             resultado['erro'] = info
-            # 3) Juntada de impossibilidade
-            resultado['juntado'] = self.juntar_resposta_impossibilidade(record, motivo=info)
+            # 3) Juntada de impossibilidade (mesma funcao, mensagem diferente)
+            try:
+                motivo = self.humanizar_erro(info)
+                obs = (
+                    f"Impossibilidade de cumprimento do Oficio n {record.numero_oficio}, "
+                    f"processo {record.numero_processo_cnj or record.processo}. "
+                    f"Motivo: {motivo}. "
+                    f"Foi tentado o envio automatico em "
+                    f"{datetime.now().strftime('%d/%m/%Y %H:%M')} sem exito. "
+                    f"Aguarda providencias do Cartorio para novo encaminhamento."
+                )
+                # Remove codDocVinculado para usar URL generica
+                url_orig = record.url_recebimento
+                if url_orig and 'codDocVinculado' in str(url_orig):
+                    record.url_recebimento = str(url_orig).split('&codDocVinculado')[0]
+                sucesso_j, _, _ = self._juntar_via_requests(record, '11383', observacao=obs)
+                if url_orig:
+                    record.url_recebimento = url_orig
+                if sucesso_j:
+                    record.status = 'juntado'
+                    record.save(update_fields=['status', 'url_recebimento'])
+                    resultado['juntado'] = True
+            except Exception:
+                pass
 
         return resultado
 
@@ -689,7 +712,10 @@ class OficioService:
         
         if 'jsessionid' in erro or 'sessao' in erro or 'expirada' in erro:
             return "A sessao do Projudi expirou. Abra o Firefox, faca login no Projudi e rode o script de captura de cookies novamente."
-        
+
+        if 'nenhum e-mail' in erro or 'email de destino' in erro or 'email nao encontrado' in erro:
+            return "o oficio nao possui e-mail de destinatario."
+
         if 'smtp' in erro or 'email' in erro or 'gmail' in erro:
             return "Nao foi possivel enviar o e-mail. Verifique se a senha de app do Gmail esta configurada corretamente nas configuracoes."
         

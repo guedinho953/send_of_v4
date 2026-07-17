@@ -139,27 +139,26 @@ class OficioSyncView(LoginRequiredMixin, View):
 
 
 class OficioSendView(LoginRequiredMixin, View):
-    """
-    POST /projudi/oficios/<pk>/enviar/
-    Envia oficio por e-mail e registra log humanizado.
-    """
+    """POST /projudi/oficios/<pk>/enviar/ - Envia e junta (ou impossibilidade)"""
     def post(self, request, pk):
         record = get_object_or_404(OficioRecord, pk=pk, user=request.user)
         service = OficioService(request.user)
         try:
-            resultado = service.enviar_oficio(record)
-            if resultado.get('enviado'):
-                messages.success(
-                    request,
-                    f"✅ Oficio {record.numero_oficio} enviado com sucesso para {record.email_destino}!"
-                )
+            resultado = service.processar_oficio(record)
+            if resultado.get('enviado') and resultado.get('juntado'):
+                messages.success(request,
+                    f"Enviado e juntado: {record.numero_oficio}")
+            elif resultado.get('juntado'):
+                messages.success(request,
+                    f"Envio falhou, mas juntada de impossibilidade realizada: {record.numero_oficio}")
+            elif resultado.get('enviado'):
+                messages.success(request,
+                    f"Enviado: {record.numero_oficio} (pendente de juntada)")
             else:
-                # Log humanizado de erro
-                erro_humanizado = service.humanizar_erro(resultado.get('erro', 'Erro desconhecido'))
-                messages.error(request, f"❌ {erro_humanizado}")
+                erro = service.humanizar_erro(resultado.get('erro', 'Erro'))
+                messages.error(request, f"{erro}")
         except Exception as e:
-            erro_humanizado = service.humanizar_erro(str(e))
-            messages.error(request, f"❌ {erro_humanizado}")
+            messages.error(request, f"Erro: {service.humanizar_erro(str(e))}")
         finally:
             try:
                 service.fechar()
@@ -624,4 +623,31 @@ class OficioExpedirCiapView(LoginRequiredMixin, View):
         except Exception as e:
             messages.error(request, f'❌ Erro: {str(e)[:200]}')
 
+        return HttpResponseRedirect(reverse('projudi:oficio_dashboard'))
+
+class OficioProcessarPendentesView(LoginRequiredMixin, View):
+    def post(self, request):
+        from projudi.oficio_service import OficioService
+        service = OficioService(request.user)
+        pendentes = OficioRecord.objects.filter(
+            user=request.user,
+            status__in=['pendente', 'falhou_email']
+        )[:10]
+        cont = {'env': 0, 'junt': 0, 'err': 0}
+        for r in pendentes:
+            try:
+                res = service.processar_oficio(r)
+                if res.get('enviado'): cont['env'] += 1
+                if res.get('juntado'): cont['junt'] += 1
+                if res.get('erro') and not res.get('juntado'): cont['err'] += 1
+            except Exception:
+                cont['err'] += 1
+        msgs = []
+        if cont['env']: msgs.append(f"Enviados: {cont['env']}")
+        if cont['junt']: msgs.append(f"Juntados: {cont['junt']}")
+        if cont['err']: msgs.append(f"Erros: {cont['err']}")
+        if msgs:
+            messages.success(request, ' | '.join(msgs))
+        else:
+            messages.info(request, 'Nenhum pendente.')
         return HttpResponseRedirect(reverse('projudi:oficio_dashboard'))

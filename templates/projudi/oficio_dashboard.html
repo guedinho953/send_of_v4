@@ -109,6 +109,13 @@
             </button>
         </form>
     {% endif %}
+    <!-- Botao: processar pendentes (envia ou junta impossibilidade) -->
+    <form method="post" action="{% url 'projudi:oficio_processar_pendentes' %}" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn" style="background:linear-gradient(135deg,#7c3aed,#a855f7); color:white; font-weight:600; box-shadow:0 2px 8px rgba(124,58,237,0.4);">
+            📨 Processar Pendentes
+        </button>
+    </form>
     <!-- Dropdown Expedir -->
     <div class="dropdown" style="display:inline-block; position:relative;">
         <button type="button" class="btn" style="background:linear-gradient(135deg,#7c3aed,#a855f7); color:white; font-weight:600; box-shadow:0 2px 8px rgba(124,58,237,0.4);" onclick="toggleExpDropdown()">

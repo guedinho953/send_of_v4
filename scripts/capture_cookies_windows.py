@@ -18,6 +18,7 @@ Requisitos:
 
 import json
 import time
+import sys
 from pathlib import Path
 import browser_cookie3
 
@@ -26,11 +27,12 @@ OUTPUT_DIR = Path("D:/Projudi")
 OUTPUT_FILE = OUTPUT_DIR / "cookies.json"
 
 
-def capture_cookies():
+def capture_cookies(quiet=False):
     """Captura cookies do Firefox via browser_cookie3."""
-    print("=" * 60)
-    print("Captura de Cookies - Projudi")
-    print("=" * 60)
+    if not quiet:
+        print("=" * 60)
+        print("Captura de Cookies - Projudi")
+        print("=" * 60)
     
     # Tenta Firefox primeiro (mais comum)
     browsers = ['firefox', 'chrome', 'edge']
@@ -41,11 +43,13 @@ def capture_cookies():
             cookies = {c.name: c.value for c in cj}
             
             if cookies:
-                print(f"\n[OK] {len(cookies)} cookies capturados do {browser_name}")
-                print(f"     Keys: {list(cookies.keys())}")
+                if not quiet:
+                    print(f"\n[OK] {len(cookies)} cookies capturados do {browser_name}")
+                    print(f"     Keys: {list(cookies.keys())}")
                 return cookies
         except Exception as e:
-            print(f"\n[IGNORADO] {browser_name}: {e}")
+            if not quiet:
+                print(f"\n[IGNORADO] {browser_name}: {e}")
     
     return {}
 
@@ -61,31 +65,36 @@ def save_cookies(cookies):
 
 
 def main():
-    cookies = capture_cookies()
+    quiet = '--quiet' in sys.argv
+    
+    cookies = capture_cookies(quiet=quiet)
     
     if not cookies:
+        if quiet:
+            return 1  # silent exit for automation
         print("\n[ERRO] Nenhum cookie encontrado!")
         print("       Certifique-se de estar logado no Projudi no navegador.")
         return 1
     
     if 'JSESSIONID' not in cookies:
-        print("\n[AVISO] JSESSIONID nao encontrado!")
-        print("        A sessao pode estar expirada ou o navegador nao esta logado.")
+        if not quiet:
+            print("\n[AVISO] JSESSIONID nao encontrado!")
+            print("        A sessao pode estar expirada ou o navegador nao esta logado.")
     
     save_cookies(cookies)
     
-    # Mantem rodando com keep-alive (opcional)
-    print("\n[INFO] Rodando keep-alive (Ctrl+C para parar)...")
-    try:
-        while True:
-            time.sleep(60)
-            # Re-captura a cada minuto
-            new_cookies = capture_cookies()
-            if new_cookies and 'JSESSIONID' in new_cookies:
-                save_cookies(new_cookies)
-                print("[OK] Cookies renovados")
-    except KeyboardInterrupt:
-        print("\n[OK] Encerrado.")
+    # Keep-alive loop (apenas em modo interativo)
+    if not quiet:
+        print("\n[INFO] Rodando keep-alive (Ctrl+C para parar)...")
+        try:
+            while True:
+                time.sleep(60)
+                new_cookies = capture_cookies(quiet=True)
+                if new_cookies and 'JSESSIONID' in new_cookies:
+                    save_cookies(new_cookies)
+                    print("[OK] Cookies renovados")
+        except KeyboardInterrupt:
+            print("\n[OK] Encerrado.")
     
     return 0
 

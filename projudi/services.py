@@ -68,20 +68,127 @@ class ProjudiService:
     # ------------------------------------------------------------------
     def _get_session_from_cookies(self):
         """
-        Cria um requests.Session a partir dos cookies salvos no Django
-        (ProjudiSession). Usa cookies existentes sem rodar o bot.
+        Cria um requests.Session a partir dos cookies.
+        Prioridade:
+        1. /mnt/d/Projudi/cookies.json (capturado pelo Windows)
+        2. Captura automática via powershell.exe (Windows nativo)
+        3. ProjudiSession no banco Django
         """
         import requests
         from .models import ProjudiSession
-        sessao = ProjudiSession.objects.filter(user=self.user, status='active').first()
-        if not sessao or not sessao.cookies:
-            return None
+        import json
+        from pathlib import Path
+        import subprocess
 
-        session = requests.Session()
-        cookies_dict = sessao.cookies if isinstance(sessao.cookies, dict) else {}
-        for name, value in cookies_dict.items():
-            session.cookies.set(name, value)
-        return session, cookies_dict
+        def _criar_session(cookies_dict):
+            session = requests.Session()
+            for name, value in cookies_dict.items():
+                session.cookies.set(name, value)
+            session.headers.update({
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "pt-BR,pt;q=0.9",
+                "Connection": "keep-alive",
+            })
+            return session, cookies_dict
+
+        # 1) Tenta o arquivo JSON (mais confiável - capturado pelo Windows)
+        caminhos_json = [
+            Path('/mnt/d/Projudi/cookies.json'),
+            Path('/mnt/c/Projudi/cookies.json'),
+            Path.home() / '.projudi_cookies.json',
+            Path('/tmp/projudi_cookies.json'),
+        ]
+
+        for caminho in caminhos_json:
+            if caminho.exists():
+                try:
+                    with open(caminho, 'r', encoding='utf-8') as f:
+                        cookies_dict = json.load(f)
+                    if 'JSESSIONID' in cookies_dict:
+                        # Atualiza sessão no banco
+                        ProjudiSession.objects.update_or_create(
+                            user=self.user,
+                            defaults={
+                                'cookies': cookies_dict,
+                                'status': 'active',
+                                'tenant': self.user.tenant if hasattr(self.user, 'tenant') else None,
+                            }
+                        )
+                        # Aquecer sessão
+                        session, _ = _criar_session(cookies_dict)
+                        session.get("https://projudi.tjba.jus.br/projudi/cadastros/AnalisarMovimentacao", timeout=10)
+                        return session, cookies_dict
+                except Exception:
+                    pass
+
+        # 2) Tenta capturar automaticamente via powershell.exe
+        try:
+            script_path = 'D:\\Projudi\\capture_cookies_windows.py'
+            result = subprocess.run(
+                ['powershell.exe', '-Command',
+                 f'python "{script_path}" --quiet'],
+                capture_output=True, text=True, timeout=30,
+            )
+            # Re-tenta ler após captura
+            for caminho in caminhos_json:
+                if caminho.exists():
+                    try:
+                        with open(caminho, 'r', encoding='utf-8') as f:
+                            cookies_dict = json.load(f)
+                        if 'JSESSIONID' in cookies_dict:
+                            ProjudiSession.objects.update_or_create(
+                                user=self.user,
+                                defaults={
+                                    'cookies': cookies_dict,
+                                    'status': 'active',
+                                    'tenant': self.user.tenant if hasattr(self.user, 'tenant') else None,
+                                }
+                            )
+                            session, _ = _criar_session(cookies_dict)
+                            session.get("https://projudi.tjba.jus.br/projudi/cadastros/AnalisarMovimentacao", timeout=10)
+                            return session, cookies_dict
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+        # 3) Fallback: browser_cookie3 direto (pode funcionar no Windows)
+        try:
+            import browser_cookie3
+            cj = browser_cookie3.firefox(domain_name='projudi.tjba.jus.br')
+            cookies_ff = {c.name: c.value for c in cj}
+            if cookies_ff and 'JSESSIONID' in cookies_ff:
+                # Salvou no arquivo e no banco
+                for caminho in caminhos_json:
+                    if caminho.parent.exists():
+                        with open(caminho, 'w') as f:
+                            json.dump(cookies_ff, f)
+                        break
+                ProjudiSession.objects.update_or_create(
+                    user=self.user,
+                    defaults={
+                        'cookies': cookies_ff,
+                        'status': 'active',
+                        'tenant': self.user.tenant if hasattr(self.user, 'tenant') else None,
+                    }
+                )
+                session, _ = _criar_session(cookies_ff)
+                session.get("https://projudi.tjba.jus.br/projudi/cadastros/AnalisarMovimentacao", timeout=10)
+                return session, cookies_ff
+        except Exception:
+            pass
+
+        # 4) Fallback: sessão salva no banco
+        sessao = ProjudiSession.objects.filter(user=self.user, status='active').first()
+        if sessao and sessao.cookies:
+            cookies_dict = sessao.cookies if isinstance(sessao.cookies, dict) else {}
+            if 'JSESSIONID' in cookies_dict:
+                session, _ = _criar_session(cookies_dict)
+                return session, cookies_dict
+
+        print("[WARN] _get_session_from_cookies: JSESSIONID não encontrado em nenhuma fonte")
+        return None
 
     def list_oficios(self, quantidade=3):
         """
