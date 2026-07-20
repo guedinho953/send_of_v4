@@ -218,3 +218,86 @@ class OficioLog(TimeStampedModel):
 
     def __str__(self):
         return f'[{self.tipo}] {self.oficio.numero_oficio}'
+
+
+class MandadoRecord(TimeStampedModel):
+    STATUS_CHOICES = [
+        ('pendente', 'Pendente'),
+        ('expedido', 'Expedido'),
+        ('juntado', 'Juntado'),
+        ('falha', 'Falha'),
+        ('dispensado', 'Dispensado'),
+    ]
+
+    processo = models.CharField('Processo (Interno)', max_length=30, db_index=True)
+    numero_processo_cnj = models.CharField('Nº Processo (CNJ)', max_length=25, blank=True, db_index=True)
+    numero_mandado = models.CharField('Número Mandado', max_length=50, db_index=True)
+    status = models.CharField('Status', max_length=20, choices=STATUS_CHOICES, default='pendente')
+
+    # URLs Projudi
+    url_mandado = models.URLField('URL Mandado', blank=True)
+    url_processo = models.URLField('URL Processo', blank=True)
+
+    # Conteúdo extraído
+    parte_nome = models.CharField('Nome da Parte', max_length=200, blank=True)
+    texto_html = models.TextField('HTML Mandado', blank=True)
+
+    # Usuário que executou
+    user = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='mandados_executados'
+    )
+
+    class Meta:
+        verbose_name = 'Mandado'
+        verbose_name_plural = 'Mandados'
+        ordering = ['-created_at']
+        unique_together = ['processo', 'numero_mandado']
+
+    def __str__(self):
+        return f'{self.numero_mandado} — {self.processo}'
+
+    @property
+    def expedido(self):
+        return self.status in ('expedido', 'juntado')
+
+    @property
+    def juntado(self):
+        return self.status == 'juntado'
+
+    @property
+    def pode_expedir(self):
+        return self.status in ('pendente', 'falha')
+
+    @property
+    def dispensado(self):
+        return self.status == 'dispensado'
+
+
+class MandadoLog(TimeStampedModel):
+    TIPO_CHOICES = [
+        ('info', 'Info'),
+        ('expedicao', 'Expedição'),
+        ('juntada', 'Juntada'),
+        ('erro', 'Erro'),
+    ]
+
+    mandado = models.ForeignKey(
+        MandadoRecord,
+        on_delete=models.CASCADE,
+        related_name='logs',
+        null=True, blank=True,
+    )
+    tipo = models.CharField('Tipo', max_length=20, choices=TIPO_CHOICES, default='info')
+    mensagem = models.TextField('Mensagem')
+    detalhes = models.JSONField('Detalhes', default=dict, blank=True)
+
+    class Meta:
+        verbose_name = 'Log de Mandado'
+        verbose_name_plural = 'Logs de Mandados'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'[{self.tipo}] {self.mandado.numero_mandado if self.mandado else "?"}'

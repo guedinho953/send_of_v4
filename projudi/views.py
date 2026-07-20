@@ -127,3 +127,37 @@ class SyncSessionTemplateView(LoginRequiredMixin, TemplateView):
             user=self.request.user
         ).first()
         return context
+
+class MandadoExpedirView(LoginRequiredMixin, View):
+    """GET /projudi/mandados/expedir/ - Abre listagem de mandados no Projudi"""
+    def get(self, request):
+        from projudi.services import ProjudiService
+        service = ProjudiService(request.user)
+        try:
+            # Usa a sessão para acessar a listagem de mandados
+            result = service._get_session_from_cookies()
+            if result is None:
+                from django.contrib import messages
+                messages.error(request, "Sessao do Projudi nao disponivel. Sincronize primeiro.")
+                return HttpResponseRedirect(reverse('projudi:sync_session'))
+            session, cookies = result
+            from bs4 import BeautifulSoup
+            url = 'https://projudi.tjba.jus.br/projudi/listagens/CumprimentoCartorio?tipo=mandado&acao=expedir'
+            resp = session.get(url, timeout=15)
+            if resp.status_code == 200 and 'login' not in resp.url.lower():
+                soup = BeautifulSoup(resp.text, 'html.parser')
+                texto = soup.get_text(" ", strip=True)[:500]
+                from django.contrib import messages
+                messages.success(request, f"Mandados carregados ({len(resp.text)} bytes). Implementacao em andamento.")
+            else:
+                from django.contrib import messages
+                messages.error(request, "Nao foi possivel acessar a listagem de mandados. Sessao expirou?")
+        except Exception as e:
+            from django.contrib import messages
+            messages.error(request, f"Erro: {str(e)[:100]}")
+        finally:
+            try:
+                service.fechar()
+            except Exception:
+                pass
+        return HttpResponseRedirect(reverse('projudi:oficio_dashboard'))

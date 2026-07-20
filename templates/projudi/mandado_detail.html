@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% load processo_filters %}
+
+{% block title %}Mandado {{ mandado.numero_mandado }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+    .detail-card { background: #fff; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+    .detail-card h4 { margin: 0 0 12px; font-size: 14px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; }
+    .detail-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f3f4f6; font-size: 14px; }
+    .detail-label { color: #6b7280; }
+    .detail-value { font-weight: 500; color: #1e3a5f; text-align: right; }
+    .tag-status { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+    .tag-pendente { background: #fef3c7; color: #92400e; }
+    .tag-expedido { background: #d1fae5; color: #065f46; }
+    .tag-juntado { background: #dbeafe; color: #1e40af; }
+    .tag-falha { background: #fee2e2; color: #991b1b; }
+    .tag-dispensado { background: #f3e8ff; color: #6b21a8; }
+    .btn-sm { padding: 5px 12px; font-size: 12px; border-radius: 5px; }
+    .btn-green { background: #059669; color: white; }
+    .btn-green:hover { background: #047857; }
+    .btn-orange { background: #ea580c; color: white; }
+    .btn-orange:hover { background: #c2410c; }
+    .btn-outline { background: transparent; border: 1px solid #d1d5db; color: #374151; text-decoration: none; display: inline-block; }
+    .btn-outline:hover { background: #f3f4f6; }
+    .log-entry { font-size: 12px; padding: 10px 12px; border-radius: 6px; margin-bottom: 8px; }
+    .log-info { background: #eff6ff; border-left: 3px solid #3b82f6; }
+    .log-expedicao { background: #f0fdf4; border-left: 3px solid #22c55e; }
+    .log-juntada { background: #f0fdf4; border-left: 3px solid #2563eb; }
+    .log-erro { background: #fef2f2; border-left: 3px solid #ef4444; }
+    @media (max-width: 768px) { .detail-grid { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1 class="section-title">
+    📋 Mandado {{ mandado.numero_mandado }}
+    <span class="tag-status tag-{{ mandado.status }}">{{ mandado.get_status_display }}</span>
+</h1>
+
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+{% endif %}
+
+<div style="margin-bottom:16px; display:flex; gap:8px;">
+    <a href="{% url 'projudi:mandado_dashboard' %}" class="btn btn-outline">← Dashboard</a>
+    {% if mandado.pode_expedir %}
+        <form method="post" action="{% url 'projudi:mandado_expedir_action' mandado.pk %}" style="display:inline;">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-green">📤 Expedir</button>
+        </form>
+    {% endif %}
+    {% if mandado.url_mandado %}
+        <a href="{% url 'projudi:mandado_abrir_projudi' mandado.pk %}" class="btn btn-outline" target="_blank">🔗 Abrir no Projudi</a>
+    {% endif %}
+    {% if mandado.status != 'dispensado' %}
+        <form method="post" action="{% url 'projudi:mandado_dispensar' mandado.pk %}" style="display:inline;" onsubmit="return confirm('Dispensar mandado {{ mandado.numero_mandado }}?')">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline" style="color:#6b21a8;">🚫 Dispensar</button>
+        </form>
+    {% endif %}
+</div>
+
+<div class="detail-grid">
+    <div class="detail-card">
+        <h4>Dados do Mandado</h4>
+        <div class="detail-row">
+            <span class="detail-label">Nº Mandado</span>
+            <span class="detail-value">{{ mandado.numero_mandado }}</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Nº Processo (CNJ)</span>
+            <span class="detail-value">{{ mandado.numero_processo_cnj|default:"—" }}</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Processo (Interno)</span>
+            <span class="detail-value">{{ mandado.processo }}</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Parte</span>
+            <span class="detail-value">{{ mandado.parte_nome|default:"—" }}</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Status</span>
+            <span class="detail-value">{{ mandado.get_status_display }}</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Criado em</span>
+            <span class="detail-value">{{ mandado.created_at|date:"d/m/Y H:i" }}</span>
+        </div>
+    </div>
+    <div class="detail-card">
+        <h4>URLs</h4>
+        {% if mandado.url_mandado %}
+            <div class="detail-row">
+                <span class="detail-label">Mandado</span>
+                <span class="detail-value" style="font-size:11px; word-break:break-all;">
+                    <a href="{{ mandado.url_mandado }}" target="_blank">Abrir ↪</a>
+                </span>
+            </div>
+        {% endif %}
+        {% if mandado.url_processo %}
+            <div class="detail-row">
+                <span class="detail-label">Processo</span>
+                <span class="detail-value" style="font-size:11px; word-break:break-all;">
+                    <a href="{{ mandado.url_processo }}" target="_blank">Abrir ↪</a>
+                </span>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if mandado.texto_html %}
+<div class="detail-card" style="margin-bottom:20px;">
+    <h4 style="margin:0 0 12px; font-size:14px; color:#6b7280; text-transform:uppercase; letter-spacing:0.5px;">Conteúdo do Mandado</h4>
+    <div style="max-height:400px; overflow:auto; border:1px solid #e5e7eb; border-radius:6px; padding:12px; font-size:12px; background:#fafafa;">
+        <pre style="white-space:pre-wrap; font-family:monospace; margin:0;">{{ mandado.texto_html|slice:":5000" }}</pre>
+    </div>
+</div>
+{% endif %}
+
+<!-- Logs -->
+<div class="detail-card">
+    <h4 style="margin:0 0 12px; font-size:14px; color:#6b7280; text-transform:uppercase; letter-spacing:0.5px;">
+        📝 Histórico / Logs
+    </h4>
+    {% if logs %}
+        {% for log in logs %}
+            <div class="log-entry log-{{ log.tipo }}">
+                <strong>{{ log.tipo|upper }}</strong> — {{ log.mensagem|truncatechars:200 }}
+                <br><small style="color:#9ca3af;">{{ log.created_at|date:"d/m/Y H:i:s" }}</small>
+            </div>
+        {% endfor %}
+    {% else %}
+        <p style="color:#9ca3af; text-align:center;">Nenhum log registrado.</p>
+    {% endif %}
+</div>
+{% endblock %}

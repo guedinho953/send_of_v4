@@ -101,6 +101,13 @@
             <a href="{% url 'admin:index' %}" class="btn">Ver no Admin</a>
         </div>
 
+        <div class="card" style="border-left-color: #6366f1;">
+            <h3>Mandados</h3>
+            <p>Expedicao, sincronizacao e gerenciamento de mandados judiciais.</p>
+            <a href="{% url 'projudi:mandado_dashboard' %}" class="btn" style="background:linear-gradient(135deg,#6366f1,#818cf8); color:white; box-shadow:0 2px 8px rgba(99,102,241,0.4);">⚡ Dashboard Mandados</a>
+            <a href="{% url 'projudi:mandado_list' %}" class="btn btn-outline">Lista</a>
+        </div>
+
         <div class="card" style="border-left-color: #0891b2;">
             <h3>Documentos</h3>
             <p>Gerenciamento de documentos e arquivos do processo.</p>

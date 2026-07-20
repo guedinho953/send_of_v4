@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% load processo_filters %}
+
+{% block title %}Mandados — Send of v4{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .stat-card { background: #fff; border-radius: 10px; padding: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.06); border-left: 4px solid; text-align: center; }
+    .stat-card h4 { margin: 0; font-size: 28px; color: #1e3a5f; font-weight: 700; }
+    .stat-card p { margin: 4px 0 0; font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-card.total { border-left-color: #2563eb; }
+    .stat-card.pendentes { border-left-color: #d97706; }
+    .stat-card.expedidos { border-left-color: #059669; }
+    .stat-card.juntados { border-left-color: #2563eb; }
+    .stat-card.falhas { border-left-color: #dc2626; }
+    .acao-bar { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+    .btn-orange { background: #ea580c; color: white; }
+    .btn-orange:hover { background: #c2410c; }
+    .btn-green { background: #059669; color: white; }
+    .btn-green:hover { background: #047857; }
+    .btn-outline { background: transparent; border: 1px solid #d1d5db; color: #374151; }
+    .btn-outline:hover { background: #f3f4f6; }
+    .mandado-card { background: #fff; border-radius: 8px; padding: 14px 16px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border-left: 3px solid #d97706; transition: transform 0.1s; }
+    .mandado-card:hover { transform: translateX(4px); }
+    .mandado-card.expedido { border-left-color: #059669; }
+    .mandado-card.juntado { border-left-color: #2563eb; }
+    .mandado-card.falha { border-left-color: #dc2626; }
+    .mandado-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+    .mandado-numero { font-size: 15px; font-weight: 600; color: #1e3a5f; }
+    .mandado-processo { font-size: 13px; color: #6b7280; font-family: monospace; }
+    .mandado-parte { font-size: 12px; color: #6b7280; margin-top: 4px; }
+    .tag-status { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+    .tag-pendente { background: #fef3c7; color: #92400e; }
+    .tag-expedido { background: #d1fae5; color: #065f46; }
+    .tag-juntado { background: #dbeafe; color: #1e40af; }
+    .tag-falha { background: #fee2e2; color: #991b1b; }
+    .tag-dispensado { background: #f3e8ff; color: #6b21a8; }
+    .mandado-actions { display: flex; gap: 6px; margin-top: 10px; }
+    .btn-sm { padding: 5px 12px; font-size: 12px; border-radius: 5px; }
+    .bulk-bar { background: #f3f4f6; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; display: flex; gap: 10px; align-items: center; }
+    .filtro-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .filtro-btn { padding: 6px 14px; border-radius: 20px; font-size: 13px; border: 1px solid #e5e7eb; background: #fff; color: #374151; cursor: pointer; text-decoration: none; }
+    .filtro-btn.active { background: #2563eb; color: white; border-color: #2563eb; }
+    .filtro-btn:hover:not(.active) { background: #f9fafb; }
+    .empty-state { text-align: center; padding: 40px 20px; color: #6b7280; }
+    .empty-state svg { width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.4; }
+    .log-entry { font-size: 12px; padding: 8px 12px; border-radius: 6px; margin-bottom: 6px; }
+    .log-info { background: #eff6ff; border-left: 3px solid #3b82f6; }
+    .log-success { background: #f0fdf4; border-left: 3px solid #22c55e; }
+    .log-error { background: #fef2f2; border-left: 3px solid #ef4444; }
+    .log-warning { background: #fffbeb; border-left: 3px solid #f59e0b; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<h1 class="section-title">📋 Mandados Judiciais</h1>
+
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+{% endif %}
+
+<!-- Estatisticas -->
+<div class="stats-grid">
+    <div class="stat-card total">
+        <h4>{{ total }}</h4>
+        <p>Total</p>
+    </div>
+    <div class="stat-card pendentes">
+        <h4>{{ pendentes }}</h4>
+        <p>Pendentes</p>
+    </div>
+    <div class="stat-card expedidos">
+        <h4>{{ expedidos }}</h4>
+        <p>Expedidos</p>
+    </div>
+    <div class="stat-card juntados">
+        <h4>{{ juntados }}</h4>
+        <p>Juntados</p>
+    </div>
+    <div class="stat-card falhas">
+        <h4>{{ falhas }}</h4>
+        <p>Falhas</p>
+    </div>
+    <div class="stat-card" style="border-left-color: #6b21a8;">
+        <h4>{{ dispensados }}</h4>
+        <p>Dispensados</p>
+    </div>
+</div>
+
+<!-- Acoes -->
+<div class="bulk-bar">
+    <form method="post" action="{% url 'projudi:mandado_sync' %}" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-orange">
+            🔄 Sincronizar com Projudi
+        </button>
+    </form>
+    <form method="post" action="{% url 'projudi:mandado_rastrear' %}" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn" style="background:linear-gradient(135deg,#7c3aed,#a855f7); color:white; font-weight:600; box-shadow:0 2px 8px rgba(124,58,237,0.4);">
+            🔍 Rastrear &amp; Expedir Mandados
+        </button>
+    </form>
+    <a href="{% url 'projudi:mandado_list' %}" class="btn btn-outline">📋 Ver Lista Completa</a>
+</div>
+
+<!-- Filtros -->
+<div class="filtro-bar">
+    <a href="?status=" class="filtro-btn {% if not request.GET.status %}active{% endif %}">Todos</a>
+    <a href="?status=pendente" class="filtro-btn {% if request.GET.status == 'pendente' %}active{% endif %}">Pendentes</a>
+    <a href="?status=expedido" class="filtro-btn {% if request.GET.status == 'expedido' %}active{% endif %}">Expedidos</a>
+    <a href="?status=juntado" class="filtro-btn {% if request.GET.status == 'juntado' %}active{% endif %}">Juntados</a>
+    <a href="?status=falha" class="filtro-btn {% if request.GET.status == 'falha' %}active{% endif %}">Falhas</a>
+    <a href="?status=dispensado" class="filtro-btn {% if request.GET.status == 'dispensado' %}active{% endif %}">Dispensados</a>
+</div>
+
+<!-- Lista de Mandados -->
+<div class="card">
+    <h3 style="margin-top:0; margin-bottom:16px; color:#374151; font-size:18px;">
+        {% if request.GET.status == 'pendente' %}⏳ Pendentes
+        {% elif request.GET.status == 'expedido' %}📤 Expedidos
+        {% elif request.GET.status == 'juntado' %}✅ Juntados
+        {% elif request.GET.status == 'falha' %}❌ Falhas
+        {% elif request.GET.status == 'dispensado' %}🚫 Dispensados
+        {% else %}📋 Todos os Mandados
+        {% endif %}
+        <span style="font-size:14px; color:#6b7280; font-weight:400;">({{ mandados|length }} exibidos)</span>
+    </h3>
+
+    {% if mandados %}
+        {% for m in mandados %}
+        <div class="mandado-card {{ m.status }}">
+            <div class="mandado-header">
+                <div>
+                    <div class="mandado-numero">
+                        {% if m.numero_processo_cnj %}
+                            {{ m.numero_processo_cnj }}
+                        {% else %}
+                            Proc. {{ m.processo }}
+                        {% endif %}
+                        {% if m.status == 'expedido' %}<span style="color:#059669;">&#10003;</span>{% endif %}
+                        {% if m.status == 'juntado' %}<span style="color:#2563eb;">&#10004;</span>{% endif %}
+                    </div>
+                    <div class="mandado-processo">
+                        {% if m.numero_processo_cnj %}
+                            {{ m.numero_processo_cnj }}
+                        {% else %}
+                            Proc. {{ m.processo }}
+                        {% endif %}
+                    </div>
+                </div>
+                <span class="tag-status tag-{{ m.status }}">{{ m.get_status_display }}</span>
+            </div>
+            <div class="mandado-parte">
+                Mandado: <strong>{{ m.numero_mandado }}</strong>
+                {% if m.parte_nome %} | Parte: {{ m.parte_nome }}{% endif %}
+            </div>
+            <div class="mandado-actions">
+                <a href="{% url 'projudi:mandado_detail' m.pk %}" class="btn btn-sm btn-outline">🔍 Detalhes</a>
+                {% if m.pode_expedir %}
+                    <form method="post" action="{% url 'projudi:mandado_expedir_action' m.pk %}" style="display:inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-green">📤 Expedir</button>
+                    </form>
+                {% endif %}
+                {% if m.url_mandado %}
+                    <a href="{% url 'projudi:mandado_abrir_projudi' m.pk %}" class="btn btn-sm btn-outline" target="_blank">🔗 Abrir no Projudi</a>
+                {% endif %}
+                {% if m.status != 'dispensado' %}
+                    <form method="post" action="{% url 'projudi:mandado_dispensar' m.pk %}" style="display:inline;" onsubmit="return confirm('Dispensar mandado {{ m.numero_mandado }}?')">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-outline" style="color:#6b21a8;">🚫 Dispensar</button>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="empty-state">
+            <p style="font-size:16px;">📭 Nenhum mandado encontrado</p>
+            <p>Clique em <strong>"Sincronizar com Projudi"</strong> para buscar mandados pendentes.</p>
+        </div>
+    {% endif %}
+</div>
+
+{% endblock %}

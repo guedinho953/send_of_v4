@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import ProjudiSession, Court, Vara, Judge, OficioRecord, OficioLog
+from .models import ProjudiSession, Court, Vara, Judge, OficioRecord, OficioLog, MandadoRecord, MandadoLog
 
 
 @admin.register(ProjudiSession)
@@ -44,6 +44,26 @@ class OficioLogAdmin(admin.ModelAdmin):
     list_display = ['oficio', 'tipo', 'mensagem_resumo', 'created_at']
     list_filter = ['tipo', 'created_at']
     search_fields = ['mensagem', 'oficio__numero_oficio']
+    readonly_fields = ['created_at']
+
+    def mensagem_resumo(self, obj):
+        return obj.mensagem[:80] + '...' if len(obj.mensagem) > 80 else obj.mensagem
+    mensagem_resumo.short_description = 'Mensagem'
+
+
+@admin.register(MandadoRecord)
+class MandadoRecordAdmin(admin.ModelAdmin):
+    list_display = ['numero_mandado', 'processo', 'parte_nome', 'status', 'created_at']
+    list_filter = ['status', 'created_at']
+    search_fields = ['numero_mandado', 'processo', 'parte_nome']
+    readonly_fields = ['created_at', 'updated_at']
+
+
+@admin.register(MandadoLog)
+class MandadoLogAdmin(admin.ModelAdmin):
+    list_display = ['mandado', 'tipo', 'mensagem_resumo', 'created_at']
+    list_filter = ['tipo', 'created_at']
+    search_fields = ['mensagem', 'mandado__numero_mandado']
     readonly_fields = ['created_at']
 
     def mensagem_resumo(self, obj):

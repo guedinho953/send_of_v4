@@ -1,6 +1,7 @@
 from django.urls import path
 from . import views
 from . import oficio_views
+from . import mandado_views
 
 app_name = 'projudi'
 
@@ -25,6 +26,17 @@ urlpatterns = [
     path('oficios/rastrear-ciap/', oficio_views.OficioRastrearCiapView.as_view(), name='oficio_rastrear_ciap'),
     path('oficios/expedir-ciap-proc/', oficio_views.OficioExpedirCiapProcessoView.as_view(), name='oficio_expedir_ciap_processo'),
     path('oficios/processar-pendentes/', oficio_views.OficioProcessarPendentesView.as_view(), name='oficio_processar_pendentes'),
+
+    # Aba Mandados
+    path('mandados/dashboard/', mandado_views.MandadoDashboardView.as_view(), name='mandado_dashboard'),
+    path('mandados/lista/', mandado_views.MandadoListView.as_view(), name='mandado_list'),
+    path('mandados/sync/', mandado_views.MandadoSyncView.as_view(), name='mandado_sync'),
+    path('mandados/<int:pk>/', mandado_views.MandadoDetailView.as_view(), name='mandado_detail'),
+    path('mandados/<int:pk>/expedir/', mandado_views.MandadoExpedirActionView.as_view(), name='mandado_expedir_action'),
+    path('mandados/<int:pk>/dispensar/', mandado_views.MandadoDispensarView.as_view(), name='mandado_dispensar'),
+    path('mandados/<int:pk>/logs/json/', mandado_views.MandadoLogsJsonView.as_view(), name='mandado_logs_json'),
+    path('mandados/<int:pk>/abrir-projudi/', mandado_views.MandadoAbrirProjudiView.as_view(), name='mandado_abrir_projudi'),
+    path('mandados/rastrear/', mandado_views.MandadoRastrearView.as_view(), name='mandado_rastrear'),
 
     # Aba Retornos (GERENCIAMENTO DE RESPOSTAS)
     path('retornos/dashboard/', oficio_views.RetornoDashboardView.as_view(), name='retorno_dashboard'),

@@ -1,0 +1,83 @@
+<div style="font-family:'Times New Roman',serif; font-size:12pt; max-width:750px; margin:0 auto;">
+
+    <div style="text-align:center; margin-bottom:6px;">
+        <div style="font-size:11pt; font-weight:bold; text-transform:uppercase;">Poder Judiciário do Estado da Bahia
+        </div>
+        <div style="font-size:11pt; font-weight:bold;">Tribunal de Justiça do Estado da Bahia</div>
+        <div style="font-size:10pt; font-weight:bold;">2ª Vara do Sistema dos Juizados Especiais</div>
+        <div style="font-size:10pt; font-weight:bold;">Paulo Afonso</div>
+    </div>
+
+    <hr style="border:0.5px solid #000; margin:4px 0;">
+
+    <div style="font-size:9pt; text-align:center; margin:2px 0; line-height:1.2;">
+        Rua das Caraibeiras, 420, Quadra 04 - 1º Andar, General Dultra - PAULO AFONSO<br>
+        <strong>pafonso-2vsj@tjba.jus.br</strong> | Funcionamento: 13:00 às 19:00 | Tel.: (75)3281-8372
+    </div>
+
+    <hr style="border:0.5px solid #000; margin:4px 0;">
+
+    <div style="text-align:center; font-size:14pt; font-weight:bold; font-family:'Courier New',monospace; margin:16px 0 12px; letter-spacing:2px; text-transform:uppercase;">
+        MANDADO
+    </div>
+
+    <div style="font-size:10pt; font-family:'Courier New',monospace; margin:4px 0;">
+        <strong>Ref. ao Proc. nº {{ processo }}</strong>
+    </div>
+
+    {% if numero_documento %}
+    <div style="font-size:10pt; font-family:'Courier New',monospace; margin:4px 0;">
+        <strong>Mandado nº {{ numero_documento }} - SEC/RPA</strong>
+    </div>
+    {% endif %}
+
+    <div style="font-size:10pt; font-family:'Courier New',monospace; margin:16px 0; text-align:justify; text-indent:80px;">
+        {% if saudacao %}{{ saudacao }}{% else %}Senhor(a),{% endif %}
+    </div>
+
+    <div style="font-size:10pt; font-family:'Courier New',monospace; margin:12px 0; text-align:justify; text-indent:80px; line-height:1.4;">
+        De ordem do Excelentíssimo Juiz de Direito da 2ª Vara do Sistema dos Juizados Especiais da Comarca de Paulo Afonso, <strong>Dr. {{ despacho_autor }}</strong>, fica(m) V.Sa. devidamente <strong>INTIMADO(A)</strong> para, no prazo de <strong>{{ prazo_dias | default:"05" }} dias</strong>, {% if descricao_cumprimento %}{{ descricao_cumprimento }}{% else %}dar cumprimento ao determinado nos autos do processo em epígrafe, sob pena de prosseguimento do feito.{% endif %}
+    </div>
+
+    {% if observacoes %}
+    <div style="font-size:10pt; font-family:'Courier New',monospace; margin:12px 0; text-align:justify; text-indent:80px; line-height:1.4;">
+        <strong>Observações:</strong> {{ observacoes }}
+    </div>
+    {% endif %}
+
+    <div style="font-size:10pt; font-family:'Courier New',monospace; margin:24px 0 6px; text-align:left;">
+        Atenciosamente,
+    </div>
+
+    <div style="font-size:10pt; font-family:'Courier New',monospace; margin:20px 0 6px; text-align:right;">
+        Paulo Afonso/BA, {{ data }}
+    </div>
+
+  
+
+    <div style="font-size:10pt; font-family:'Courier New',monospace; margin:24px 0 6px; text-align:center;">
+        <strong>{{ despacho_autor }}</strong><br>
+        <strong>JUIZ DE DIREITO</strong>
+    </div>
+
+    <div style="text-align:center;">
+        <hr style="border:0.5px solid #000; width:60%; margin:12px 0 6px;">
+    </div>
+
+    <div style="font-size:9pt; font-family:'Courier New',monospace; text-align:left; line-height:1.3; margin-left:0;">
+        <strong>Destinatário(a):</strong> {{ parte.nome }}{% if parte.endereco %} &mdash; {{ parte.endereco }}{% endif %}{% if parte.telefone %} &mdash; Tel.: {{ parte.telefone }}{% endif %}{% if parte.email %} &mdash; E-mail: {{ parte.email }}{% endif %}.
+    </div>
+
+    <div style="font-size:7pt; font-family:'Courier New',monospace; text-align:center; margin:6px 0;">
+        Documento assinado eletronicamente
+    </div>
+
+    <div style="font-size:7pt; font-family:'Courier New',monospace; margin:8px 0 0; text-align:justify; line-height:1.2;">
+        <sup>1</sup> Documento assinado eletronicamente conforme arts. 1º e 2º da Lei nº. 11.419/06, que dispõe sobre a informatização do processo digital. O documento pode ser acessado no endereço eletrônico https://projudi.tjba.jus.br/projudi sob o número acima epigrafado.
+    </div>
+
+    <div style="font-size:7pt; font-family:'Courier New',monospace; text-align:right; margin-top:2px;">
+        {{ processo }}
+    </div>
+
+</div>

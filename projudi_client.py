@@ -35,10 +35,12 @@ class ProjudiClient:
     LINK_BASE = "https://projudi.tjba.jus.br/projudi/"
 
     PATH_OFICIOS = "listagens/CumprimentoCartorio?tipo=oficio&acao=expedidos"
+    PATH_MANDADOS = "listagens/CumprimentoCartorio?tipo=mandado&acao=expedir"
     PATH_PETICOES = "listagens/JuntadaPeticao"
     PATH_MOVIMENTACOES = "cadastros/AnalisarMovimentacao"
-    
+
     URL_OFICIOS = urljoin(LINK_BASE, PATH_OFICIOS)
+    URL_MANDADOS = urljoin(LINK_BASE, PATH_MANDADOS)
     URL_PETICOES = urljoin(LINK_BASE, PATH_PETICOES)
     URL_MOVIMENTACOES = urljoin(LINK_BASE, PATH_MOVIMENTACOES)
 
