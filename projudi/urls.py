@@ -37,6 +37,8 @@ urlpatterns = [
     path('mandados/<int:pk>/logs/json/', mandado_views.MandadoLogsJsonView.as_view(), name='mandado_logs_json'),
     path('mandados/<int:pk>/abrir-projudi/', mandado_views.MandadoAbrirProjudiView.as_view(), name='mandado_abrir_projudi'),
     path('mandados/rastrear/', mandado_views.MandadoRastrearView.as_view(), name='mandado_rastrear'),
+    path('oficios/rastrear/', mandado_views.OficioRastrearView.as_view(), name='oficio_rastrear'),
+    path('rastrear-expedir/', mandado_views.RastrearExpedirView.as_view(), name='rastrear_expedir'),
 
     # Aba Retornos (GERENCIAMENTO DE RESPOSTAS)
     path('retornos/dashboard/', oficio_views.RetornoDashboardView.as_view(), name='retorno_dashboard'),

@@ -213,12 +213,12 @@ class MandadoRastrearView(LoginRequiredMixin, View):
     def post(self, request):
         import subprocess, os, sys
 
-        script_path = os.path.join(settings.BASE_DIR, 'expedir_mandado_rapido.py')
+        script_path = os.path.join(settings.BASE_DIR, 'expedir_rapido.py')
         env = {**os.environ, 'DJANGO_ALLOW_ASYNC_UNSAFE': 'true'}
 
         try:
             result = subprocess.run(
-                [sys.executable or 'python3', script_path],
+                [sys.executable or 'python3', script_path, '--mandados-only'],
                 cwd=settings.BASE_DIR, env=env,
                 capture_output=True, text=True,
                 timeout=600,
@@ -245,3 +245,83 @@ class MandadoRastrearView(LoginRequiredMixin, View):
             messages.error(request, f'❌ Erro: {str(e)[:200]}')
 
         return HttpResponseRedirect(reverse('projudi:mandado_dashboard'))
+
+
+class RastrearExpedirView(LoginRequiredMixin, View):
+    """
+    POST /projudi/rastrear-expedir/
+    Varre movimentações, match RAG e expede mandados E ofícios.
+    """
+    def post(self, request):
+        import subprocess, os, sys
+        from django.conf import settings
+
+        script_path = os.path.join(settings.BASE_DIR, 'expedir_rapido.py')
+        env = {**os.environ, 'DJANGO_ALLOW_ASYNC_UNSAFE': 'true'}
+
+        try:
+            result = subprocess.run(
+                [sys.executable or 'python3', script_path],
+                cwd=settings.BASE_DIR, env=env,
+                capture_output=True, text=True,
+                timeout=600,
+            )
+
+            output = (result.stdout or '') + (result.stderr or '')
+            linhas_uteis = [l.strip() for l in output.split('\n') if l.strip()]
+
+            if result.returncode == 0:
+                messages.success(request, '🔍 Rastreamento concluído! Verifique o resultado.')
+            else:
+                messages.warning(request, f'⚠️ Código {result.returncode}. Verifique o log.')
+
+            for linha in linhas_uteis[-30:]:
+                if any(kw in linha.lower() for kw in ['✅', '❌', '🔍', 'match', 'exped', 'erro', '>>', 'rag', 'template', 'processo', 'playwright', 'mov', 'fckeditor', 'registrar', 'mandado', 'oficio']):
+                    messages.info(request, linha[:300])
+
+        except subprocess.TimeoutExpired:
+            messages.error(request, '⏱️ Rastreamento excedeu 10 minutos.')
+        except Exception as e:
+            messages.error(request, f'❌ Erro: {str(e)[:200]}')
+
+        return HttpResponseRedirect(reverse('dashboard'))
+
+
+class OficioRastrearView(LoginRequiredMixin, View):
+    """
+    POST /projudi/oficios/rastrear/
+    Varre movimentações, match RAG e expede ofícios (CIAP, RPV, etc).
+    """
+    def post(self, request):
+        import subprocess, os, sys
+        from django.conf import settings
+
+        script_path = os.path.join(settings.BASE_DIR, 'expedir_rapido.py')
+        env = {**os.environ, 'DJANGO_ALLOW_ASYNC_UNSAFE': 'true'}
+
+        try:
+            result = subprocess.run(
+                [sys.executable or 'python3', script_path, '--oficios-only'],
+                cwd=settings.BASE_DIR, env=env,
+                capture_output=True, text=True,
+                timeout=600,
+            )
+
+            output = (result.stdout or '') + (result.stderr or '')
+            linhas_uteis = [l.strip() for l in output.split('\n') if l.strip()]
+
+            if result.returncode == 0:
+                messages.success(request, '🔍 Rastreamento de ofícios concluído!')
+            else:
+                messages.warning(request, f'⚠️ Código {result.returncode}. Verifique o log.')
+
+            for linha in linhas_uteis[-30:]:
+                if any(kw in linha.lower() for kw in ['✅', '❌', '🔍', 'match', 'exped', 'erro', 'rag', 'template', 'oficio', 'rpv', 'ciap']):
+                    messages.info(request, linha[:300])
+
+        except subprocess.TimeoutExpired:
+            messages.error(request, '⏱️ Rastreamento excedeu 10 minutos.')
+        except Exception as e:
+            messages.error(request, f'❌ Erro: {str(e)[:200]}')
+
+        return HttpResponseRedirect(reverse('dashboard'))

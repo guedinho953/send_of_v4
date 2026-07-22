@@ -161,6 +161,51 @@ def expedir_mandado_playwright(proc, session, cookies_dict, html_mandado, part=N
         part = Party.objects.filter(process=proc).last()
     nome_parte = part.name if part else 'parte'
 
+    # Se a parte não tem endereço, tenta buscar dados atualizados do Projudi
+    if part and (not part.address or not part.phone):
+        print('   🔍 Buscando dados atualizados da parte no Projudi...')
+        try:
+            proc_url = (proc.projudi_url or
+                f'https://projudi.tjba.jus.br/projudi/listagens/DadosProcesso?numeroProcesso={PROC_PROJUDI}')
+            r = session.get(proc_url, timeout=30)
+            if r.status_code == 200:
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(r.text, 'html.parser')
+                # Procura a linha (tr) da parte pelo nome
+                nome_busca = part.name.lower().strip()
+                for tr in soup.find_all('tr', id=lambda x: x and x.startswith('tr')):
+                    tds = tr.find_all('td')
+                    if len(tds) < 2:
+                        continue
+                    nome_td = tds[1].get_text(' ', strip=True).lower().strip()
+                    if nome_busca in nome_td or nome_td in nome_busca:
+                        id_linha = tr.get('id', '').replace('tr', '')
+                        span_end = soup.find('span', id=f'spanEnd{id_linha}')
+                        if span_end:
+                            texto = span_end.get_text(' ', strip=True)
+                            # Extrai endereço (tudo entre "Endereço" e o próximo campo)
+                            end_match = re.search(r'Endereço\s*(.*?)(?:\s+\d{10,11}|$)', texto, re.I | re.DOTALL)
+                            tel_match = re.search(r'(\d{10,11})', texto)
+                            email_match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', texto)
+                            endereco = end_match.group(1).strip() if end_match else ''
+                            if endereco:
+                                # Limpa caracteres especiais e espaços extras
+                                endereco = endereco.replace('\xa0', ' ').replace('\r\n', ', ').replace('\r', ', ').replace('\n', ', ')
+                                endereco = re.sub(r'\s+', ' ', endereco).strip().rstrip(',').strip()
+                            telefone = tel_match.group(1) if tel_match else ''
+                            email = email_match.group(0) if email_match else ''
+                            if endereco or telefone or email:
+                                part.address = endereco or part.address
+                                part.phone = telefone or part.phone
+                                part.email = email or part.email
+                                part.save(update_fields=['address', 'phone', 'email'])
+                                print(f'   ✅ Dados atualizados: endereço={bool(endereco)}, tel={bool(telefone)}, email={bool(email)}')
+                            break
+                else:
+                    print('   ⚠️ Parte não encontrada nos dados do Projudi')
+        except Exception as e:
+            print(f'   ⚠️ Erro ao buscar dados: {e}')
+
     sucesso = False
     try:
         with sync_playwright() as pw:
@@ -198,16 +243,41 @@ def expedir_mandado_playwright(proc, session, cookies_dict, html_mandado, part=N
             time.sleep(1)
             print('   ✅ Mov 581 injetado')
 
-            page.select_option('select[name="codTipoDocumento"]', '54')
-            time.sleep(1)
-            print(f'   Tipo doc: Mandado (54)')
+            page.select_option('select[name="codTipoDocumento"]', '51')
+            time.sleep(1.5)
+            print(f'   Tipo doc: Mandado (51)')
             page.fill('#observacao', f'Solicitada Expedicao de Mandado - {nome_parte[:30]}')
             time.sleep(0.5)
 
             page.locator("a:text('Cumprimento')").first.click()
             time.sleep(1)
-            page.select_option('#tipoCumprimento', '3')
+            page.select_option('#tipoCumprimento', '4')
             time.sleep(0.5)
+            # Seleciona subtipoCumprimento = "Intimação" (value 3) para mandado
+            # Subtipos disponíveis (projudi/tjba):
+            #   1  = Citação e Intimação para Audiência
+            #   2  = Intimação para Audiência
+            #   3  = Intimação ← (usando)
+            #   4  = Citação
+            #   5  = Intimação Despacho
+            #   6  = Intimação de Sentença
+            #   7  = Busca e Apreensão
+            #   8  = Citação e/ou Intimação com Liminar
+            #   9  = Mandado genérico
+            #   10 = Alvará de soltura
+            #   11 = Citação/Penhora/Avaliação/Intimação/Depósito
+            #   12 = Ofício
+            #   24 = Notificação
+            #   26 = Penhora e/ou avaliação
+            #   27 = Reintegração de Posse
+            #   34 = Prisão
+            try:
+                st = page.locator('#subtipoCumprimento, select[name="subtipoCumprimento"]').first
+                if st.count():
+                    st.select_option('3')
+                    print('   ✅ Subtipo cumprimento: Intimação (3)')
+            except Exception as e:
+                print(f'   Subtipo cumprimento: não encontrado ({e})')
             # Seleciona destinatário: a parte ré (autor do fato)
             nome_dest = part.name if part else ''
             if nome_dest:
@@ -259,7 +329,6 @@ def expedir_mandado_playwright(proc, session, cookies_dict, html_mandado, part=N
                 cod_cump = m.group(1)
 
             if not cod_cump:
-                # Tenta pegar de links na página
                 cod_cump = page.evaluate('''() => {
                     var body = document.body.innerHTML;
                     var m = body.match(/codCumprimento["']?\\s*[:=]\\s*["']?(\\d+)/i);
@@ -268,7 +337,6 @@ def expedir_mandado_playwright(proc, session, cookies_dict, html_mandado, part=N
             print(f'   codCumprimento: {cod_cump or "não encontrado"}')
 
             # Usa o link de movimentação genérica (do DadosProcesso)
-            # que mostra todos os cumprimentos pendentes do processo
             link_mov = proc.projudi_url or f'https://projudi.tjba.jus.br/projudi/listagens/DadosProcesso?numeroProcesso={PROC_PROJUDI}'
             r_mov = session.get(link_mov, timeout=15)
             if r_mov.status_code == 200:
@@ -300,7 +368,7 @@ def expedir_mandado_playwright(proc, session, cookies_dict, html_mandado, part=N
                         var sel = forms[i].querySelector('select[name="codModelo"]');
                         if (sel) {
                             for (var j = 0; j < sel.options.length; j++) {
-                                if (sel.options[j].text.toLowerCase().includes('mandado')) {
+                                if (sel.options[j].text.toLowerCase().includes('rpa')) {
                                     sel.value = sel.options[j].value; break;
                                 }
                             }
@@ -312,7 +380,6 @@ def expedir_mandado_playwright(proc, session, cookies_dict, html_mandado, part=N
                 }''')
                 print(f'   {r}')
                 if not r.get('ok'):
-                    # Fallback: vai direto pro ExpedirCumprimento
                     if cod_cump:
                         url_exp = f'https://projudi.tjba.jus.br/projudi/acoes/ExpedirCumprimentoCartorio?codCumprimento={cod_cump}&gerarar=false'
                         page.goto(url_exp, wait_until='load')
@@ -328,16 +395,59 @@ def expedir_mandado_playwright(proc, session, cookies_dict, html_mandado, part=N
                 browser.close()
                 return False
 
-            # ── 3. FCKEDITOR ──────────────────────────────────
-            print('   [3/5] ✍️ Colando HTML...')
+            # ── 3. FCKEDITOR — preservar brasão do RPA e colar nosso template ──
+            print('   [3/5] ✍️ Extraindo brasão do RPA e colando template...')
             time.sleep(3)
-            res = page.evaluate('''(html) => {
-                try { var ed = FCKeditorAPI.GetInstance('FCKeditor1'); ed.SetHTML(html); return 'OK'; }
-                catch(e) {
-                    try { var ed2 = window.parent.FCKeditorAPI.GetInstance('FCKeditor1'); ed2.SetHTML(html); return 'OK parent'; }
-                    catch(e2) { return 'ERRO: ' + e2.message; }
+
+            # 1. Pegar HTML original do modelo RPA
+            html_original = page.evaluate('''() => {
+                try {
+                    return FCKeditorAPI.GetInstance('FCKeditor1').GetHTML();
+                } catch(e) {
+                    try {
+                        return window.parent.FCKeditorAPI.GetInstance('FCKeditor1').GetHTML();
+                    } catch(e2) {
+                        return '';
+                    }
                 }
-            }''', html_mandado)
+            }''')
+
+            # 2. Extrair primeira imagem do brasão
+            img_match = re.search(r'(<img[^>]+src="[^"]*brasao[^"]*"[^>]*>)', html_original, re.I)
+            brasao_html = ''
+            if img_match:
+                brasao_html = f'<div style="text-align:center; margin-bottom:8px;">{img_match.group(1)}</div>'
+                print('   ✅ Brasão do modelo RPA extraído')
+            else:
+                print('   ⚠️ Brasão não encontrado no modelo RPA')
+
+            # 3. Montar HTML final: brasão + nosso template (já vem com destinatário do banco)
+            html_final = brasao_html + html_mandado
+
+            # 4. Colar no editor
+            res = page.evaluate('''(html) => {
+                try {
+                    var ed = FCKeditorAPI.GetInstance('FCKeditor1');
+                    ed.SetHTML('');
+                    ed.SetHTML(html);
+                    return 'OK SetHTML';
+                } catch(e) {
+                    try {
+                        var ed2 = window.parent.FCKeditorAPI.GetInstance('FCKeditor1');
+                        ed2.SetHTML('');
+                        ed2.SetHTML(html);
+                        return 'OK parent.SetHTML';
+                    } catch(e2) {
+                        var ifr = document.querySelector('iframe[title*="editor"], iframe[src*="FCKeditor"]');
+                        if (ifr) {
+                            var doc = ifr.contentDocument || ifr.contentWindow.document;
+                            var body = doc.querySelector('body');
+                            if (body) { body.innerHTML = html; return 'OK iframe'; }
+                        }
+                        return 'ERRO: ' + e2.message;
+                    }
+                }
+            }''', html_final)
             print(f'   📝 {res}')
             time.sleep(2)
 
@@ -383,8 +493,14 @@ def expedir_mandado_playwright(proc, session, cookies_dict, html_mandado, part=N
                 time.sleep(1)
                 btn_r.click()
                 time.sleep(4)
-                print('   ✅ Mandado registrado!')
-                sucesso = True
+                # Verificar se registrou
+                html_final = page.content()
+                if any(k in html_final.lower() for k in ['registrado', 'sucesso', 'confirmado', 'mandados para expedir', 'cumprimentocartorio']):
+                    print('   ✅ Mandado registrado!')
+                    sucesso = True
+                else:
+                    print('   ⚠️ Registrar clicado, mas não confirmado. Pode ter funcionado.')
+                    sucesso = True
             else:
                 print('   ⚠️ Registrar não encontrado (pode ter ido direto)')
                 sucesso = True
@@ -406,17 +522,25 @@ if __name__ == '__main__':
     parser.add_argument('--dry-run', action='store_true')
     args = parser.parse_args()
 
-    cookies_dict = carregar_cookies()
-    session = session_com_cookies(cookies_dict)
-
-    filtro = args.processo
-    projudi_informado = args.projudi
-    dry_run = args.dry_run
-
     user = User.objects.filter(is_active=True).first()
     if not user:
         print('❌ Nenhum usuário ativo')
         sys.exit(1)
+
+    # Usa captura robusta de cookies (4 camadas: JSON → PowerShell → browser_cookie3 → banco)
+    from projudi.services import ProjudiService
+    service = ProjudiService(user)
+    result = service._get_session_from_cookies()
+    if not result:
+        print('❌ Não foi possível capturar a sessão do Projudi.')
+        print('   Deixe o Firefox aberto e logado no Projudi, depois execute:')
+        print('   D:\\Projudi\\capturar_cookies.bat  (dê duplo clique)')
+        sys.exit(1)
+    session, cookies_dict = result
+
+    filtro = args.processo
+    projudi_informado = args.projudi
+    dry_run = args.dry_run
 
     # ══════════ MODO DIRETO (--processo) ══════════
     if filtro:
@@ -510,18 +634,52 @@ if __name__ == '__main__':
                 if not similares:
                     continue
 
-                melhor = similares[0]
-
-                # Filtro: % das palavras do RAGExample presentes no despacho
+                melhor = None
+                template = None
+                # Procura entre os matches: prioriza quem TEM template vinculado
                 palavras_texto = set(texto.lower().split())
-                palavras_rag = set(melhor['despacho_ato'].lower().split())
-                total_rag = max(len(palavras_rag), 1)
-                intersecao = len(palavras_texto & palavras_rag)
-                pct = intersecao / total_rag
-                if pct < 0.70:
+                for s in similares:
+                    palavras_rag_s = set(s['despacho_ato'].lower().split())
+                    total_s = max(len(palavras_rag_s), 1)
+                    inter_s = len(palavras_texto & palavras_rag_s)
+                    pct_s = inter_s / total_s
+                    if pct_s < 0.70:
+                        continue
+                    try:
+                        rag_cand = RAGExample.objects.get(id=s['id'])
+                        t = rag_cand.suggested_templates.filter(
+                            template_type='mandado').first()
+                        if t:
+                            melhor = s
+                            template = t
+                            rag = rag_cand
+                            break
+                    except RAGExample.DoesNotExist:
+                        continue
+
+                if not melhor:
+                    # Fallback: pega o primeiro que passar dos 70% E tiver template mandado
+                    for s in similares:
+                        palavras_rag_s = set(s['despacho_ato'].lower().split())
+                        total_s = max(len(palavras_rag_s), 1)
+                        inter_s = len(palavras_texto & palavras_rag_s)
+                        if inter_s / total_s >= 0.70:
+                            try:
+                                rag_cand = RAGExample.objects.get(id=s['id'])
+                                t = rag_cand.suggested_templates.filter(
+                                    template_type='mandado').first()
+                                if t:
+                                    melhor = s
+                                    rag = rag_cand
+                                    template = t
+                                    break
+                            except RAGExample.DoesNotExist:
+                                continue
+
+                if not melhor:
                     continue
 
-                print(f'\n  {proc_num}: match {melhor["similaridade"]} pal ({pct:.0%})', end='')
+                print(f'\n  {proc_num}: match {melhor["similaridade"]} pal ({pct_s:.0%})', end='')
 
                 proc = Process.objects.filter(number=proc_num).first()
                 if not proc:
@@ -531,25 +689,6 @@ if __name__ == '__main__':
                         print(' falhou')
                         continue
                     print(' OK', end='')
-
-                rag = RAGExample.objects.filter(
-                    process=proc, suggested_templates__in=templates_mandado,
-                ).first()
-                if not rag:
-                    rag_similar = RAGExample.objects.filter(
-                        despacho_ato__icontains=melhor['despacho_ato'][:50],
-                        suggested_templates__in=templates_mandado,
-                    ).first()
-                    if not rag_similar:
-                        print(' — sem RAG')
-                        continue
-                    rag = rag_similar
-
-                template = rag.suggested_templates.filter(
-                    template_type='mandado').first()
-                if not template:
-                    print(' — sem template')
-                    continue
 
                 part = Party.objects.filter(
                     process=proc, role__in=['reu', 'executado']).first()
@@ -561,7 +700,26 @@ if __name__ == '__main__':
 
                 print(f' ✅ {template.name} — {part.name}')
 
-                ctx = rag.get_template_context(parte_id=part.id)
+                ctx = {
+                    'processo': proc.number,
+                    'despacho_ato': rag.despacho_ato,
+                    'despacho_observacao': rag.despacho_observacao,
+                    'despacho_data': rag.despacho_data,
+                    'despacho_autor': rag.despacho_autor or 'MARTINHO FERRAZ DA NOBREGA JUNIOR',
+                    'parte': {
+                        'nome': part.name,
+                        'endereco': part.address,
+                        'email': part.email,
+                        'telefone': part.phone,
+                    },
+                    'partes': [{
+                        'nome': part.name,
+                        'endereco': part.address,
+                        'email': part.email,
+                        'telefone': part.phone,
+                    }],
+                    'prazo_dias': '05',
+                }
                 num_man = f'MAN-{proc.id:03d}/{date.today().year}'
                 ctx.update({
                     'numero_documento': num_man,

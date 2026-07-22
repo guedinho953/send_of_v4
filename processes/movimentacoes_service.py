@@ -244,7 +244,8 @@ def buscar_cumprimentos_similares(texto_movimentacao: str, top_k: int = 3) -> Li
 
     palavras_atual = set(texto_movimentacao.lower().split())
     for ex in exemplos:
-        texto_busca = ex.despacho_ato.lower()
+        # Usa despacho_ato + despacho_observacao (conteúdo real da decisão)
+        texto_busca = ex.despacho_ato.lower() + ' ' + ex.despacho_observacao.lower()
         for c in ex.cumprimentos:
             texto_busca += ' ' + c.get('ato', '') + ' ' + c.get('observacao', '')
         palavras_hist = set(texto_busca.split())
@@ -252,9 +253,12 @@ def buscar_cumprimentos_similares(texto_movimentacao: str, top_k: int = 3) -> Li
         if len(intersecao) > 2:
             resultados.append({
                 'similaridade': len(intersecao),
+                'id': ex.id,
                 'processo': ex.process.number if ex.process else None,
                 'despacho_ato': ex.despacho_ato[:200],
+                'despacho_observacao': ex.despacho_observacao[:500],
                 'cumprimentos': ex.cumprimentos,
+                'template_ids': list(ex.suggested_templates.values_list('id', flat=True)),
                 'data': ex.despacho_data,
             })
 

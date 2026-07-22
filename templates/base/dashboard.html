@@ -80,6 +80,10 @@
             <a href="{% url 'projudi:oficio_dashboard' %}" class="btn">Dashboard Oficios</a>
             <a href="{% url 'projudi:oficio_list' %}" class="btn btn-outline">Lista</a>
             <a href="{% url 'projudi:oficio_sync' %}" class="btn btn-green">Sincronizar</a>
+            <form method="post" action="{% url 'projudi:oficio_rastrear' %}" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn" style="background:#d97706;">🔍 Rastrear Ofícios</button>
+            </form>
         </div>
 
         <div class="card" style="border-left-color: #7c3aed;">
@@ -106,6 +110,14 @@
             <p>Expedicao, sincronizacao e gerenciamento de mandados judiciais.</p>
             <a href="{% url 'projudi:mandado_dashboard' %}" class="btn" style="background:linear-gradient(135deg,#6366f1,#818cf8); color:white; box-shadow:0 2px 8px rgba(99,102,241,0.4);">⚡ Dashboard Mandados</a>
             <a href="{% url 'projudi:mandado_list' %}" class="btn btn-outline">Lista</a>
+            <form method="post" action="{% url 'projudi:mandado_rastrear' %}" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn" style="background:#7c3aed;">🔍 Rastrear Mandados</button>
+            </form>
+            <form method="post" action="{% url 'projudi:rastrear_expedir' %}" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn" style="background:linear-gradient(135deg,#7c3aed,#a855f7); color:white; box-shadow:0 2px 8px rgba(124,58,237,0.4);">⚡ Rastrear e Expedir</button>
+            </form>
         </div>
 
         <div class="card" style="border-left-color: #0891b2;">

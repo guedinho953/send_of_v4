@@ -24,7 +24,7 @@ from processes.models import GeneratedDocument, Process, DocumentTemplate, Party
 from datetime import date
 from django.template import Template, Context
 from django.db.models import Max
-from projudi_bot import ProjudiBot
+from projudi_client import ProjudiClient
 from processo_parser_ext import ProcessoParserExt
 
 # ====== CONFIG ======
@@ -36,15 +36,20 @@ def rastrear_movimentacoes(paginas=3):
     print(f'\n========== RASTREAMENTO ==========')
     print(f'Varrendo últimas {paginas} páginas de movimentações...')
     
-    bot = ProjudiBot()
-    session = requests.Session()
-    session.cookies.update(cookies_dict)
-    
-    pages = bot.obter_paginas_finais_movimentacoes(paginas)
-    for page in pages:
-        movs = bot.extrair_links_movimentacoes(page)
+    client = ProjudiClient()
+    client.session = session
+    client.cookies = cookies_dict
+
+    pages = client.obter_paginas_finais_movimentacoes(quantidade=paginas)
+    for p in pages:
+        data = {'pagina': str(p), 'loginJuiz': ''}
+        rp = session.post(client.URL_MOVIMENTACOES, data=data, timeout=15)
+        if len(rp.text) < 1000:
+            continue
+        sp = BeautifulSoup(rp.text, 'html.parser')
+        movs = client.extrair_links_movimentacoes(sp)
         for m in movs:
-            proc_num = m.get('numero_processo')
+            proc_num = m.get('processo')
             if not proc_num:
                 continue
             
@@ -58,7 +63,8 @@ def rastrear_movimentacoes(paginas=3):
                 try:
                     r = session.get(doc_url, timeout=30)
                     if r.status_code == 200:
-                        texto = bot.limpar_texto_doc(r.text)
+                        soup_doc = BeautifulSoup(r.text, 'html.parser')
+                        texto = soup_doc.get_text(' ', strip=True)
                         print(f'   Documento: {len(texto)} chars')
                         
                         # Análise de comando
