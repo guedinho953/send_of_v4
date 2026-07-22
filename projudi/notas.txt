@@ -25,6 +25,9 @@
     powershell
     wsl -d Ubuntu -u ivan -e bash -c "cd /home/ivan/PythonProjects/send_of_v4 && source .venv/bin/activate && python scripts/capture_cookies_windows.py"
 
+    docker start pg_send_of
+
+    
     cd /home/ivan/PythonProjects/send_of_v4
     source .venv/bin/activate
     python manage.py runserver 0.0.0.0:8000 --noreload
@@ -32,3 +35,7 @@
     Pra voltar pro estado estável a qualquer momento:
     bash
     git checkout backup_estavel
+
+    python manage.py shell -c "from processes.models import Process; Process.objects.create(number='123456-78.2026.8.05.0191', number_normalized='0000000000000000000')"
+
+

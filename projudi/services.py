@@ -92,6 +92,28 @@ class ProjudiService:
             })
             return session, cookies_dict
 
+        def _session_valida(session):
+            """Verifica se a sessão realmente está autenticada no Projudi."""
+            try:
+                r = session.get(
+                    "https://projudi.tjba.jus.br/projudi/cadastros/AnalisarMovimentacao",
+                    timeout=10, allow_redirects=False
+                )
+                # Se redirecionou para login ou contém "expirou" no texto, está inválida
+                if r.status_code == 302:
+                    location = r.headers.get('Location', '')
+                    if 'login' in location.lower():
+                        return False
+                if 'login' in r.url.lower():
+                    return False
+                if 'expirou' in r.text[:500].lower():
+                    return False
+                if len(r.text) < 500:
+                    return False
+                return True
+            except Exception:
+                return False
+
         # 1) Tenta o arquivo JSON (mais confiável - capturado pelo Windows)
         caminhos_json = [
             Path('/mnt/d/Projudi/cookies.json'),
@@ -106,19 +128,21 @@ class ProjudiService:
                     with open(caminho, 'r', encoding='utf-8') as f:
                         cookies_dict = json.load(f)
                     if 'JSESSIONID' in cookies_dict:
-                        # Atualiza sessão no banco
-                        ProjudiSession.objects.update_or_create(
-                            user=self.user,
-                            defaults={
-                                'cookies': cookies_dict,
-                                'status': 'active',
-                                'tenant': self.user.tenant if hasattr(self.user, 'tenant') else None,
-                            }
-                        )
-                        # Aquecer sessão
+                        # Aquecer e validar sessão
                         session, _ = _criar_session(cookies_dict)
-                        session.get("https://projudi.tjba.jus.br/projudi/cadastros/AnalisarMovimentacao", timeout=10)
-                        return session, cookies_dict
+                        if _session_valida(session):
+                            # Cookies válidos — salva no banco
+                            ProjudiSession.objects.update_or_create(
+                                user=self.user,
+                                defaults={
+                                    'cookies': cookies_dict,
+                                    'status': 'active',
+                                    'tenant': self.user.tenant if hasattr(self.user, 'tenant') else None,
+                                }
+                            )
+                            return session, cookies_dict
+                        else:
+                            print(f"[INFO] Cookies em {caminho} expirados. Tentando próximo método...")
                 except Exception:
                     pass
 
@@ -137,17 +161,19 @@ class ProjudiService:
                         with open(caminho, 'r', encoding='utf-8') as f:
                             cookies_dict = json.load(f)
                         if 'JSESSIONID' in cookies_dict:
-                            ProjudiSession.objects.update_or_create(
-                                user=self.user,
-                                defaults={
-                                    'cookies': cookies_dict,
-                                    'status': 'active',
-                                    'tenant': self.user.tenant if hasattr(self.user, 'tenant') else None,
-                                }
-                            )
                             session, _ = _criar_session(cookies_dict)
-                            session.get("https://projudi.tjba.jus.br/projudi/cadastros/AnalisarMovimentacao", timeout=10)
-                            return session, cookies_dict
+                            if _session_valida(session):
+                                ProjudiSession.objects.update_or_create(
+                                    user=self.user,
+                                    defaults={
+                                        'cookies': cookies_dict,
+                                        'status': 'active',
+                                        'tenant': self.user.tenant if hasattr(self.user, 'tenant') else None,
+                                    }
+                                )
+                                return session, cookies_dict
+                            else:
+                                print("[INFO] Cookies capturados via PowerShell expirados.")
                     except Exception:
                         pass
         except Exception:
@@ -159,23 +185,25 @@ class ProjudiService:
             cj = browser_cookie3.firefox(domain_name='projudi.tjba.jus.br')
             cookies_ff = {c.name: c.value for c in cj}
             if cookies_ff and 'JSESSIONID' in cookies_ff:
-                # Salvou no arquivo e no banco
-                for caminho in caminhos_json:
-                    if caminho.parent.exists():
-                        with open(caminho, 'w') as f:
-                            json.dump(cookies_ff, f)
-                        break
-                ProjudiSession.objects.update_or_create(
-                    user=self.user,
-                    defaults={
-                        'cookies': cookies_ff,
-                        'status': 'active',
-                        'tenant': self.user.tenant if hasattr(self.user, 'tenant') else None,
-                    }
-                )
                 session, _ = _criar_session(cookies_ff)
-                session.get("https://projudi.tjba.jus.br/projudi/cadastros/AnalisarMovimentacao", timeout=10)
-                return session, cookies_ff
+                if _session_valida(session):
+                    # Salvou no arquivo e no banco
+                    for caminho in caminhos_json:
+                        if caminho.parent.exists():
+                            with open(caminho, 'w') as f:
+                                json.dump(cookies_ff, f)
+                            break
+                    ProjudiSession.objects.update_or_create(
+                        user=self.user,
+                        defaults={
+                            'cookies': cookies_ff,
+                            'status': 'active',
+                            'tenant': self.user.tenant if hasattr(self.user, 'tenant') else None,
+                        }
+                    )
+                    return session, cookies_ff
+                else:
+                    print("[INFO] browser_cookie3: cookies expirados.")
         except Exception:
             pass
 
@@ -185,7 +213,10 @@ class ProjudiService:
             cookies_dict = sessao.cookies if isinstance(sessao.cookies, dict) else {}
             if 'JSESSIONID' in cookies_dict:
                 session, _ = _criar_session(cookies_dict)
-                return session, cookies_dict
+                if _session_valida(session):
+                    return session, cookies_dict
+                else:
+                    print("[INFO] Sessão do banco expirada. Re-sincronize em /projudi/sessoes/")
 
         print("[WARN] _get_session_from_cookies: JSESSIONID não encontrado em nenhuma fonte")
         return None

@@ -31,13 +31,13 @@
 
   <hr style="border:0.5px solid #000; margin:4px 0;">
 
-  <div style="font-size:9pt; font-family:'Courier New',monospace; margin:12px 0; line-height:1.6;">
-    <strong>1. Processo nº {{ processo }}</strong><br>
-    <strong>2. Parte Credora:</strong> {{ parte.nome }}<br>
-    <strong>2.1. CPF/CNPJ:</strong> {{ parte.cpf_cnpj }}<br>
-    <strong>3. Ente Devedor:</strong> {{ ente_devedor }}<br>
-    <strong>4. Valor Requisitado:</strong> R$ {{ valor }}
-  </div>
+  <table style="font-size:9pt; font-family:'Courier New',monospace; margin:12px 0; line-height:1.6; width:100%; border-collapse:collapse;">
+    <tr><td style="width:10px;">1.</td><td>Processo nº</td><td><strong>{{ processo }}</strong></td></tr>
+    <tr><td>2.</td><td>Parte Credora:</td><td><strong>{{ parte.nome }}</strong></td></tr>
+    {% if parte.cpf_cnpj %}<tr><td>2.1.</td><td>CPF/CNPJ:</td><td><strong>{{ parte.cpf_cnpj }}</strong></td></tr>{% endif %}
+    <tr><td>3.</td><td>Ente Devedor:</td><td><strong>{{ ente_devedor }}</strong></td></tr>
+    <tr><td>4.</td><td>Valor Requisitado:</td><td><strong>R$ {{ valor }}</strong></td></tr>
+  </table>
 
   <div style="font-size:10pt; font-family:'Courier New',monospace; margin:12px 0; text-align:justify; text-indent:80px; line-height:1.4;">
     Considerando o quanto disposto no art. 535, § 3º, inciso II, do NCPC, e em vista do atendimento de todas as formalidades exigidas pela Resolução 115 do CNJ e Instrução Normativa 01/2016-TJBA, REQUISITO a V. Exª o pagamento da quantia indicada no item 4, em benefício da parte credora acima identificada, decorrente do procedimento de execução indicado no item 1, o que deverá ser cumprido integralmente no prazo máximo de 2 (dois) meses, sob pena de sequestro.

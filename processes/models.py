@@ -469,9 +469,9 @@ class RAGExample(TimeStampedModel):
     despacho_data = models.CharField('Data Despacho', max_length=20, blank=True)
     despacho_autor = models.CharField('Juiz', max_length=200, blank=True)
     evento_despacho = models.CharField('Evento Despacho', max_length=20, blank=True)
-    cumprimentos = models.JSONField('Atos de Cumprimento', default=list,
+    cumprimentos = models.JSONField('Atos de Cumprimento', default=list, blank=True,
         help_text='Lista de dicts com ato, observacao, data, autor, tipo')
-    documentos = models.JSONField('Documentos do Despacho', default=list,
+    documentos = models.JSONField('Documentos do Despacho', default=list, blank=True,
         help_text='Links para documentos/downloads do despacho')
     active = models.BooleanField('Ativo p/ RAG', default=True,
         help_text='Usar como exemplo nas buscas')

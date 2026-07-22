@@ -23,6 +23,7 @@ from datetime import date
 from projudi_bot import ProjudiBot
 from processo_parser_ext import ProcessoParserExt
 
+from accounts.models import User
 from processes.models import Process, DocumentTemplate, Party
 from projudi.models import MandadoRecord, MandadoLog
 
@@ -55,8 +56,20 @@ def obter_session(cookies_dict):
 
 def expedir_mandado(mandado_id=None, processo_cnj=None, dry_run=False):
     """Fluxo completo de expedição de mandado via Playwright."""
-    cookies_dict = carregar_cookies()
-    session = obter_session(cookies_dict)
+    # Usa captura robusta de cookies (4 camadas)
+    from projudi.services import ProjudiService
+    user = User.objects.filter(is_active=True).first()
+    if not user:
+        print('❌ Nenhum usuário ativo')
+        return False
+    service = ProjudiService(user)
+    result = service._get_session_from_cookies()
+    if not result:
+        print('❌ Não foi possível capturar a sessão do Projudi.')
+        print('   Deixe o Firefox aberto e logado no Projudi, depois execute:')
+        print('   D:\\Projudi\\capturar_cookies.bat  (dê duplo clique)')
+        return False
+    session, cookies_dict = result
 
     # ── Localizar MandadoRecord ────────────────────────────────
     if mandado_id:
@@ -196,7 +209,8 @@ def expedir_mandado(mandado_id=None, processo_cnj=None, dry_run=False):
             # 🔴 IMPORTANTE: selecionar MANDADO (não 53-OFÍCIO)
             # O código do tipo de documento para Mandado/Mandado Genérico
             # precisa ser ajustado conforme o Projudi
-            page.select_option('select[name="codTipoDocumento"]', '54')  # ← AJUSTAR: código do Mandado
+            page.select_option('select[name="codTipoDocumento"]', '51')  # Mandado
+            time.sleep(1.5)
             page.fill('#observacao', f'Solicitada a Expedicao de Mandado - {party.name[:30]}')
             time.sleep(0.5)
 
@@ -205,7 +219,33 @@ def expedir_mandado(mandado_id=None, processo_cnj=None, dry_run=False):
             time.sleep(1)
 
             # 🔴 IMPORTANTE: selecionar MANDADO (não 2-OFÍCIO)
-            page.select_option('#tipoCumprimento', '3')  # ← AJUSTAR: código do Mandado
+            page.select_option('#tipoCumprimento', '4')  # Mandado
+            time.sleep(0.5)
+            # Seleciona subtipoCumprimento = "Intimação" (value 3) para mandado
+            # Subtipos disponíveis (projudi/tjba):
+            #   1  = Citação e Intimação para Audiência
+            #   2  = Intimação para Audiência
+            #   3  = Intimação ← (usando)
+            #   4  = Citação
+            #   5  = Intimação Despacho
+            #   6  = Intimação de Sentença
+            #   7  = Busca e Apreensão
+            #   8  = Citação e/ou Intimação com Liminar
+            #   9  = Mandado genérico
+            #   10 = Alvará de soltura
+            #   11 = Citação/Penhora/Avaliação/Intimação/Depósito
+            #   12 = Ofício
+            #   24 = Notificação
+            #   26 = Penhora e/ou avaliação
+            #   27 = Reintegração de Posse
+            #   34 = Prisão
+            try:
+                st = page.locator('#subtipoCumprimento, select[name="subtipoCumprimento"]').first
+                if st.count():
+                    st.select_option('3')
+                    print('   ✅ Subtipo cumprimento: Intimação (3)')
+            except Exception as e:
+                print(f'   Subtipo cumprimento: não encontrado ({e})')
             # Destinatário = código da parte (precisa descobrir)
             # page.select_option('#codigoDestinatario', '...')
             page.click('#btnAddCumprimento')
@@ -242,10 +282,22 @@ def expedir_mandado(mandado_id=None, processo_cnj=None, dry_run=False):
                 var form = forms[forms.length - 1];
                 var sel = form.querySelector('select[name="codModelo"]');
                 if (!sel) return {erro: 'sem select codModelo', form: form.name};
-                // Pega a última opção (mais recente)
+                // Procura modelo Mandado RPA
                 var opts = sel.options;
-                sel.value = opts[opts.length - 1].value;
-                return {ok: true, form: form.name, valor: sel.value};
+                var rpaValue = null;
+                for (var i = 0; i < opts.length; i++) {
+                    if (opts[i].text.toLowerCase().includes('rpa')) {
+                        rpaValue = opts[i].value;
+                        break;
+                    }
+                }
+                if (!rpaValue) {
+                    // Fallback: última opção
+                    sel.value = opts[opts.length - 1].value;
+                    return {ok: true, form: form.name, valor: sel.value, notice: 'fallback ultima opcao'};
+                }
+                sel.value = rpaValue;
+                return {ok: true, form: form.name, valor: rpaValue, modelo: 'Mandado RPA'};
             }''')
             print(f'   📝 {cump_result}')
 
@@ -273,25 +325,59 @@ def expedir_mandado(mandado_id=None, processo_cnj=None, dry_run=False):
                 browser.close()
                 return False
 
-            # === PASSO 4: FCKeditor ===
-            print('   [4/5] ✍️ Colando HTML no editor...')
+            # === PASSO 4: FCKeditor — preservar brasão do RPA e colar nosso template ===
+            print('   [4/5] ✍️ Extraindo brasão do RPA e colando template...')
             time.sleep(3)
 
+            # 1. Pegar HTML original do modelo RPA
+            html_original = page.evaluate('''() => {
+                try {
+                    return FCKeditorAPI.GetInstance('FCKeditor1').GetHTML();
+                } catch(e) {
+                    try {
+                        return window.parent.FCKeditorAPI.GetInstance('FCKeditor1').GetHTML();
+                    } catch(e2) {
+                        return '';
+                    }
+                }
+            }''')
+
+            # 2. Extrair primeira imagem do brasão
+            img_match = re.search(r'(<img[^>]+src="[^"]*brasao[^"]*"[^>]*>)', html_original, re.I)
+            brasao_html = ''
+            if img_match:
+                brasao_html = f'<div style="text-align:center; margin-bottom:8px;">{img_match.group(1)}</div>'
+                print('   ✅ Brasão do modelo RPA extraído')
+            else:
+                print('   ⚠️ Brasão não encontrado no modelo RPA')
+
+            # 3. Montar HTML final: brasão + nosso template (já vem com destinatário do banco)
+            html_final = brasao_html + html
+
+            # 4. Colar no editor
             result = page.evaluate('''(html) => {
                 try {
                     var ed = FCKeditorAPI.GetInstance('FCKeditor1');
+                    ed.SetHTML('');
                     ed.SetHTML(html);
-                    return 'OK';
+                    return 'OK SetHTML';
                 } catch(e) {
                     try {
                         var ed2 = window.parent.FCKeditorAPI.GetInstance('FCKeditor1');
+                        ed2.SetHTML('');
                         ed2.SetHTML(html);
-                        return 'OK parent';
+                        return 'OK parent.SetHTML';
                     } catch(e2) {
+                        var ifr = document.querySelector('iframe[title*="editor"], iframe[src*="FCKeditor"]');
+                        if (ifr) {
+                            var doc = ifr.contentDocument || ifr.contentWindow.document;
+                            var body = doc.querySelector('body');
+                            if (body) { body.innerHTML = html; return 'OK iframe'; }
+                        }
                         return 'ERRO: ' + e2.message;
                     }
                 }
-            }''', html)
+            }''', html_final)
             print(f'   📝 FCKeditor: {result}')
             time.sleep(2)
 
