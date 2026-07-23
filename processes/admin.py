@@ -85,11 +85,38 @@ class ProcessSummaryAdmin(admin.ModelAdmin):
 
 @admin.register(RAGExample)
 class RAGExampleAdmin(admin.ModelAdmin):
-    list_display = ['process', 'evento_despacho', 'despacho_ato', 'active']
+    list_display = ['process', 'evento_despacho', 'despacho_ato', 'active', 'resumo_sequencia']
     list_filter = ['active']
     search_fields = ['process__number', 'despacho_ato']
     filter_horizontal = ['suggested_templates']
+    fieldsets = [
+        ('Processo', {'fields': ['process', 'oficio', 'evento_despacho']}),
+        ('Decisão do Juiz', {'fields': ['despacho_ato', 'despacho_observacao',
+                                         'despacho_data', 'despacho_autor']}),
+        ('Cumprimentos', {'fields': ['cumprimentos', 'documentos']}),
+        ('Sequência de Execução',
+         {'fields': ['sequencia_cumprimento'],
+          'classes': ['wide'],
+          'description':
+              'Lista ORDENADA de atos. Exemplo:<br>'
+              '<code>[<br>'
+              '&nbsp; {"tipo": "movimentacao", "observacao": "Certifique-se..."},<br>'
+              '&nbsp; {"tipo": "oficio", "template_id": 7}<br>'
+              ']</code>'}),
+        ('Controle', {'fields': ['active', 'suggested_templates']}),
+    ]
     actions = ['expedir_ciap']
+
+    def resumo_sequencia(self, obj):
+        seq = obj.sequencia_cumprimento or []
+        if not seq:
+            return '—'
+        total = len(seq)
+        tipos = ', '.join(s.get('tipo', '?') for s in seq[:5])
+        if total > 5:
+            tipos += f' … +{total-5}'
+        return f'{total} passo(s): {tipos}'
+    resumo_sequencia.short_description = 'Sequência'
 
     def expedir_ciap(self, request, queryset):
         fila = []
@@ -112,7 +139,7 @@ class RAGExampleAdmin(admin.ModelAdmin):
 
 @admin.register(DocumentTemplate)
 class DocumentTemplateAdmin(admin.ModelAdmin):
-    list_display = ['name', 'template_type', 'active', 'acoes']
+    list_display = ['id', 'name', 'template_type', 'active', 'acoes']
     list_filter = ['template_type', 'active']
     search_fields = ['name', 'description']
 

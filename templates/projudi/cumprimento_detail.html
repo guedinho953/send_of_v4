@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% load processo_filters %}
+
+{% block title %}Cumprimento #{{ cumprimento.pk }} — Send of v4{% endblock %}
+
+{% block extra_css %}
+<style>
+    .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+    .detail-card { background: #fff; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+    .detail-card.full { grid-column: 1 / -1; }
+    .detail-label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+    .detail-value { font-size: 14px; color: #1e3a5f; font-weight: 500; margin-bottom: 12px; word-break: break-word; }
+    .detail-value.mono { font-family: monospace; }
+    .tag-fluxo { display: inline-block; padding: 4px 14px; border-radius: 12px; font-size: 13px; font-weight: 600; }
+    .fluxo-eletronico { background: #dbeafe; color: #1e40af; }
+    .fluxo-advogado { background: #e0e7ff; color: #3730a3; }
+    .fluxo-email { background: #d1fae5; color: #065f46; }
+    .fluxo-email_condicional { background: #fef3c7; color: #92400e; }
+    .fluxo-ar { background: #fce7f3; color: #9d174d; }
+    .fluxo-mandado { background: #fee2e2; color: #991b1b; }
+    .fluxo-mandado_precatorio { background: #f3e8ff; color: #5b21b6; }
+    .fluxo-edital { background: #fef9c3; color: #854d0e; }
+    .fluxo-movimentacao_simples { background: #f0fdf4; color: #166534; }
+    .tag-status { display: inline-block; padding: 4px 14px; border-radius: 12px; font-size: 13px; font-weight: 600; }
+    .tag-pendente { background: #fef3c7; color: #92400e; }
+    .tag-processando { background: #ede9fe; color: #5b21b6; }
+    .tag-cumprido { background: #d1fae5; color: #065f46; }
+    .tag-falha { background: #fee2e2; color: #991b1b; }
+    .tag-dispensado { background: #f3e8ff; color: #6b21a8; }
+    .acao-bar { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+    .log-entry { font-size: 13px; padding: 10px 14px; border-radius: 6px; margin-bottom: 8px; border-left: 3px solid; }
+    .log-info { background: #eff6ff; border-left-color: #3b82f6; }
+    .log-decisao { background: #f0fdf4; border-left-color: #22c55e; }
+    .log-execucao { background: #fffbeb; border-left-color: #f59e0b; }
+    .log-erro { background: #fef2f2; border-left-color: #ef4444; }
+    .log-data { font-size: 11px; color: #9ca3af; }
+    .btn-green { background: #059669; color: white; }
+    .btn-green:hover { background: #047857; }
+    .btn-outline { background: transparent; border: 1px solid #d1d5db; color: #374151; }
+    .btn-outline:hover { background: #f3f4f6; }
+    .btn-danger-outline { border: 1px solid #dc2626; color: #dc2626; background: transparent; }
+    .btn-danger-outline:hover { background: #fef2f2; }
+    .endereco-box { background: #f9fafb; border-radius: 6px; padding: 12px; font-size: 13px; line-height: 1.6; margin-top: 8px; }
+    .endereco-box pre { margin: 0; font-family: inherit; white-space: pre-wrap; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<h1 style="font-size:22px; font-weight:700; color:#1e3a5f; margin-bottom:20px;">
+    📬 Cumprimento #{{ cumprimento.pk }}
+    <span style="font-size:14px; color:#6b7280; font-weight:400;">
+        {{ cumprimento.processo }}
+    </span>
+</h1>
+
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+{% endif %}
+
+<!-- Acoes -->
+<div class="acao-bar">
+    {% if cumprimento.pode_executar %}
+        <form method="post" action="{% url 'projudi:cumprimento_executar' cumprimento.pk %}" style="display:inline;">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-green">▶️ Executar Cumprimento</button>
+        </form>
+    {% endif %}
+    {% if cumprimento.status != 'dispensado' %}
+        <form method="post" action="{% url 'projudi:cumprimento_dispensar' cumprimento.pk %}" style="display:inline;" onsubmit="return confirm('Dispensar este cumprimento?')">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline" style="color:#6b21a8; border-color:#6b21a8;">🚫 Dispensar</button>
+        </form>
+    {% endif %}
+    {% if cumprimento.url_processo %}
+        <a href="{{ cumprimento.url_processo }}" target="_blank" class="btn btn-outline">🔗 Abrir Processo no Projudi</a>
+    {% endif %}
+    {% if cumprimento.url_movimentacao %}
+        <a href="{{ cumprimento.url_movimentacao }}" target="_blank" class="btn btn-outline">🔗 Abrir Movimentação</a>
+    {% endif %}
+    <a href="{% url 'projudi:cumprimento_dashboard' %}" class="btn btn-outline">← Dashboard</a>
+</div>
+
+<!-- Informacoes principais -->
+<div class="detail-grid">
+    <div class="detail-card">
+        <div class="detail-label">Fluxo</div>
+        <div class="detail-value"><span class="tag-fluxo fluxo-{{ cumprimento.fluxo }}">{{ cumprimento.get_fluxo_display }}</span></div>
+
+        <div class="detail-label">Status</div>
+        <div class="detail-value"><span class="tag-status tag-{{ cumprimento.status }}">{{ cumprimento.get_status_display }}</span></div>
+
+        <div class="detail-label">Parte</div>
+        <div class="detail-value">{{ cumprimento.parte_nome|default:"—" }}</div>
+
+        <div class="detail-label">Papel</div>
+        <div class="detail-value">{{ cumprimento.parte_papel|default:"—" }}</div>
+    </div>
+
+    <div class="detail-card">
+        <div class="detail-label">Processo (CNJ)</div>
+        <div class="detail-value mono">{{ cumprimento.numero_processo_cnj|default:"—" }}</div>
+
+        <div class="detail-label">Ato</div>
+        <div class="detail-value">{{ cumprimento.act_verb|default:"—" }}</div>
+
+        <div class="detail-label">Template</div>
+        <div class="detail-value">{{ cumprimento.template_used.name|default:"—" }}</div>
+
+        <div class="detail-label">RAG Example</div>
+        <div class="detail-value">#{{ cumprimento.rag_example_id|default:"—" }}</div>
+
+        <div class="detail-label">Criado em</div>
+        <div class="detail-value">{{ cumprimento.created_at|date:"d/m/Y H:i" }}</div>
+    </div>
+
+    {% if cumprimento.fluxo_justificativa %}
+    <div class="detail-card full">
+        <div class="detail-label">Justificativa da Decisão</div>
+        <div class="detail-value" style="font-weight:400; line-height:1.6;">{{ cumprimento.fluxo_justificativa }}</div>
+    </div>
+    {% endif %}
+
+    {% if cumprimento.endereco_analisado %}
+    <div class="detail-card full">
+        <div class="detail-label">Endereço Analisado</div>
+        <div class="endereco-box">
+            <pre>{{ cumprimento.endereco_analisado|pprint }}</pre>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if cumprimento.snippet %}
+    <div class="detail-card full">
+        <div class="detail-label">Trecho da Decisão</div>
+        <div class="detail-value" style="font-weight:400; font-size:13px; line-height:1.6;">{{ cumprimento.snippet|linebreaks }}</div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Logs -->
+<h2 style="font-size:18px; font-weight:600; color:#374151; margin:20px 0 12px;">📜 Histórico</h2>
+
+{% if logs %}
+    {% for log in logs %}
+    <div class="log-entry log-{{ log.tipo }}">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+            <div>
+                <strong style="text-transform:uppercase; font-size:11px;">{{ log.tipo }}</strong>
+                <span style="margin-left:8px;">{{ log.mensagem }}</span>
+            </div>
+            <div class="log-data">{{ log.created_at|date:"d/m/y H:i" }}</div>
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+    <div style="text-align:center; padding:40px; color:#6b7280;">
+        <p>Nenhum log registrado para este cumprimento.</p>
+    </div>
+{% endif %}
+
+{% endblock %}

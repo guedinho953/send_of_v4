@@ -38,4 +38,39 @@
 
     python manage.py shell -c "from processes.models import Process; Process.objects.create(number='123456-78.2026.8.05.0191', number_normalized='0000000000000000000')"
 
-
+   Pronto. Agora você pode cadastrar no Admin assim:
+    
+    Exemplo 1 — Só intimação (padrão)
+    
+    json
+    [
+      {"tipo": "movimentacao", "observacao": "Intime-se a parte autora para pagar no prazo de 15 dias.",
+       "codigo_mov": "581", "descricao_mov": "Intimação"}
+    ]
+    
+    
+    Exemplo 2 — Intimação + certidão
+    
+    json
+    [
+      {"tipo": "movimentacao", "observacao": "Certifique-se a tempestividade do recurso."},
+      {"tipo": "movimentacao", "observacao": "Intime-se a parte embargada para contrarrazoar.",
+       "codigo_mov": "581", "descricao_mov": "Intimação"},
+      {"tipo": "oficio", "template_id": 7}
+    ]
+    
+    
+    Exemplo 3 — Só ofício (mesmo de antes)
+    
+    json
+    [{"tipo": "oficio", "template_id": 7}]
+    
+    
+    Campos opcionais para movimentação:
+    
+    | Campo         | Padrão                   | O que faz no Projudi            |
+    |---------------|--------------------------|---------------------------------|
+    | codigo_mov    | "581"                    | Código seqCategoriaMovimentacao |
+    | descricao_mov | "Cumprimento de Decisão" | Texto descCategoriaMovimentacao |
+    
+    Se não preencher, usa 581 / "Cumprimento de Decisão". Se quiser que apareça "Intimação" no Projudi em vez do genérico, é só preencher "descricao_mov": "Intimação".

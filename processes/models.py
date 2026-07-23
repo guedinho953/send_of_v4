@@ -476,6 +476,30 @@ class RAGExample(TimeStampedModel):
     active = models.BooleanField('Ativo p/ RAG', default=True,
         help_text='Usar como exemplo nas buscas')
 
+    sequencia_cumprimento = models.JSONField(
+        'Sequência de Execução', default=list, blank=True,
+        help_text=(
+            'Lista ORDENADA de atos a executar quando este RAGExample '
+            'for match. Cada item da lista é um dict:\n'
+            '- {"tipo": "movimentacao", "observacao": "texto..."}\n'
+            '  + campos opcionais: "codigo_mov": "581", '
+            '"descricao_mov": "Intimação"\n'
+            '- {"tipo": "mandado", "template_id": 12}\n'
+            '  + campo opcional: "subtipo": "11"\n'
+            '    (1=Citação+Int.Audiência, 2=Int.Audiência, '
+            '3=Intimação, 4=Citação, 5=Int.Despacho, '
+            '6=Int.Sentença, 11=Citação/Penhora/Avaliação, '
+            '26=Penhora, 27=Reintegração)\n'
+            '- {"tipo": "oficio", "template_id": 7}\n'
+            '- {"tipo": "intimacao", "template_id": 5}\n'
+            'A ordem da lista define a sequência de execução. '
+            'Para movimentações, a "observacao" é o texto que será '
+            'registrado no Projudi via Mov581, e "codigo_mov"/'
+            '"descricao_mov" definem o tipo de movimentação no Projudi '
+            '(padrão: 581 / "Cumprimento de Decisão").'
+        )
+    )
+
     class Meta:
         verbose_name = 'Exemplo RAG'
         verbose_name_plural = 'Exemplos RAG'

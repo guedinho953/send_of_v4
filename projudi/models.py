@@ -301,3 +301,253 @@ class MandadoLog(TimeStampedModel):
 
     def __str__(self):
         return f'[{self.tipo}] {self.mandado.numero_mandado if self.mandado else "?"}'
+
+
+class CumprimentoRecord(TimeStampedModel):
+    """Registro de cumprimento de ato de secretaria (não mandado/ofício).
+
+    Análogo a MandadoRecord / OficioRecord, mas para fluxos como:
+    - eletronico (DJEN)
+    - advogado (intimação ao advogado)
+    - email / email_condicional
+    - ar (Aviso de Recebimento)
+    - mandado_precatorio
+    - edital
+    - movimentacao_simples (certidões internas)
+    """
+
+    FLUXO_CHOICES = [
+        ('eletronico', 'Eletrônico (DJEN)'),
+        ('advogado', 'Advogado Constituído'),
+        ('email', 'E-mail'),
+        ('email_condicional', 'E-mail Condicional'),
+        ('ar', 'Aviso de Recebimento'),
+        ('mandado', 'Mandado'),
+        ('mandado_precatorio', 'Mandado Prec.'),
+        ('edital', 'Edital'),
+        ('movimentacao_simples', 'Movimentação Simples'),
+    ]
+
+    STATUS_CHOICES = [
+        ('pendente', 'Pendente'),
+        ('processando', 'Processando'),
+        ('cumprido', 'Cumprido'),
+        ('falha', 'Falha'),
+        ('dispensado', 'Dispensado'),
+    ]
+
+    processo = models.CharField('Processo (Interno)', max_length=30, db_index=True)
+    numero_processo_cnj = models.CharField('Nº Processo (CNJ)', max_length=25, blank=True, db_index=True)
+
+    # Fluxo escolhido pelo FluxoDecisor
+    fluxo = models.CharField('Fluxo', max_length=25, choices=FLUXO_CHOICES)
+    fluxo_justificativa = models.TextField('Justificativa do Fluxo', blank=True)
+
+    # Dados da decisão
+    parte_nome = models.CharField('Nome da Parte', max_length=200, blank=True)
+    parte_papel = models.CharField('Papel da Parte', max_length=20, blank=True)
+    endereco_analisado = models.JSONField('Endereço Analisado', default=dict, blank=True)
+
+    # Comando / ato de origem
+    act_verb = models.CharField('Ato', max_length=50, blank=True)
+    snippet = models.TextField('Trecho da Decisão', blank=True)
+
+    # Template/Documento gerado
+    template_used = models.ForeignKey(
+        'processes.DocumentTemplate',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='cumprimentos'
+    )
+    rag_example = models.ForeignKey(
+        'processes.RAGExample',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='cumprimentos_gerados'
+    )
+    texto_html = models.TextField('HTML Gerado', blank=True)
+
+    # URLs Projudi
+    url_processo = models.URLField('URL Processo', max_length=500, blank=True)
+    url_movimentacao = models.URLField('URL Movimentação', max_length=500, blank=True)
+
+    # Status
+    status = models.CharField('Status', max_length=20, choices=STATUS_CHOICES, default='pendente')
+
+    # Usuário que executou
+    user = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='cumprimentos_executados'
+    )
+
+    class Meta:
+        verbose_name = 'Cumprimento'
+        verbose_name_plural = 'Cumprimentos'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.get_fluxo_display()} — {self.processo}'
+
+    @property
+    def cumprido(self):
+        return self.status == 'cumprido'
+
+    @property
+    def pode_executar(self):
+        return self.status in ('pendente', 'falha')
+
+    @property
+    def dispensado(self):
+        return self.status == 'dispensado'
+
+
+class CumprimentoLog(TimeStampedModel):
+    TIPO_CHOICES = [
+        ('info', 'Info'),
+        ('decisao', 'Decisão'),
+        ('execucao', 'Execução'),
+        ('erro', 'Erro'),
+    ]
+
+    cumprimento = models.ForeignKey(
+        CumprimentoRecord,
+        on_delete=models.CASCADE,
+        related_name='logs',
+        null=True, blank=True,
+    )
+    tipo = models.CharField('Tipo', max_length=20, choices=TIPO_CHOICES, default='info')
+    mensagem = models.TextField('Mensagem')
+    detalhes = models.JSONField('Detalhes', default=dict, blank=True)
+
+    class Meta:
+        verbose_name = 'Log de Cumprimento'
+        verbose_name_plural = 'Logs de Cumprimentos'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'[{self.tipo}] {self.cumprimento_id}'
+
+
+class MovimentacaoRecord(TimeStampedModel):
+    """Registro de movimentação interna no Projudi (Mov581).
+
+    Análogo a MandadoRecord / OficioRecord, mas para atos que
+    não geram documento — apenas registram o cumprimento via Mov581.
+    """
+
+    CATEGORIA_CHOICES = [
+        ('certidao', 'Certidão'),
+        ('intimacao', 'Intimação'),
+        ('arquivamento', 'Arquivamento'),
+        ('publicacao', 'Publicação'),
+        ('registro', 'Registro'),
+        ('outro', 'Outro'),
+    ]
+
+    STATUS_CHOICES = [
+        ('pendente', 'Pendente'),
+        ('processando', 'Processando'),
+        ('cumprido', 'Cumprido'),
+        ('falha', 'Falha'),
+        ('dispensado', 'Dispensado'),
+    ]
+
+    processo = models.CharField('Processo (Interno)', max_length=30, db_index=True)
+    numero_processo_cnj = models.CharField('Nº Processo (CNJ)', max_length=25, blank=True, db_index=True)
+
+    # Dados do ato
+    act_verb = models.CharField('Ato', max_length=50, blank=True,
+        help_text='Ex: certifique-se, arquive-se, publique-se, registre-se')
+    categoria = models.CharField('Categoria', max_length=20,
+        choices=CATEGORIA_CHOICES, default='outro')
+    observacao = models.TextField('Observação', blank=True,
+        help_text='Texto a ser registrado como observação da movimentação')
+
+    # Código e descrição da movimentação no Projudi (seqCategoriaMovimentacao)
+    codigo_movimentacao = models.CharField(
+        'Código Mov.', max_length=10, default='581',
+        help_text='Código da categoria no Projudi (ex: 581 = TD - Tipo Documental)')
+    descricao_movimentacao = models.CharField(
+        'Descrição Mov.', max_length=100, default='Cumprimento de Decisão',
+        help_text='Descrição que aparece no campo descCategoriaMovimentacao do Projudi')
+
+    # Parte (se o ato tiver um destinatário)
+    parte_nome = models.CharField('Nome da Parte', max_length=200, blank=True)
+    parte_papel = models.CharField('Papel da Parte', max_length=20, blank=True)
+
+    # Origem (RAG + template)
+    rag_example = models.ForeignKey(
+        'processes.RAGExample',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='movimentacoes_geradas'
+    )
+    template_used = models.ForeignKey(
+        'processes.DocumentTemplate',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='movimentacoes'
+    )
+
+    # URLs
+    url_processo = models.URLField('URL Processo', max_length=500, blank=True)
+    url_movimentacao = models.URLField('URL Movimentação', max_length=500, blank=True)
+
+    # Status
+    status = models.CharField('Status', max_length=20, choices=STATUS_CHOICES, default='pendente')
+
+    # Usuário que executou
+    user = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='movimentacoes_executadas'
+    )
+
+    class Meta:
+        verbose_name = 'Movimentação'
+        verbose_name_plural = 'Movimentações'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.act_verb or self.get_categoria_display()} — {self.processo}'
+
+    @property
+    def cumprido(self):
+        return self.status == 'cumprido'
+
+    @property
+    def pode_executar(self):
+        return self.status in ('pendente', 'falha')
+
+    @property
+    def dispensado(self):
+        return self.status == 'dispensado'
+
+
+class MovimentacaoLog(TimeStampedModel):
+    TIPO_CHOICES = [
+        ('info', 'Info'),
+        ('execucao', 'Execução'),
+        ('erro', 'Erro'),
+    ]
+
+    movimentacao = models.ForeignKey(
+        MovimentacaoRecord,
+        on_delete=models.CASCADE,
+        related_name='logs',
+        null=True, blank=True,
+    )
+    tipo = models.CharField('Tipo', max_length=20, choices=TIPO_CHOICES, default='info')
+    mensagem = models.TextField('Mensagem')
+    detalhes = models.JSONField('Detalhes', default=dict, blank=True)
+
+    class Meta:
+        verbose_name = 'Log de Movimentação'
+        verbose_name_plural = 'Logs de Movimentações'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'[{self.tipo}] {self.movimentacao_id}'

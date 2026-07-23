@@ -233,6 +233,68 @@ def normalizar_nome(x: str) -> Optional[str]:
     return x
 
 
+def extrair_prazo_dias(texto: str) -> str:
+    """Extrai prazo em dias do texto do despacho.
+    Ex: '03 dias' → '03', '05 (cinco) dias' → '05'
+    """
+    m = re.search(r'(\d+)\s*(?:\([^)]*\))?\s*(?:dias?|dia)', texto, re.I)
+    return m.group(1) if m else '03'
+
+
+def extrair_valor_penhora(texto: str) -> str:
+    """Extrai valor em reais do texto do despacho.
+    Ex: 'R$ 1.942,52' → '1.942,52'
+    """
+    m = re.search(
+        r'(?:R\$\s*|valor\s*(?:de\s*)?(?:da\s+penhora\s*)?:?\s*R?\$?\s*)'
+        r'([\d\.,]+)',
+        texto, re.I)
+    if m:
+        return m.group(1).strip()
+    return ''
+
+
+def numero_por_extenso(numero: str) -> str:
+    """Converte número de dias por extenso. Ex: '03' → 'três'."""
+    extenso = {
+        '1': 'um', '2': 'dois', '3': 'três', '4': 'quatro', '5': 'cinco',
+        '6': 'seis', '7': 'sete', '8': 'oito', '9': 'nove', '10': 'dez',
+        '15': 'quinze', '20': 'vinte', '30': 'trinta',
+    }
+    return extenso.get(numero.strip().lstrip('0'), numero)
+
+
+def extrair_contexto_para_template(rag, parte) -> Dict:
+    """Monta o contexto para renderizar um DocumentTemplate,
+    extraindo prazo, valor e demais campos do RAGExample."""
+    from datetime import date
+    texto_busca = f"{rag.despacho_observacao or ''} {rag.despacho_ato or ''}"
+    prazo = extrair_prazo_dias(texto_busca)
+
+    ctx = {
+        'processo': rag.process.number if rag.process else '',
+        'despacho_ato': rag.despacho_ato,
+        'despacho_observacao': rag.despacho_observacao,
+        'despacho_data': rag.despacho_data,
+        'despacho_autor': rag.despacho_autor or 'MARTINHO FERRAZ DA NOBREGA JUNIOR',
+        'parte': {
+            'nome': parte.name if parte else '',
+            'endereco': parte.address if parte else '',
+            'email': parte.email if parte else '',
+            'telefone': parte.phone if parte else '',
+            'cpf_cnpj': parte.cpf_cnpj if parte else '',
+            'rg': parte.rg if parte else '',
+            'nome_pai': parte.nome_pai if parte else '',
+            'nome_mae': parte.nome_mae if parte else '',
+        } if parte else {},
+        'prazo_dias': prazo,
+        'prazo_dias_extenso': numero_por_extenso(prazo),
+        'valor_penhora': extrair_valor_penhora(texto_busca),
+        'data': date.today().strftime('%d/%m/%Y'),
+    }
+    return ctx
+
+
 def buscar_cumprimentos_similares(texto_movimentacao: str, top_k: int = 3) -> List[Dict]:
     """
     Busca exemplos RAG similares ao texto da movimentacao.
@@ -260,6 +322,7 @@ def buscar_cumprimentos_similares(texto_movimentacao: str, top_k: int = 3) -> Li
                 'cumprimentos': ex.cumprimentos,
                 'template_ids': list(ex.suggested_templates.values_list('id', flat=True)),
                 'data': ex.despacho_data,
+                'sequencia_cumprimento': ex.sequencia_cumprimento or [],
             })
 
     resultados.sort(key=lambda x: x['similaridade'], reverse=True)

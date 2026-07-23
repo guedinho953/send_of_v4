@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+{% load processo_filters %}
+
+{% block title %}Cumprimentos — Send of v4{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .stat-card { background: #fff; border-radius: 10px; padding: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.06); border-left: 4px solid; text-align: center; }
+    .stat-card h4 { margin: 0; font-size: 26px; color: #1e3a5f; font-weight: 700; }
+    .stat-card p { margin: 4px 0 0; font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-card.total { border-left-color: #2563eb; }
+    .stat-card.pendentes { border-left-color: #d97706; }
+    .stat-card.processando { border-left-color: #7c3aed; }
+    .stat-card.cumpridos { border-left-color: #059669; }
+    .stat-card.falhas { border-left-color: #dc2626; }
+    .stat-card.dispensados { border-left-color: #6b21a8; }
+
+    .acao-bar { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+    .btn-orange { background: #ea580c; color: white; }
+    .btn-orange:hover { background: #c2410c; }
+    .btn-green { background: #059669; color: white; }
+    .btn-green:hover { background: #047857; }
+    .btn-purple { background: #7c3aed; color: white; }
+    .btn-purple:hover { background: #6d28d9; }
+    .btn-outline { background: transparent; border: 1px solid #d1d5db; color: #374151; }
+    .btn-outline:hover { background: #f3f4f6; }
+
+    .fluxo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; margin-bottom: 20px; }
+    .fluxo-card { background: #fff; border-radius: 8px; padding: 12px 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); border: 1px solid #e5e7eb; text-align: center; }
+    .fluxo-card h4 { margin: 0; font-size: 20px; color: #1e3a5f; font-weight: 700; }
+    .fluxo-card p { margin: 2px 0 0; font-size: 10px; color: #6b7280; }
+
+    .card-item { background: #fff; border-radius: 8px; padding: 14px 16px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border-left: 3px solid #d97706; transition: transform 0.1s; }
+    .card-item:hover { transform: translateX(4px); }
+    .card-item.cumprido { border-left-color: #059669; }
+    .card-item.processando { border-left-color: #7c3aed; }
+    .card-item.falha { border-left-color: #dc2626; }
+    .card-item.dispensado { border-left-color: #6b21a8; }
+    .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+    .card-titulo { font-size: 14px; font-weight: 600; color: #1e3a5f; }
+    .card-subtitulo { font-size: 12px; color: #6b7280; font-family: monospace; }
+    .card-info { font-size: 12px; color: #6b7280; margin-top: 4px; }
+    .card-actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+
+    .tag-status { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+    .tag-pendente { background: #fef3c7; color: #92400e; }
+    .tag-processando { background: #ede9fe; color: #5b21b6; }
+    .tag-cumprido { background: #d1fae5; color: #065f46; }
+    .tag-falha { background: #fee2e2; color: #991b1b; }
+    .tag-dispensado { background: #f3e8ff; color: #6b21a8; }
+
+    .tag-fluxo { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; }
+    .fluxo-eletronico { background: #dbeafe; color: #1e40af; }
+    .fluxo-advogado { background: #e0e7ff; color: #3730a3; }
+    .fluxo-email { background: #d1fae5; color: #065f46; }
+    .fluxo-email_condicional { background: #fef3c7; color: #92400e; }
+    .fluxo-ar { background: #fce7f3; color: #9d174d; }
+    .fluxo-mandado { background: #fee2e2; color: #991b1b; }
+    .fluxo-mandado_precatorio { background: #f3e8ff; color: #5b21b6; }
+    .fluxo-edital { background: #fef9c3; color: #854d0e; }
+    .fluxo-movimentacao_simples { background: #f0fdf4; color: #166534; }
+
+    .btn-sm { padding: 5px 12px; font-size: 12px; border-radius: 5px; }
+    .bulk-bar { background: #f3f4f6; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .filtro-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .filtro-btn { padding: 6px 14px; border-radius: 20px; font-size: 13px; border: 1px solid #e5e7eb; background: #fff; color: #374151; cursor: pointer; text-decoration: none; }
+    .filtro-btn.active { background: #2563eb; color: white; border-color: #2563eb; }
+    .filtro-btn:hover:not(.active) { background: #f9fafb; }
+    .empty-state { text-align: center; padding: 40px 20px; color: #6b7280; }
+    .section-title { font-size: 22px; font-weight: 700; color: #1e3a5f; margin-bottom: 20px; }
+    .fluxo-legend { font-size: 12px; color: #6b7280; margin-bottom: 10px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<h1 class="section-title">📬 Cumprimentos — Atos de Secretaria</h1>
+
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }}">{{ message|safe }}</div>
+    {% endfor %}
+{% endif %}
+
+<!-- Estatisticas -->
+<div class="stats-grid">
+    <div class="stat-card total">
+        <h4>{{ total }}</h4>
+        <p>Total</p>
+    </div>
+    <div class="stat-card pendentes">
+        <h4>{{ pendentes }}</h4>
+        <p>Pendentes</p>
+    </div>
+    <div class="stat-card processando">
+        <h4>{{ processando }}</h4>
+        <p>Processando</p>
+    </div>
+    <div class="stat-card cumpridos">
+        <h4>{{ cumpridos }}</h4>
+        <p>Cumpridos</p>
+    </div>
+    <div class="stat-card falhas">
+        <h4>{{ falhas }}</h4>
+        <p>Falhas</p>
+    </div>
+    <div class="stat-card dispensados">
+        <h4>{{ dispensados }}</h4>
+        <p>Dispensados</p>
+    </div>
+</div>
+
+<!-- Fluxos (cards pequenos) -->
+{% if fluxos %}
+<div class="fluxo-legend">🔀 Distribuição por fluxo:</div>
+<div class="fluxo-grid">
+    {% for key, f in fluxos.items %}
+    <div class="fluxo-card">
+        <h4>{{ f.count }}</h4>
+        <p>{{ f.label }}</p>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Acoes -->
+<div class="bulk-bar">
+    <form method="post" action="{% url 'projudi:cumprimento_sync' %}" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-orange">
+            🔄 Sincronizar com Projudi
+        </button>
+    </form>
+    {% if pendentes %}
+    <form method="post" action="{% url 'projudi:cumprimento_batch' %}" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-purple" onclick="return confirm('Executar todos os {{ pendentes }} pendentes?')">
+            ▶️ Executar Todos ({{ pendentes }})
+        </button>
+    </form>
+    {% endif %}
+    <a href="{% url 'projudi:cumprimento_list' %}" class="btn btn-outline">📋 Lista Completa</a>
+</div>
+
+{% if not session_active %}
+<div class="alert alert-warning">
+    ⚠️ Sessão do Projudi não está ativa. <a href="{% url 'projudi:sync_session' %}">Clique aqui para sincronizar</a> antes de buscar cumprimentos.
+</div>
+{% endif %}
+
+<!-- Filtros -->
+<div class="filtro-bar">
+    <a href="?status=" class="filtro-btn {% if not request.GET.status %}active{% endif %}">Todos</a>
+    <a href="?status=pendente" class="filtro-btn {% if request.GET.status == 'pendente' %}active{% endif %}">⏳ Pendentes</a>
+    <a href="?status=processando" class="filtro-btn {% if request.GET.status == 'processando' %}active{% endif %}">🔄 Processando</a>
+    <a href="?status=cumprido" class="filtro-btn {% if request.GET.status == 'cumprido' %}active{% endif %}">✅ Cumpridos</a>
+    <a href="?status=falha" class="filtro-btn {% if request.GET.status == 'falha' %}active{% endif %}">❌ Falhas</a>
+    <a href="?status=dispensado" class="filtro-btn {% if request.GET.status == 'dispensado' %}active{% endif %}">🚫 Dispensados</a>
+</div>
+
+<!-- Lista -->
+<div class="card">
+    <h3 style="margin-top:0; margin-bottom:16px; color:#374151; font-size:18px;">
+        {% if request.GET.status == 'pendente' %}⏳ Pendentes
+        {% elif request.GET.status == 'processando' %}🔄 Processando
+        {% elif request.GET.status == 'cumprido' %}✅ Cumpridos
+        {% elif request.GET.status == 'falha' %}❌ Falhas
+        {% elif request.GET.status == 'dispensado' %}🚫 Dispensados
+        {% else %}📋 Todos os Cumprimentos
+        {% endif %}
+        <span style="font-size:14px; color:#6b7280; font-weight:400;">({{ cumprimentos|length }} exibidos)</span>
+    </h3>
+
+    {% if cumprimentos %}
+        {% for c in cumprimentos %}
+        <div class="card-item {{ c.status }}">
+            <div class="card-header">
+                <div>
+                    <div class="card-titulo">
+                        <span class="tag-fluxo fluxo-{{ c.fluxo }}">{{ c.get_fluxo_display }}</span>
+                        {{ c.processo|default:'' }}
+                        {% if c.cumprido %}<span style="color:#059669;">&#10004;</span>{% endif %}
+                    </div>
+                    <div class="card-subtitulo">
+                        {% if c.numero_processo_cnj %}{{ c.numero_processo_cnj }}{% endif %}
+                        {% if c.parte_nome %} | {{ c.parte_nome }}{% endif %}
+                    </div>
+                </div>
+                <span class="tag-status tag-{{ c.status }}">{{ c.get_status_display }}</span>
+            </div>
+            {% if c.act_verb or c.fluxo_justificativa %}
+            <div class="card-info">
+                {% if c.act_verb %}<strong>Ato:</strong> {{ c.act_verb }}{% endif %}
+                {% if c.act_verb and c.fluxo_justificativa %} — {% endif %}
+                {% if c.fluxo_justificativa %}{{ c.fluxo_justificativa|truncatechars:120 }}{% endif %}
+            </div>
+            {% endif %}
+            <div class="card-actions">
+                <a href="{% url 'projudi:cumprimento_detail' c.pk %}" class="btn btn-sm btn-outline">🔍 Detalhes</a>
+                {% if c.pode_executar %}
+                    <form method="post" action="{% url 'projudi:cumprimento_executar' c.pk %}" style="display:inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-green">▶️ Executar</button>
+                    </form>
+                {% endif %}
+                {% if c.status != 'dispensado' %}
+                    <form method="post" action="{% url 'projudi:cumprimento_dispensar' c.pk %}" style="display:inline;" onsubmit="return confirm('Dispensar cumprimento para {{ c.parte_nome }}?')">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-outline" style="color:#6b21a8;">🚫 Dispensar</button>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="empty-state">
+            <p style="font-size:16px;">📭 Nenhum cumprimento encontrado</p>
+            <p>Clique em <strong>"Sincronizar com Projudi"</strong> para buscar movimentações, classificar partes e gerar os cumprimentos automaticamente.</p>
+        </div>
+    {% endif %}
+</div>
+
+{% endblock %}

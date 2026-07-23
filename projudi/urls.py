@@ -2,6 +2,8 @@ from django.urls import path
 from . import views
 from . import oficio_views
 from . import mandado_views
+from . import cumprimento_views
+from . import movimentacao_views
 
 app_name = 'projudi'
 
@@ -48,4 +50,24 @@ urlpatterns = [
     path('retornos/<int:pk>/juntar-resposta/', oficio_views.RetornoJuntarRespostaView.as_view(), name='retorno_juntar_resposta'),
     path('retornos/importar/', oficio_views.RetornoImportarView.as_view(), name='retorno_importar'),
     path('retornos/juntar-todos/', oficio_views.RetornoJuntarTodosView.as_view(), name='retorno_juntar_todos'),
+
+    # Aba Cumprimentos (NOVO FLUXO — atos de secretaria)
+    path('cumprimentos/dashboard/', cumprimento_views.CumprimentoDashboardView.as_view(), name='cumprimento_dashboard'),
+    path('cumprimentos/lista/', cumprimento_views.CumprimentoListView.as_view(), name='cumprimento_list'),
+    path('cumprimentos/sync/', cumprimento_views.CumprimentoSyncView.as_view(), name='cumprimento_sync'),
+    path('cumprimentos/<int:pk>/', cumprimento_views.CumprimentoDetailView.as_view(), name='cumprimento_detail'),
+    path('cumprimentos/<int:pk>/executar/', cumprimento_views.CumprimentoExecutarView.as_view(), name='cumprimento_executar'),
+    path('cumprimentos/<int:pk>/dispensar/', cumprimento_views.CumprimentoDispensarView.as_view(), name='cumprimento_dispensar'),
+    path('cumprimentos/executar-todos/', cumprimento_views.CumprimentoBatchView.as_view(), name='cumprimento_batch'),
+    path('cumprimentos/<int:pk>/logs/json/', cumprimento_views.CumprimentoLogsJsonView.as_view(), name='cumprimento_logs_json'),
+
+    # Aba Movimentações (NOVO — atos internos via Mov581)
+    path('movimentacoes/dashboard/', movimentacao_views.MovimentacaoDashboardView.as_view(), name='movimentacao_dashboard'),
+    path('movimentacoes/lista/', movimentacao_views.MovimentacaoListView.as_view(), name='movimentacao_list'),
+    path('movimentacoes/sync/', movimentacao_views.MovimentacaoSyncView.as_view(), name='movimentacao_sync'),
+    path('movimentacoes/<int:pk>/', movimentacao_views.MovimentacaoDetailView.as_view(), name='movimentacao_detail'),
+    path('movimentacoes/<int:pk>/executar/', movimentacao_views.MovimentacaoExecutarView.as_view(), name='movimentacao_executar'),
+    path('movimentacoes/<int:pk>/dispensar/', movimentacao_views.MovimentacaoDispensarView.as_view(), name='movimentacao_dispensar'),
+    path('movimentacoes/executar-todos/', movimentacao_views.MovimentacaoBatchView.as_view(), name='movimentacao_batch'),
+    path('movimentacoes/<int:pk>/logs/json/', movimentacao_views.MovimentacaoLogsJsonView.as_view(), name='movimentacao_logs_json'),
 ]
