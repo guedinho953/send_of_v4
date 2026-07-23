@@ -441,6 +441,71 @@ def _expedir_mandado(proc, session, cookies_dict, html_mandado, part, subtipo='1
 
     nome_parte = part.name if part else 'parte'
     sucesso = False
+    subtipo_valor = subtipo or '11'
+
+    # ── Party enrichment: busca endereço/telefone/email no DadosProcesso ──
+    if part and (not part.address or not part.phone or not part.email):
+        try:
+            proc_url = projudi_url or f'https://projudi.tjba.jus.br/projudi/listagens/DadosProcesso?numeroProcesso={PROC_PROJUDI}'
+            r = session.get(proc_url, timeout=30)
+            if r.status_code == 200 and 'expirou' not in r.text.lower():
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(r.text, 'html.parser')
+                nome_busca_raw = part.name.lower().strip()
+                # Remove parênteses e conteúdo (ex: "(REVEL)", "(Rev. Arg.)")
+                nome_busca = re.sub(r'\([^)]*\)', '', nome_busca_raw).strip()
+                for tr in soup.find_all('tr', id=lambda x: x and x.startswith('tr')):
+                    tds = tr.find_all('td')
+                    if len(tds) < 2:
+                        continue
+                    nome_td = tds[1].get_text(' ', strip=True).lower().strip()
+                    nome_td_clean = re.sub(r'\([^)]*\)', '', nome_td).strip()
+                    # Match flexível: contido ou contém
+                    if nome_busca in nome_td_clean or nome_td_clean in nome_busca or \
+                       nome_busca in nome_td or nome_td in nome_busca:
+                        id_linha = tr.get('id', '').replace('tr', '')
+                        span_end = soup.find('span', id=f'spanEnd{id_linha}')
+                        if span_end:
+                            texto = span_end.get_text(' ', strip=True)
+                            # Regex mais flexível para extrair endereço
+                            end_match = re.search(
+                                r'(?:Endereço|Endereco)\s*(.*?)(?:\s+\d{10,11}|$)',
+                                texto, re.I | re.DOTALL)
+                            tel_match = re.search(r'(\d{10,11})', texto)
+                            email_match = re.search(
+                                r'[\w\.-]+@[\w\.-]+\.\w+', texto)
+                            endereco = end_match.group(1).strip() if end_match else ''
+                            telefone = tel_match.group(1) if tel_match else ''
+                            email = email_match.group(0) if email_match else ''
+                            if endereco:
+                                # Formata endereço: componentes em linhas separadas
+                                endereco = endereco.replace('\xa0', ' ') \
+                                    .replace('\r\n', ', ') \
+                                    .replace('\r', ', ').replace('\n', ', ')
+                                endereco = re.sub(r'\s+', ' ', endereco) \
+                                    .strip().rstrip(',').strip()
+                                # Tenta separar CEP em linha própria
+                                cep_match = re.search(r'(\d{8})', endereco)
+                                if cep_match:
+                                    cep = cep_match.group(1)
+                                    endereco = endereco.replace(cep, f'<br>CEP {cep[:5]}-{cep[5:]}')
+                                # Tenta separar cidade/UF em linha própria
+                                endereco = re.sub(
+                                    r',\s*([A-ZÀ-Ú]{2,}?\s*-\s*[A-Z]{2})',
+                                    r'<br>\1', endereco)
+                            if endereco or telefone or email:
+                                if endereco:
+                                    part.address = endereco
+                                if telefone:
+                                    part.phone = telefone
+                                if email:
+                                    part.email = email
+                                part.save(update_fields=['address', 'phone', 'email'])
+                                print(f'   📍 Endereço: {endereco[:100] if endereco else "—"}')
+                                print(f'   📞 Tel: {telefone or "—"} | 📧 Email: {email or "—"}')
+                        break
+        except Exception as e:
+            print(f'   ⚠️ Enrichment: {e}')
 
     try:
         with sync_playwright() as pw:
