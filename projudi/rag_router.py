@@ -140,6 +140,27 @@ def _executar_sequencia(sequencia, mov, proc_num, texto,
                     resumo['cumprimentos'] += 1
                     print(f' → Cumprimento: {tmpl.name}')
 
+            elif tipo == 'intimacao_eletronica':
+                """Mov581 + intimation click automático."""
+                print(' → Iniciando Mov581 + Intimação eletrônica...')
+                try:
+                    service = MovimentacaoService(user)
+                    ok = service.executar_com_intimacao(
+                        processo_numero=proc_num,
+                        observacao=obs or texto[:500],
+                        codigo_mov=str(passo.get('codigo_mov', '581')),
+                        descricao_mov=passo.get('descricao_mov', 'Intimação'),
+                    )
+                    if ok:
+                        print(' → ✅ Intimação eletrônica concluída')
+                        resumo['movimentacoes'] += 1
+                    else:
+                        print(' → ⚠️ Intimação eletrônica pode ter falhado')
+                        resumo['erros'] += 1
+                except Exception as e:
+                    print(f' ❌ erro: {e}')
+                    resumo['erros'] += 1
+
             else:
                 print(f' ⚠️ tipo desconhecido: {tipo}')
 

@@ -191,6 +191,24 @@ def rastrear_e_expedir(tipo=None):
             pct = len(palavras_texto & set(melhor['despacho_ato'].lower().split())) / max(len(set(melhor['despacho_ato'].lower().split())), 1)
             print(f'\n  {proc_num}: match {melhor["similaridade"]} pal ({pct:.0%}) → {template.name}')
 
+            # ── CommandAnalyzer: classifica o texto antes de prosseguir ──
+            from projudi.command_analyzer import CommandAnalyzer
+            ca = CommandAnalyzer()
+            ca_result = ca.analisar(texto)
+
+            # Se o analyzer diz que não é cumprível, avisa e continua
+            if not ca_result.get('cumprivel'):
+                # Ainda pode ser processado se for ofício (ex: "expeça-se ofício RPV" tem condição)
+                if template.template_type != 'oficio':
+                    print(f'   ⏳ Comando não cumprível automaticamente ({ca_result["tipo"]})')
+                    continue
+
+            # Classifica o tipo de cumprimento para uso no FluxoDecisor
+            tipo_cumprimento = None
+            if ca_result.get('comandos'):
+                tipo_cumprimento = ca_result['comandos'][0].get('tipo_cumprimento')
+                print(f'   📋 CommandAnalyzer: {tipo_cumprimento} ({ca_result["tipo"]})')
+
             proc = Process.objects.filter(number=proc_num).first()
             if not proc:
                 print('   — criando processo...', end='')
@@ -199,6 +217,23 @@ def rastrear_e_expedir(tipo=None):
                     print(' falhou')
                     continue
                 print(' ✅')
+
+            # ── ComunicacaoTracker: pre-check antes de expedir ──
+            from projudi.comunicacao_tracker import ComunicacaoTracker
+            try:
+                # Baixa DadosProcesso para obter movimentações
+                r_dados = session.get(proc.projudi_url, timeout=30)
+                if r_dados.status_code == 200 and 'expirou' not in r_dados.text.lower():
+                    from projudiProcessNavigator import ProcessoParser
+                    parser = ProcessoParser(r_dados.text)
+                    movs_parser, _ = parser.extrair_movimentacoes()
+                    tracker = ComunicacaoTracker(movs_parser)
+                else:
+                    tracker = ComunicacaoTracker([])
+            except Exception:
+                tracker = ComunicacaoTracker([])
+
+            tipo_ato = 'oficio' if (template and template.template_type == 'oficio') else 'mandado'
 
             # Para mandados: destinatário é o RÉU/EXECUTADO
             # Para ofícios CIAP (Transação Penal): destinatário é o AUTOR DO FATO
@@ -266,6 +301,14 @@ def rastrear_e_expedir(tipo=None):
                 if not part:
                     print('   — sem partes')
                     continue
+
+                # ── PRE-CHECK: já foi expedido para esta parte? ──
+                nome_parte_ex = part.name if hasattr(part, 'name') else str(part)
+                ja_exp = tracker.ja_expedida(tipo_ato, nome_parte_ex)
+                if ja_exp.get('existe'):
+                    print(f'   ⏭️ {tipo_ato} já expedido para {nome_parte_ex[:40]} ({ja_exp["situacao"]})')
+                    continue
+
                 print(f'   ✅ {template.name} — {part.name}')
 
                 html_doc = _gerar_html(proc, part, rag, template, dados_ata=dados_ata)
@@ -280,6 +323,11 @@ def rastrear_e_expedir(tipo=None):
                 if sucesso:
                     expedidos += 1
                     print(f'   ✅ {template.name} expedido para {part.name}')
+                    # ── POST-TRACK: registra expedição ──
+                    try:
+                        tracker.rastrear_resultado(proc.number, tipo_ato, nome_parte_ex, tipo_ato)
+                    except Exception:
+                        pass
             else:
                 erros += 1
 
@@ -326,6 +374,37 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                         'descricao_mov', 'Cumprimento de Decisão'),
                 )
                 print(f'Movimentação #{record.id}')
+                # Executa a Mov581 automaticamente
+                print('  ▶️ Executando Mov581...')
+                ok = service.executar(record)
+                if ok:
+                    print('   ✅ Mov581 concluída')
+                else:
+                    print('   ⚠️ Mov581 pode ter falhado')
+
+            elif tipo == 'intimacao_eletronica':
+                """Mov581 + intimação automática (MovimentarAnalise ou MovimentarProcesso)."""
+                service = MovimentacaoService(user)
+                print('  ▶️ Executando intimação eletrônica...')
+                
+                # Tenta extrair cod_analise da movimentação (se veio da lista de análises)
+                cod_analise = None
+                if mov:
+                    mov_link = mov.get('movimentar', '')
+                    if mov_link and 'codAnalise=' in mov_link:
+                        cod_analise = mov_link.split('codAnalise=')[1].split('&')[0]
+                
+                ok = service.executar_com_intimacao(
+                    processo_numero=proc_num,
+                    observacao=obs or texto[:500],
+                    codigo_mov=str(passo.get('codigo_mov', '581')),
+                    descricao_mov=passo.get('descricao_mov', 'Intimação'),
+                    cod_analise=cod_analise,
+                )
+                if ok:
+                    print('   ✅ Intimação eletrônica concluída')
+                else:
+                    print('   ⚠️ Intimação eletrônica pode ter falhado')
 
             elif tipo in ('mandado', 'oficio'):
                 if not template_id:
@@ -344,7 +423,8 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                     print('processo não encontrado')
                     continue
 
-                # Filtra partes RÉU/EXECUTADO — para mandados, o destinatário é sempre o réu
+                # Filtra partes: mandado → réu; ofício → role-based (exceto CIAP)
+                dados_ata = None
                 if tipo == 'mandado':
                     partes = Party.objects.filter(
                         process=proc,
@@ -353,13 +433,62 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                     if not partes:
                         partes = Party.objects.filter(process=proc)[:1]
                 else:
-                    partes = Party.objects.filter(process=proc)[:1]
+                    # CIAP: autor do fato vem EXCLUSIVAMENTE da ata (não usa role)
+                    eh_oficio_ciap = (
+                        tmpl and tmpl.template_type == 'oficio'
+                        and 'ciap' in tmpl.name.lower()
+                    )
+                    if eh_oficio_ciap:
+                        dados_ata = _extrair_dados_ata(session, proc, mov)
+                        if dados_ata and dados_ata.get('autores_do_fato'):
+                            nomes_ata = [n.upper().strip() for n in dados_ata['autores_do_fato']]
+                            from types import SimpleNamespace
+                            novas_partes = []
+                            for nome_ata in nomes_ata[:5]:
+                                nome_limpo = re.sub(r'\s+', ' ', nome_ata).strip()
+                                # Tenta encontrar RG no Party existente
+                                rg_parte = ''
+                                try:
+                                    party_existente = Party.objects.filter(
+                                        process=proc, name__icontains=nome_limpo[:30]
+                                    ).first()
+                                    if party_existente:
+                                        rg_parte = party_existente.rg or ''
+                                except Exception:
+                                    pass
+                                novas_partes.append(SimpleNamespace(
+                                    name=nome_ata, address='', email='',
+                                    phone='', cpf_cnpj='', rg=rg_parte,
+                                    nome_pai='', nome_mae=''))
+                            if novas_partes:
+                                print(f'   🆕 {len(novas_partes)} autor(es) do fato da ata')
+                                partes = novas_partes
+                            else:
+                                print('   ⏭️ Pulando processo (sem autores do fato)')
+                                continue
+                        else:
+                            # Fallback: usa qualquer parte como destinatário
+                            print('   ⚠️ Ata sem autores do fato — usando parte do processo')
+                            partes = list(Party.objects.filter(
+                                process=proc,
+                                role__in=['reu', 'executado', 'PROMOVIDO', 'EXECUTADO']
+                            ))
+                            if not partes:
+                                partes = [Party.objects.filter(process=proc).first()]
+                    else:
+                        # Ofício comum (RPV, etc.): usa role-based
+                        partes = list(Party.objects.filter(
+                            process=proc,
+                            role__in=['reu', 'executado', 'PROMOVIDO', 'EXECUTADO']
+                        ))
+                        if not partes:
+                            partes = [Party.objects.filter(process=proc).first()]
 
                 for part in partes:
                     rag_ctx = rag or SimpleNamespace(
                         despacho_ato='', despacho_observacao='',
                         despacho_data='', despacho_autor='MARTINHO FERRAZ DA NOBREGA JUNIOR')
-                    html_doc = _gerar_html(proc, part, rag_ctx, tmpl)
+                    html_doc = _gerar_html(proc, part, rag_ctx, tmpl, dados_ata=dados_ata)
                     if not html_doc:
                         continue
 
@@ -603,11 +732,26 @@ def _extrair_dados_ata(session, proc, mov=None):
 
                     autores = []
 
-                    # Padrão 1: "Autor do fato:" (HTML) - extrai só o nome
-                    for m in re.finditer(
-                        r'autor(?:es)?\s+do\s+fato\s*:?\s*([A-ZÀ-Ú\s]{5,60}?)(?:\s+(?:Aos|Aceitou|Aceita|para|nos|em|Na|Às|Ficou|Compromete|Presta|Condições|Deverá|Devera|Oficiará|Oficiara)|\s*$|\.)',
-                        texto_limpo, re.I):
-                        raw = m.group(1).strip()
+                    # Padrão 0: linha direta "AUTOR DO FATO: NOME" (pdf/texto simples)
+                    # Mais confiável para PDFs onde o nome está na mesma linha
+                    for linha in texto_limpo.split('\n'):
+                        if re.match(r'.*\bautor\s+do\s+fato\b\s*:', linha, re.I):
+                            nome = linha.split(':', 1)[1].strip().upper()
+                            if nome and len(nome) > 5:
+                                # Remove sufixos indesejados
+                                nome = re.sub(
+                                    r'\s+(?:AOS|ACEITOU|ACEITA|PARA|NOS|EM|NA|ÀS|FICOU|COMPROMETEU|PRESTA|DEVER[ÁA]|OFICIAR[ÁA]).*',
+                                    '', nome, flags=re.I
+                                ).strip()
+                                if nome:
+                                    autores.append(nome)
+
+                    # Padrão 1: "Autor do fato:" (HTML) - regex com stop words
+                    if not autores:
+                        for m in re.finditer(
+                            r'autor(?:es)?\s+do\s+fato\s*:?\s*([A-ZÀ-Ú\s]{5,60}?)(?:\s+(?:Aos|Aceitou|Aceita|para|nos|em|Na|Às|Ficou|Compromete|Presta|Condições|Deverá|Devera|Oficiará|Oficiara)|\s*$|\.)',
+                            texto_limpo, re.I):
+                            raw = m.group(1).strip()
                         for nome in re.split(r'\s+e\s+|\s*,\s*', raw):
                             nome = nome.strip().upper()
                             if nome and len(nome) > 5:
@@ -702,6 +846,9 @@ def _extrair_dados_ata(session, proc, mov=None):
                         dados['prestacao_valor'] = val_match.group(1)
 
                     parc_match = re.search(r'(\d+)\s*parcelas?', texto_lower)
+                    if not parc_match:
+                        # Tenta "em até X vezes", "X vezes", "parcelada em X vezes"
+                        parc_match = re.search(r'(?:em\s+at[eé]\s+)?(\d+)\s*vezes', texto_lower)
                     if parc_match:
                         dados['prestacao_parcelas'] = parc_match.group(1)
 
@@ -1417,17 +1564,85 @@ def _expedir_oficio(proc, session, cookies_dict, html_oficio, part, template):
 
 
 # ══════════════════════════════════════════════════════════════════
+def expedir_processo_especifico(proc_num: str):
+    """Executa o fluxo expedir_rapido para um processo específico.
+    
+    Busca o processo no DB, encontra RAGExamples vinculados
+    e executa a sequencia_cumprimento de cada um.
+    """
+    user, session, cookies_dict = session_projudi()
+    
+    from processes.models import Process, RAGExample
+    
+    proc = Process.objects.filter(number__icontains=proc_num).first()
+    if not proc:
+        print(f'❌ Processo {proc_num} não encontrado no banco.')
+        # Tenta criar a partir do Projudi
+        from projudi_client import ProjudiClient
+        client = ProjudiClient()
+        client.session = session
+        client.cookies = cookies_dict
+        movs = []
+        pages = client.obter_paginas_finais_movimentacoes(quantidade=3)
+        for p in pages:
+            data = {'pagina': str(p), 'loginJuiz': ''}
+            rp = session.post(client.URL_MOVIMENTACOES, data=data, timeout=15)
+            if len(rp.text) > 1000:
+                sp = BeautifulSoup(rp.text, 'html.parser')
+                movs.extend(client.extrair_links_movimentacoes(sp))
+        mov = None
+        for m in movs:
+            if proc_num in m.get('processo', ''):
+                mov = m
+                break
+        if not mov:
+            print('❌ Processo não encontrado nas movimentações recentes.')
+            return
+        proc = _criar_processo(session, mov, proc_num, user)
+        if not proc:
+            print('❌ Não foi possível criar o processo.')
+            return
+    
+    # Busca RAGExamples do processo
+    rags = RAGExample.objects.filter(process=proc, active=True)
+    if not rags:
+        print(f'⚠️ Nenhum RAGExample ativo para {proc.number}.')
+        print('   Tente rastrear primeiro (sem --processo).')
+        return
+    
+    for rag in rags:
+        print(f'\n📋 RAGExample #{rag.id}: {rag.despacho_ato[:80]}')
+        if rag.sequencia_cumprimento:
+            print(f'   Sequência: {len(rag.sequencia_cumprimento)} passo(s)')
+            _executar_sequencia_rapido(
+                rag.sequencia_cumprimento, 
+                {'processo': proc_num, 'link_processo': getattr(proc, 'projudi_url', '')},
+                proc_num, rag.despacho_observacao or rag.despacho_ato,
+                session, cookies_dict, user, rag
+            )
+        else:
+            print('   ⏭️ Sem sequencia_cumprimento definida.')
+    
+    print(f'\n✅ Processo {proc.number} finalizado.')
+
+
+# ══════════════════════════════════════════════════════════════════
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='Rastrear e expedir documentos')
     parser.add_argument('--processo', type=str, help='CNJ do processo específico')
     parser.add_argument('--mandados-only', action='store_true', help='Só mandados')
     parser.add_argument('--oficios-only', action='store_true', help='Só ofícios')
+    parser.add_argument('--mov-only', action='store_true', help='Só movimentações (intimações, certidões)')
     args = parser.parse_args()
 
     if args.mandados_only:
         rastrear_e_expedir(tipo='mandado')
     elif args.oficios_only:
         rastrear_e_expedir(tipo='oficio')
+    elif args.mov_only:
+        rastrear_e_expedir(tipo='movimentacao')
+    elif args.processo:
+        expedir_processo_especifico(args.processo)
     else:
         rastrear_e_expedir(tipo=None)

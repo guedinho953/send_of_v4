@@ -253,16 +253,21 @@ class RastrearExpedirView(LoginRequiredMixin, View):
     Varre movimentações, match RAG e expede mandados E ofícios.
     """
     def post(self, request):
+        return self._executar_script(request, [])
+
+    def _executar_script(self, request, args_extra=None):
         import subprocess, os, sys
         from django.conf import settings
 
         script_path = os.path.join(settings.BASE_DIR, 'expedir_rapido.py')
         env = {**os.environ, 'DJANGO_ALLOW_ASYNC_UNSAFE': 'true'}
+        cmd = [sys.executable or 'python3', script_path]
+        if args_extra:
+            cmd.extend(args_extra)
 
         try:
             result = subprocess.run(
-                [sys.executable or 'python3', script_path],
-                cwd=settings.BASE_DIR, env=env,
+                cmd, cwd=settings.BASE_DIR, env=env,
                 capture_output=True, text=True,
                 timeout=600,
             )
@@ -285,6 +290,15 @@ class RastrearExpedirView(LoginRequiredMixin, View):
             messages.error(request, f'❌ Erro: {str(e)[:200]}')
 
         return HttpResponseRedirect(reverse('dashboard'))
+
+
+class RastrearMovimentacoesView(LoginRequiredMixin, View):
+    """
+    POST /projudi/rastrear-movimentacoes/
+    Varre movimentações e expede SÓ atos de movimentação (intimações, certidões, etc).
+    """
+    def post(self, request):
+        return RastrearExpedirView._executar_script(self, request, ['--mov-only'])
 
 
 class OficioRastrearView(LoginRequiredMixin, View):

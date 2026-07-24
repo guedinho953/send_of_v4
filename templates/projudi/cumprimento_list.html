@@ -56,6 +56,11 @@
     <a href="?fluxo=eletronico" class="filtro-btn {% if request.GET.fluxo == 'eletronico' %}active{% endif %}">💻 DJEN</a>
     <a href="?fluxo=email" class="filtro-btn {% if request.GET.fluxo == 'email' %}active{% endif %}">📧 Email</a>
     <a href="?fluxo=edital" class="filtro-btn {% if request.GET.fluxo == 'edital' %}active{% endif %}">📰 Edital</a>
+    <span style="flex:1;"></span>
+    <form method="post" action="{% url 'projudi:rastrear_expedir' %}" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn" style="background:#7c3aed; color:white; border:none; padding:6px 16px; border-radius:20px; cursor:pointer; font-size:13px;">▶️ Rastrear e Expedir Tudo</button>
+    </form>
 </div>
 
 <div class="card">
@@ -84,14 +89,18 @@
                     <td style="font-size:12px;">{{ c.act_verb|default:"—" }}</td>
                     <td><span class="tag-status status-{{ c.status }}">{{ c.get_status_display }}</span></td>
                     <td style="font-size:12px; color:#6b7280;">{{ c.created_at|date:"d/m/y H:i" }}</td>
-                    <td>
-                        <a href="{% url 'projudi:cumprimento_detail' c.pk %}" class="btn-sm btn-outline">🔍</a>
+                    <td style="white-space:nowrap;">
+                        <a href="{% url 'projudi:cumprimento_detail' c.pk %}" class="btn-sm btn-outline" title="Detalhes">🔍</a>
                         {% if c.pode_executar %}
                             <form method="post" action="{% url 'projudi:cumprimento_executar' c.pk %}" style="display:inline;">
                                 {% csrf_token %}
-                                <button type="submit" class="btn-sm btn-outline" style="color:#059669; border-color:#059669;">▶️</button>
+                                <button type="submit" class="btn-sm btn-outline" style="color:#059669; border-color:#059669;" title="Executar (fluxo normal)">▶️</button>
                             </form>
                         {% endif %}
+                        <form method="post" action="{% url 'projudi:cumprimento_expedir_rapido' c.pk %}" style="display:inline;">
+                            {% csrf_token %}
+                            <button type="submit" class="btn-sm btn-outline" style="color:#7c3aed; border-color:#7c3aed;" title="Expedir Rápido (sequência RAG)">⚡</button>
+                        </form>
                     </td>
                 </tr>
                 {% endfor %}

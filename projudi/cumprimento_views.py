@@ -239,6 +239,36 @@ class CumprimentoDispensarView(LoginRequiredMixin, View):
         return HttpResponseRedirect(reverse('projudi:cumprimento_dashboard'))
 
 
+class CumprimentoExpedirRapidoView(LoginRequiredMixin, View):
+    """POST /projudi/cumprimentos/<pk>/expedir-rapido/
+    Executa o fluxo expedir_rapido (sequencia_cumprimento) para o processo do cumprimento.
+    """
+    
+    def post(self, request, pk):
+        record = get_object_or_404(CumprimentoRecord, pk=pk, user=request.user)
+        proc = record.process
+        if not proc:
+            messages.error(request, 'Cumprimento sem processo vinculado.')
+            return HttpResponseRedirect(reverse('projudi:cumprimento_dashboard'))
+        
+        try:
+            import sys, os
+            # Adiciona o diretório do projeto ao path (necessário para importar)
+            project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            if project_dir not in sys.path:
+                sys.path.insert(0, project_dir)
+            
+            from expedir_rapido import expedir_processo_especifico
+            expedir_processo_especifico(proc.number)
+            messages.success(request, f'✅ Expedição concluída para {proc.number}')
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            messages.error(request, f'❌ Erro: {str(e)[:300]}')
+        
+        return HttpResponseRedirect(reverse('projudi:cumprimento_dashboard'))
+
+
 class CumprimentoLogsJsonView(LoginRequiredMixin, View):
     """GET /projudi/cumprimentos/<pk>/logs/json/"""
 

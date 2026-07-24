@@ -72,6 +72,16 @@ class FluxoDecisor:
         'publique-se', 'registre-se', 'anote-se',
     }
 
+    # Atos que mapeiam para fluxo de ofício
+    ATOS_DE_OFICIO = {
+        'oficie-se', 'oficie-se',
+    }
+
+    # Atos que mapeiam para fluxo de intimação
+    ATOS_DE_INTIMACAO = {
+        'intime-se', 'intimem-se', 'notifique-se',
+    }
+
     # Atos que exigem citação/intimação pessoal (sempre precatória se fora da comarca)
     ATOS_COM_CITACAO_PESSOAL = {
         'citacao', 'citacao_pessoal', 'intimacao_pessoal',
@@ -115,6 +125,10 @@ class FluxoDecisor:
         # Se o CommandAnalyzer já classificou como movimentação, pula árvore
         if self._eh_movimentacao():
             return self._resposta_sem_destinatario()
+
+        # Se o CommandAnalyzer classificou como ofício, usa fluxo de ofício
+        if self._eh_oficio():
+            return self._resposta_oficio()
 
         # Se o ato não tem destinatário, retorna fluxo simples
         if self._ato_sem_destinatario():
@@ -369,6 +383,22 @@ class FluxoDecisor:
             return True
         return False
 
+    def _eh_oficio(self) -> bool:
+        """Verifica se o CommandAnalyzer classificou como ofício."""
+        tipo = (self._ato_data.get('tipo_cumprimento') or '').lower().strip()
+        if tipo == 'oficio':
+            return True
+        act_verb = (self._ato_data.get('act_verb') or '').lower().strip()
+        return act_verb in self.ATOS_DE_OFICIO
+
+    def _eh_intimacao(self) -> bool:
+        """Verifica se o CommandAnalyzer classificou como intimação."""
+        tipo = (self._ato_data.get('tipo_cumprimento') or '').lower().strip()
+        if tipo == 'intimacao':
+            return True
+        act_verb = (self._ato_data.get('act_verb') or '').lower().strip()
+        return act_verb in self.ATOS_DE_INTIMACAO
+
     def _ato_permite_email_condicional(self, tipo_ato: str) -> bool:
         """Verifica se o tipo de ato permite usar e-mail sem opt-in."""
         from projudi.parte_classifier import ParteClassifier
@@ -407,6 +437,31 @@ class FluxoDecisor:
                              f"apenas movimentação interna (Mov581) necessária.",
             'partes': [],
             'resumo': {'fluxos': {'movimentacao_simples': []}},
+        }
+
+    def _resposta_oficio(self) -> Dict:
+        """Retorna resposta para fluxo de ofício."""
+        act_verb = self._ato_data.get('act_verb', '')
+        tipo_oficio = 'RPV' if 'rpv' in str(self._ato_data.get('observacao', '')).lower() else 'CIAP'
+        # Identifica partes que devem receber ofício
+        partes_oficio = []
+        for p_cls in self._partes_classif:
+            p_raw = self._encontrar_raw(p_cls['nome_normalizado'])
+            if p_raw and p_raw.get('papel') == 'PROMOVIDO' if tipo_oficio == 'RPV' else True:
+                partes_oficio.append({
+                    'nome': p_cls['nome'],
+                    'nome_normalizado': p_cls['nome_normalizado'],
+                    'fluxo': f'oficio_{tipo_oficio.lower()}',
+                    'justificativa': f"Comando '{act_verb}' classificado como ofício ({tipo_oficio}).",
+                })
+
+        return {
+            'tipo': 'oficio',
+            'ato': act_verb,
+            'subtipo': tipo_oficio,
+            'partes': partes_oficio,
+            'justificativa': f"'{act_verb}' → ofício {tipo_oficio}",
+            'resumo': {'fluxos': {f'oficio_{tipo_oficio.lower()}': [p['nome'] for p in partes_oficio]}},
         }
 
     def _montar_saida(self, resultados: List[Dict]) -> Dict:

@@ -132,10 +132,16 @@
             🔄 Sincronizar com Projudi
         </button>
     </form>
+    <form method="post" action="{% url 'projudi:rastrear_expedir' %}" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-purple">
+            ▶️ Rastrear e Expedir Tudo
+        </button>
+    </form>
     {% if pendentes %}
     <form method="post" action="{% url 'projudi:cumprimento_batch' %}" style="display:inline;">
         {% csrf_token %}
-        <button type="submit" class="btn btn-purple" onclick="return confirm('Executar todos os {{ pendentes }} pendentes?')">
+        <button type="submit" class="btn btn-green" onclick="return confirm('Executar todos os {{ pendentes }} pendentes?')">
             ▶️ Executar Todos ({{ pendentes }})
         </button>
     </form>

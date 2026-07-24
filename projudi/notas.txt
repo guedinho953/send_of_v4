@@ -74,3 +74,7 @@
     | descricao_mov | "Cumprimento de Decisão" | Texto descCategoriaMovimentacao |
     
     Se não preencher, usa 581 / "Cumprimento de Decisão". Se quiser que apareça "Intimação" no Projudi em vez do genérico, é só preencher "descricao_mov": "Intimação".
+
+    [{"tipo": "intimacao_eletronica", "codigo_mov": "581", 
+    "observacao": "Intimem-se as partes para manifestarem-se acerca do retorno dos autos da Turma Recursal, no prazo de 05 (cinco) dias,  aportando petição neste prazo sem necessidade de aguardar prazo da outra parte.", 
+    "descricao_mov": "Intimação"}]

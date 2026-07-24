@@ -101,8 +101,17 @@
 
         <div class="card" style="border-left-color: #db2777;">
             <h3>Cumprimentos</h3>
-            <p>Acompanhamento de cumprimentos de decisoes judiciais.</p>
-            <a href="{% url 'admin:index' %}" class="btn">Ver no Admin</a>
+            <p>Acompanhamento de cumprimentos de decisoes judiciais. Inclui intimações, ofícios CIAP e movimentações.</p>
+            <a href="{% url 'projudi:cumprimento_dashboard' %}" class="btn" style="background:linear-gradient(135deg,#db2777,#f472b6); color:white; box-shadow:0 2px 8px rgba(219,39,119,0.4);">📋 Dashboard Cumprimentos</a>
+            <a href="{% url 'projudi:cumprimento_list' %}" class="btn btn-outline">Lista</a>
+            <form method="post" action="{% url 'projudi:rastrear_expedir' %}" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn" style="background:linear-gradient(135deg,#7c3aed,#a855f7); color:white; box-shadow:0 2px 8px rgba(124,58,237,0.4);">▶️ Rastrear e Expedir Tudo</button>
+            </form>
+            <form method="post" action="{% url 'projudi:rastrear_movimentacoes' %}" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn" style="background:#0891b2; color:white;">📋 Só Movimentações</button>
+            </form>
         </div>
 
         <div class="card" style="border-left-color: #6366f1;">

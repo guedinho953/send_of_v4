@@ -41,6 +41,7 @@ urlpatterns = [
     path('mandados/rastrear/', mandado_views.MandadoRastrearView.as_view(), name='mandado_rastrear'),
     path('oficios/rastrear/', mandado_views.OficioRastrearView.as_view(), name='oficio_rastrear'),
     path('rastrear-expedir/', mandado_views.RastrearExpedirView.as_view(), name='rastrear_expedir'),
+    path('rastrear-movimentacoes/', mandado_views.RastrearMovimentacoesView.as_view(), name='rastrear_movimentacoes'),
 
     # Aba Retornos (GERENCIAMENTO DE RESPOSTAS)
     path('retornos/dashboard/', oficio_views.RetornoDashboardView.as_view(), name='retorno_dashboard'),
@@ -57,6 +58,7 @@ urlpatterns = [
     path('cumprimentos/sync/', cumprimento_views.CumprimentoSyncView.as_view(), name='cumprimento_sync'),
     path('cumprimentos/<int:pk>/', cumprimento_views.CumprimentoDetailView.as_view(), name='cumprimento_detail'),
     path('cumprimentos/<int:pk>/executar/', cumprimento_views.CumprimentoExecutarView.as_view(), name='cumprimento_executar'),
+    path('cumprimentos/<int:pk>/expedir-rapido/', cumprimento_views.CumprimentoExpedirRapidoView.as_view(), name='cumprimento_expedir_rapido'),
     path('cumprimentos/<int:pk>/dispensar/', cumprimento_views.CumprimentoDispensarView.as_view(), name='cumprimento_dispensar'),
     path('cumprimentos/executar-todos/', cumprimento_views.CumprimentoBatchView.as_view(), name='cumprimento_batch'),
     path('cumprimentos/<int:pk>/logs/json/', cumprimento_views.CumprimentoLogsJsonView.as_view(), name='cumprimento_logs_json'),

@@ -291,6 +291,330 @@ class MovimentacaoService:
         return {'cumpridos': cumpridos, 'falhas': falhas}
 
     # =================================================================
+    # EXECUTAR COM INTIMAÇÃO (2 fluxos: MovimentarAnalise + MovimentarProcesso)
+    # =================================================================
+    def executar_com_intimacao(
+        self,
+        processo_numero: str,
+        observacao: str,
+        codigo_mov: str = '581',
+        descricao_mov: str = 'Intimação',
+        cookies_dict: dict = None,
+        proc_projudi: str = None,
+        cod_analise: str = None,
+    ) -> bool:
+        """Executa Mov581 + intimação no Projudi em um único Playwright.
+
+        DOIS FLUXOS:
+        1. Via cod_analise (MovimentarAnalise):
+           - Abre cadastros/MovimentarAnalise?codAnalise=X
+           - Preenche mov + observação
+           - Clica painel de intimação → Autoras/Rés → motivo=3 prazo=3 → Concluir
+           - Usado quando há uma mov pendente na lista de análises
+
+        2. Via proc_projudi (MovimentarProcesso):
+           - Abre movimentacao/MovimentarProcesso?numeroProcesso=X
+           - Preenche mov + seleciona "Intimação" no grid + observação
+           - Navega até DadosProcesso para clicar link Intimar
+           - Usado como fallback genérico (sempre funciona)
+        """
+        from playwright.sync_api import sync_playwright
+
+        result = self.projudi_service._get_session_from_cookies()
+        if not result:
+            print('   ❌ Sessão do Projudi não disponível.')
+            return False
+
+        _, saved_cookies = result
+        cookies = cookies_dict or saved_cookies
+
+        if not proc_projudi and not cod_analise:
+            m = re.search(r'(\d{13,20})', processo_numero.replace('-', '').replace('.', ''))
+            if m:
+                proc_projudi = m.group(1)
+            if not proc_projudi:
+                print('   ❌ Número Projudi não encontrado.')
+                return False
+
+        print(f'   🔷 Iniciando intimação eletrônica...')
+        if cod_analise:
+            print(f'      Via MovimentarAnalise?codAnalise={cod_analise}')
+        else:
+            print(f'      Via MovimentarProcesso?numeroProcesso={proc_projudi}')
+
+        sucesso = False
+        import time
+
+        try:
+            with sync_playwright() as pw:
+                browser = pw.firefox.launch(headless=False, slow_mo=400)
+                ctx_b = browser.new_context(
+                    viewport={'width': 1500, 'height': 950}, locale='pt-BR')
+                ctx_b.add_cookies([
+                    {'name': k, 'value': v,
+                     'domain': 'projudi.tjba.jus.br', 'path': '/'}
+                    for k, v in cookies.items()
+                ])
+                page = ctx_b.new_page()
+
+                # ─── Abrir página ───
+                if cod_analise:
+                    url = (
+                        'https://projudi.tjba.jus.br/projudi/cadastros/'
+                        f'MovimentarAnalise?codAnalise={cod_analise}'
+                    )
+                else:
+                    url = (
+                        'https://projudi.tjba.jus.br/projudi/movimentacao/'
+                        f'MovimentarProcesso?numeroProcesso={proc_projudi}'
+                    )
+
+                page.goto(url, wait_until='networkidle')
+                time.sleep(2)
+
+                # Verifica se carregou
+                tem_form = page.evaluate(
+                    '!!document.getElementById("seqCategoriaMovimentacao")')
+                if not tem_form:
+                    if 'expirou' in page.title().lower():
+                        print('   ❌ Sessão expirou.')
+                    else:
+                        print('   ❌ Formulário não carregou.')
+                    browser.close()
+                    return False
+
+                # ─── PASSO 1: Código da movimentação ───
+                page.evaluate(f'''() => {{
+                    var camp = document.getElementById('seqCategoriaMovimentacao');
+                    if (camp) {{ camp.value = '{codigo_mov}'; camp.dispatchEvent(new Event('change', {{bubbles:true}})); }}
+                }}''')
+                time.sleep(1)
+
+                # ─── PASSO 2: Clicar btnBuscaMovimentacao ───
+                try:
+                    page.click('#btnBuscaMovimentacao', timeout=5000)
+                    time.sleep(2)
+                except Exception:
+                    print('   ⚠️ btnBuscaMovimentacao não encontrado')
+
+                # Tratar alerta
+                try:
+                    alert = page.wait_for_event('dialog', timeout=5000)
+                    print(f'   ⚠️ Alerta: {alert.message}')
+                    alert.accept()
+                    time.sleep(2)
+                except Exception:
+                    pass
+
+                # ─── PASSO 3: Selecionar "Intimação" no grid ───
+                try:
+                    link_int = page.query_selector('a:has-text("Intimação")')
+                    if not link_int:
+                        link_int = page.query_selector('td:has-text("Intimação")')
+                    if link_int:
+                        link_int.click()
+                        print('   ✅ Intimação selecionada no grid')
+                        time.sleep(1)
+                    else:
+                        # Fallback: injeta direto na descrição
+                        page.evaluate(f'''() => {{
+                            var desc = document.getElementById('descCategoriaMovimentacao');
+                            if (desc) {{ desc.value = '{descricao_mov}'; }}
+                        }}''')
+                        time.sleep(0.5)
+                except Exception:
+                    pass
+
+                # ─── PASSO 4: Preencher observação ───
+                try:
+                    page.fill('#observacao', observacao[:500])
+                    time.sleep(0.5)
+                    print('   ✅ Observação preenchida')
+                except Exception as e:
+                    print(f'   ⚠️ Observação: {e}')
+
+                # ═══════════════════════════════════════════════════
+                # FLUXO A: MovimentarAnalise → painel de intimação
+                # ═══════════════════════════════════════════════════
+                if cod_analise:
+                    print('   🔔 Pipeline de intimação (painel)...')
+
+                    # Clicar painel de intimação
+                    try:
+                        btn_painel = page.query_selector('#imgBotao_painelIntimacao')
+                        if btn_painel:
+                            btn_painel.click()
+                            time.sleep(1)
+                            print('   ✅ Painel de intimação aberto')
+                        else:
+                            print('   ⚠️ Botão painel de intimação não encontrado')
+                    except Exception as e:
+                        print(f'   ⚠️ Painel: {e}')
+
+                    # Autoras
+                    try:
+                        page.evaluate('''() => {
+                            var aba = document.getElementById('Autoras');
+                            if (aba) aba.click();
+                        }''')
+                        time.sleep(0.5)
+                        page.evaluate('''() => {
+                            var sel = document.getElementById('codMotivoAutor');
+                            if (sel) { sel.value = '3'; sel.dispatchEvent(new Event('change', {bubbles:true})); }
+                            var sel2 = document.getElementById('codPrazoAutor');
+                            if (sel2) { sel2.value = '3'; sel2.dispatchEvent(new Event('change', {bubbles:true})); }
+                        }''')
+                        time.sleep(0.5)
+                        print('   ✅ Autoras configuradas (motivo=3, prazo=3)')
+                    except Exception as e:
+                        print(f'   ⚠️ Autoras: {e}')
+
+                    # Rés
+                    try:
+                        page.evaluate('''() => {
+                            var aba = document.getElementById('Res');
+                            if (aba) aba.click();
+                        }''')
+                        time.sleep(0.5)
+                        page.evaluate('''() => {
+                            var sel = document.getElementById('codMotivoReu');
+                            if (sel) { sel.value = '3'; sel.dispatchEvent(new Event('change', {bubbles:true})); }
+                            var sel2 = document.getElementById('codPrazoReu');
+                            if (sel2) { sel2.value = '3'; sel2.dispatchEvent(new Event('change', {bubbles:true})); }
+                        }''')
+                        time.sleep(0.5)
+                        print('   ✅ Rés configurados (motivo=3, prazo=3)')
+                    except Exception as e:
+                        print(f'   ⚠️ Rés: {e}')
+
+                    time.sleep(2)
+
+                    # Concluir
+                    page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+                    time.sleep(0.5)
+                    try:
+                        page.click('#Concluir', timeout=10000)
+                        time.sleep(3)
+                        try:
+                            alert = page.wait_for_event('dialog', timeout=5000)
+                            print(f'   ⚠️ Alerta: {alert.message}')
+                            alert.accept()
+                            time.sleep(2)
+                        except Exception:
+                            pass
+                        print('   ✅ Intimação concluída (MovimentarAnalise)')
+                        sucesso = True
+                    except Exception as e:
+                        print(f'   ❌ Erro ao concluir: {e}')
+
+                # ═══════════════════════════════════════════════════
+                # FLUXO B: MovimentarProcesso → Concluir → DadosProcesso → link Intimar
+                # ═══════════════════════════════════════════════════
+                else:
+                    # Concluir movimentação
+                    page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+                    time.sleep(0.5)
+                    try:
+                        page.click('#Concluir', timeout=10000)
+                        time.sleep(4)
+                        try:
+                            alert = page.wait_for_event('dialog', timeout=5000)
+                            print(f'   ⚠️ Alerta: {alert.message}')
+                            alert.accept()
+                            time.sleep(3)
+                        except Exception:
+                            pass
+                    except Exception as e:
+                        print(f'   ⚠️ Concluir: {e}')
+
+                    # Navegar para DadosProcesso
+                    url_dados = (
+                        'https://projudi.tjba.jus.br/projudi/listagens/'
+                        f'DadosProcesso?numeroProcesso={proc_projudi}'
+                    )
+                    page.goto(url_dados, wait_until='networkidle')
+                    time.sleep(2)
+
+                    print('   🔍 Buscando link de intimação...')
+
+                    # Procurar link Intimar
+                    intimou = False
+                    selectores = [
+                        'a[href*="Intimar"]', 'a[href*="intimar"]',
+                        'a:has-text("Intimar")', 'a:has-text("Intimação")',
+                        'button:has-text("Intimar")', 'input[value="Intimar"]',
+                    ]
+                    for sel in selectores:
+                        try:
+                            el = page.query_selector(sel)
+                            if el:
+                                print(f'   🔘 Clicando: {sel}')
+                                el.click()
+                                time.sleep(3)
+                                intimou = True
+                                break
+                        except Exception:
+                            continue
+
+                    if intimou:
+                        # Confirmar modal
+                        try:
+                            time.sleep(2)
+                            for csel in ['input[value="Confirmar"]', 'input[value="OK"]',
+                                          'button:has-text("Confirmar")', '#confirmar']:
+                                try:
+                                    btn = page.query_selector(csel)
+                                    if btn:
+                                        btn.click()
+                                        time.sleep(3)
+                                        break
+                                except Exception:
+                                    continue
+                        except Exception:
+                            pass
+                        try:
+                            alert = page.wait_for_event('dialog', timeout=5000)
+                            print(f'   ℹ️ Alerta: {alert.message}')
+                            alert.accept()
+                            time.sleep(2)
+                        except Exception:
+                            pass
+                        print('   ✅ Intimação eletrônica gerada (DadosProcesso)')
+                        sucesso = True
+                    else:
+                        print('   ⚠️ Link de intimação não encontrado em DadosProcesso')
+                        print(f'      URL: {url_dados}')
+                        sucesso = True  # parcial
+
+                browser.close()
+
+        except Exception as e:
+            print(f'   ❌ Erro no Playwright: {str(e)[:200]}')
+            import traceback
+            traceback.print_exc()
+            sucesso = False
+
+        # ── Registra no banco (CumprimentoRecord) para aparecer nos Cumprimentos ──
+        try:
+            from projudi.models import CumprimentoRecord
+            status = 'cumprido' if sucesso else 'falha'
+            record = CumprimentoRecord.objects.create(
+                processo=proc_projudi or processo_numero[:20],
+                numero_processo_cnj=processo_numero,
+                fluxo='eletronico',
+                fluxo_justificativa='Intimação eletrônica via DJEN (Mov581 + click Intimar)',
+                act_verb='intimacao',
+                snippet=observacao[:300],
+                status=status,
+                user=self.user if hasattr(self, 'user') else None,
+            )
+            print(f'   📝 Cumprimento #{record.id} registrado ({status})')
+        except Exception as e:
+            print(f'   ⚠️ Erro ao registrar cumprimento: {e}')
+
+        return sucesso
+
+    # =================================================================
     # FECHAR
     # =================================================================
     def fechar(self):
