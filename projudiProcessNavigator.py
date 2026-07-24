@@ -137,6 +137,7 @@ class ProcessoParser:
                 nome_normalizado = nome.lower().strip()
                 nome_normalizado = re.sub(r'\s+', ' ', nome.lower().strip())
                 cpf = tds[3].get_text(strip=True)
+                rg = tds[2].get_text(strip=True) if len(tds) > 2 else ''
 
                 recebe_email = bool(
                     tds[1].find("img", src=lambda x: x and "envelope" in x)
@@ -196,6 +197,7 @@ class ProcessoParser:
                     "nome": nome,
                     'nome_normalizado' : nome_normalizado,
                     "cpf/cnpj": cpf,
+                    "rg": rg,
                     "tipo": tipo,
                     "papel": papel,
                     "recebe_intimacao_email": recebe_email,
@@ -761,6 +763,7 @@ class ProcessoParser:
                     revel = True
                 nome_normalizado = re.sub(r'\s+', ' ', nome.lower().strip())
                 cpf = tds[3].get_text(strip=True)
+                rg = tds[2].get_text(strip=True) if len(tds) > 2 else ''
 
                 recebe_email = bool(
                     tds[1].find("img", src=lambda x: x and "envelope" in x)
@@ -816,6 +819,7 @@ class ProcessoParser:
                     "nome": nome,
                     'nome_normalizado' : nome_normalizado,
                     "cpf/cnpj": cpf,
+                    "rg": rg,
                     "tipo": tipo,
                     "papel": papel,
                     'revel' : revel,

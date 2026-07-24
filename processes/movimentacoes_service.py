@@ -318,7 +318,7 @@ def buscar_cumprimentos_similares(texto_movimentacao: str, top_k: int = 3) -> Li
                 'id': ex.id,
                 'processo': ex.process.number if ex.process else None,
                 'despacho_ato': ex.despacho_ato[:200],
-                'despacho_observacao': ex.despacho_observacao[:500],
+                'despacho_observacao': ex.despacho_observacao[:2000],
                 'cumprimentos': ex.cumprimentos,
                 'template_ids': list(ex.suggested_templates.values_list('id', flat=True)),
                 'data': ex.despacho_data,

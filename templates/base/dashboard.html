@@ -77,13 +77,13 @@
         <div class="card" style="border-left-color: #059669;">
             <h3>Envio de Oficios</h3>
             <p>Busca, envia por e-mail e juntar oficios expedidos pelo Projudi.</p>
-            <a href="{% url 'projudi:oficio_dashboard' %}" class="btn">Dashboard Oficios</a>
+            <a href="{% url 'projudi:oficio_dashboard' %}" class="btn" style="background:linear-gradient(135deg,#059669,#10b981); color:white; box-shadow:0 2px 8px rgba(5,150,105,0.4);">⚡ Dashboard Oficios</a>
             <a href="{% url 'projudi:oficio_list' %}" class="btn btn-outline">Lista</a>
-            <a href="{% url 'projudi:oficio_sync' %}" class="btn btn-green">Sincronizar</a>
             <form method="post" action="{% url 'projudi:oficio_rastrear' %}" style="display:inline;">
                 {% csrf_token %}
-                <button type="submit" class="btn" style="background:#d97706;">🔍 Rastrear Ofícios</button>
+                <button type="submit" class="btn" style="background:linear-gradient(135deg,#7c3aed,#a855f7); color:white; box-shadow:0 2px 8px rgba(124,58,237,0.4);">🔍 Rastrear e Expedir Ofícios</button>
             </form>
+            <a href="{% url 'projudi:oficio_sync' %}" class="btn btn-outline">🔄 Sincronizar</a>
         </div>
 
         <div class="card" style="border-left-color: #7c3aed;">

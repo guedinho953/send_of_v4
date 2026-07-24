@@ -324,4 +324,4 @@ class OficioRastrearView(LoginRequiredMixin, View):
         except Exception as e:
             messages.error(request, f'❌ Erro: {str(e)[:200]}')
 
-        return HttpResponseRedirect(reverse('dashboard'))
+        return HttpResponseRedirect(reverse('projudi:oficio_dashboard'))

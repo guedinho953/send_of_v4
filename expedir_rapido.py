@@ -115,6 +115,7 @@ def rastrear_e_expedir(tipo=None):
 
             for s in similares:
                 # Usa despacho_ato + observacao para comparação (mais preciso)
+                # A observacao tem o conteúdo real da decisão (ex: detalhes do CIAP/RPV)
                 texto_rag = s['despacho_ato'] + ' ' + s.get('despacho_observacao', '')
                 palavras_rag_s = set(texto_rag.lower().split())
                 total_s = max(len(palavras_rag_s), 1)
@@ -122,6 +123,32 @@ def rastrear_e_expedir(tipo=None):
                     continue
                 try:
                     rag_cand = RAGExample.objects.get(id=s['id'])
+                    # ── Filtro semântico de palavras-chave ──
+                    # Para ofícios: exige que o texto da movimentação contenha
+                    # ao menos uma palavra-chave específica do tipo de ofício.
+                    # O despacho_ato curto (ex: "Homologação de Transação Penal")
+                    # matcharia qualquer processo com essas palavras genéricas.
+                    # O filtro usa o texto COMPLETO (ato + observação) para o
+                    # threshold de similaridade, mas EXIGE um sinal forte no
+                    # texto original da movimentação para confirmar o match.
+                    if tipo == 'oficio' or (tipo is None and (
+                        rag_cand.sequencia_cumprimento or
+                        rag_cand.suggested_templates.filter(
+                            template_type='oficio').exists()
+                    )):
+                        texto_lower = texto.lower()
+                        tem_sinal_oficio = any(
+                            kw in texto_lower
+                            for kw in ['ofício', 'oficio', 'oficie-se',
+                                       'expeça-se ofício', 'expeça-se oficio',
+                                       'requisitório', 'requisitorio',
+                                       'ciap', 'rpv',
+                                       'requisição de pequeno valor',
+                                       'requisicao de pequeno valor',
+                                       'transação penal', 'transacao penal']
+                        )
+                        if not tem_sinal_oficio:
+                            continue
                     if rag_cand.sequencia_cumprimento:
                         # Verifica tipo na sequência
                         seq_tipos = {p.get('tipo') for p in rag_cand.sequencia_cumprimento}
@@ -174,6 +201,8 @@ def rastrear_e_expedir(tipo=None):
                 print(' ✅')
 
             # Para mandados: destinatário é o RÉU/EXECUTADO
+            # Para ofícios CIAP (Transação Penal): destinatário é o AUTOR DO FATO
+            # Para ofícios RPV: destinatário é o ENTE DEVEDOR (réu/executado)
             if template and template.template_type == 'mandado':
                 partes = list(Party.objects.filter(
                     process=proc,
@@ -181,8 +210,57 @@ def rastrear_e_expedir(tipo=None):
                 ))
                 if not partes:
                     partes = [Party.objects.filter(process=proc).first()]
+            elif template and template.template_type == 'oficio':
+                eh_ciap = 'ciap' in template.name.lower()
+                if eh_ciap:
+                    # CIAP: autor do fato é o RÉU/EXECUTADO (quem aceitou a transação)
+                    partes = list(Party.objects.filter(
+                        process=proc,
+                        role__in=['reu', 'executado', 'PROMOVIDO', 'EXECUTADO']
+                    ))
+                else:
+                    # RPV: ente devedor
+                    partes = list(Party.objects.filter(
+                        process=proc,
+                        role__in=['reu', 'executado', 'PROMOVIDO', 'EXECUTADO']
+                    ))
+                if not partes:
+                    partes = [Party.objects.filter(process=proc).first()]
             else:
                 partes = [Party.objects.filter(process=proc).first()]
+
+            # Extrai dados da ata de audiência (CIAP) antes de gerar os ofícios
+            dados_ata = None
+            eh_oficio_ciap = (template and template.template_type == 'oficio'
+                              and 'ciap' in template.name.lower())
+            if eh_oficio_ciap:
+                dados_ata = _extrair_dados_ata(session, proc, mov)
+                # Filtra partes: só AUTORES DO FATO extraídos da ata
+                if dados_ata and dados_ata.get('autores_do_fato'):
+                    nomes_ata = [n.upper().strip() for n in dados_ata['autores_do_fato']]
+                    partes_filtradas = []
+                    for p in partes:
+                        p_nome = p.name.upper().strip() if p.name else ''
+                        if any(n in p_nome or p_nome in n for n in nomes_ata):
+                            partes_filtradas.append(p)
+                    if partes_filtradas:
+                        print(f'   🎯 {len(partes_filtradas)} autor(es) do fato encontrado(s) nas partes')
+                        partes = partes_filtradas
+                    else:
+                        # Cria parte temporária a partir do nome da ata
+                        from types import SimpleNamespace
+                        novas_partes = []
+                        for nome_ata in nomes_ata[:5]:
+                            nome_limpo = re.sub(r'\s+', ' ', nome_ata).strip()
+                            novas_partes.append(SimpleNamespace(
+                                name=nome_ata, address='', email='',
+                                phone='', cpf_cnpj=''))
+                        if novas_partes:
+                            print(f'   🆕 {len(novas_partes)} autor(es) do fato criados da ata')
+                            partes = novas_partes
+                        else:
+                            print('   ⏭️ Pulando processo')
+                            continue
 
             for part in partes:
                 if not part:
@@ -190,7 +268,7 @@ def rastrear_e_expedir(tipo=None):
                     continue
                 print(f'   ✅ {template.name} — {part.name}')
 
-                html_doc = _gerar_html(proc, part, rag, template)
+                html_doc = _gerar_html(proc, part, rag, template, dados_ata=dados_ata)
                 if not html_doc:
                     continue
 
@@ -342,13 +420,31 @@ def _criar_processo(session, mov, proc_num, user):
                 continue
             role = 'autor' if p.get('tipo', '').upper() in ('EXEQUENTE', 'PROMOVENTE') else 'reu'
             end_parts = []
-            for k in ('logradouro', 'bairro', 'cidade', 'uf'):
-                v = p.get(k, '')
-                if v:
-                    end_parts.append(str(v).strip())
-            endereco = ', '.join(end_parts) if end_parts else ''
-            if p.get('cep'):
-                endereco += f' - CEP: {p.get("cep")}'
+            logradouro = p.get('logradouro', '') or ''
+            numero = p.get('numero', '') or ''
+            complemento = p.get('complemento', '') or ''
+            bairro = p.get('bairro', '') or ''
+            cidade = p.get('cidade', '') or ''
+            uf = p.get('uf', '') or ''
+            cep = p.get('cep', '') or ''
+
+            # Monta endereço formatado (mesmo padrão do enrichment de mandados)
+            linha1 = logradouro
+            if numero:
+                linha1 += f', {numero}'
+            if complemento:
+                linha1 += f' - {complemento}'
+            if bairro:
+                if linha1:
+                    linha1 += f', {bairro}'
+                else:
+                    linha1 = bairro
+            endereco = linha1
+            if cidade or uf:
+                endereco += f'<br>{cidade}/{uf}' if cidade and uf else f'<br>{cidade or uf}'
+            if cep:
+                cep_fmt = f'{cep[:5]}-{cep[5:]}' if len(cep) == 8 else cep
+                endereco += f'<br>CEP {cep_fmt}'
 
             Party.objects.get_or_create(
                 process=proc, name=nome, tenant=user.tenant,
@@ -356,6 +452,9 @@ def _criar_processo(session, mov, proc_num, user):
                     'name_normalized': nome.lower().strip(), 'role': role,
                     'cpf_cnpj': p.get('cpf/cnpj', ''), 'email': p.get('email', '') or '',
                     'phone': p.get('tel', '') or '', 'address': endereco,
+                    'rg': p.get('rg', '') or '',
+                    'nome_pai': p.get('nome_pai', '') or '',
+                    'nome_mae': p.get('nome_mae', '') or '',
                 })
 
         return proc
@@ -363,7 +462,273 @@ def _criar_processo(session, mov, proc_num, user):
         return None
 
 
-def _gerar_html(proc, part, rag, template):
+def _extrair_dados_ata(session, proc, mov=None):
+    """Extrai dados da ata de audiência (autores do fato, prestação, parcelas).
+
+    A ata de audiência é um documento HTML vinculado à movimentação
+    que contém os termos da transação penal (CIAP):
+    - autor do fato (infrator) — SÓ esses devem receber ofício
+    - tipo de prestação (pecuniária ou serviço comunitário)
+    - valor, parcelas, forma de pagamento
+    """
+    import re
+    from bs4 import BeautifulSoup
+
+    dados = {
+        'prestacao_tipo': '',
+        'prestacao_valor': '',
+        'prestacao_parcelas': '',
+        'prestacao_descricao': '',
+        'autores_do_fato': [],  # nomes extraídos da ata
+        'ata_encontrada': False,
+    }
+
+    # 1. Acessa DadosProcesso para encontrar movimentos com atas
+    projudi_url = getattr(proc, 'projudi_url', None) or (
+        mov.get('link_processo', '') if mov else '')
+    if not projudi_url:
+        return dados
+
+    try:
+        r = session.get(projudi_url, timeout=30)
+        if r.status_code != 200 or 'expirou' in r.text.lower():
+            return dados
+
+        soup = BeautifulSoup(r.text, 'html.parser')
+
+        # 2. Percorre movimentos procurando eventos de audiência
+        # (o documento pode ser "online.html" sem "ata" no nome)
+        for tr in soup.find_all('tr'):
+            tds = tr.find_all('td', recursive=False)
+            if not tds:
+                continue
+            if not tds[0].get_text(strip=True).isdigit():
+                continue
+
+            texto_evento = tds[1].get_text(' ', strip=True).lower()
+            if not any(x in texto_evento for x in
+                       ['audiência', 'audiencia', 'termo de audiência',
+                        'termo de audiencia', 'junta', 'termo']):
+                continue
+
+            id_mov = None
+            for a in tr.find_all('a', href=True):
+                m = re.search(r"mostra\('sub(\d+)'\)", a['href'])
+                if m:
+                    id_mov = m.group(1)
+            if not id_mov:
+                continue
+
+            span_sub = soup.find('span', id=f'sub{id_mov}')
+            if not span_sub:
+                continue
+
+            for a in span_sub.find_all('a', href=True):
+                nome_doc = a.get_text(strip=True).lower()
+                # Se o evento já é de audiência, processa TODOS os documentos
+                # Senão, só processa se o nome conter "ata" ou "audiência"
+                evento_eh_audiencia = any(x in texto_evento for x in
+                    ['audiência', 'audiencia', 'termo de audiência', 'termo de audiencia'])
+                if not evento_eh_audiencia and not any(x in nome_doc for x in
+                    ['ata', 'audiência', 'audiencia']):
+                    continue
+
+                href = a['href']
+                if href.startswith('javascript'):
+                    continue
+                from urllib.parse import urljoin
+                url_doc = urljoin('https://projudi.tjba.jus.br/projudi/', href)
+
+                # 3. Download do documento da audiência
+                try:
+                    r_ata = session.get(url_doc, timeout=30)
+                    if r_ata.status_code != 200:
+                        continue
+
+                    # Detecta se é PDF ou HTML
+                    content_type = r_ata.headers.get('Content-Type', '')
+                    soup_ata = None
+                    texto_limpo = ''
+                    if 'pdf' in content_type.lower():
+                        try:
+                            import subprocess, tempfile
+                            with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp:
+                                tmp.write(r_ata.content)
+                                tmp_path = tmp.name
+                            result = subprocess.run(
+                                ['pdftotext', tmp_path, '-l', '10', '-'],
+                                capture_output=True, text=True, timeout=30)
+                            texto_limpo = result.stdout
+                            os.unlink(tmp_path)
+                        except Exception as e:
+                            try:
+                                import io, PyPDF2
+                                pdf_file = io.BytesIO(r_ata.content)
+                                reader = PyPDF2.PdfReader(pdf_file)
+                                texto_limpo = ' '.join(
+                                    page.extract_text() or ''
+                                    for page in reader.pages
+                                )
+                            except Exception:
+                                print('   ⚠️ Erro ao extrair texto do PDF')
+                                continue
+                    else:
+                        soup_ata = BeautifulSoup(r_ata.text, 'html.parser')
+                        texto_limpo = soup_ata.get_text(' ', strip=True)
+
+                    # Verifica se a ata é do MESMO processo
+                    proc_num_ata = ''
+                    for m_nproc in re.finditer(
+                        r'(?:N[úu]mero do processo|Processo)\s*:?\s*([\d.-]+)',
+                        texto_limpo, re.I):
+                        proc_num_ata = m_nproc.group(1).strip()
+                        break
+                    if proc_num_ata:
+                        proc_atual = re.sub(r'[^\d]', '', str(proc.number))
+                        proc_ata = re.sub(r'[^\d]', '', proc_num_ata)
+                        if proc_atual and proc_ata and proc_atual != proc_ata:
+                            print(f'   ⏭️ Ata do processo {proc_num_ata} (atual: {proc.number})')
+                            continue
+                        else:
+                            print(f'   ✅ Ata do processo {proc_num_ata}')
+
+                    dados['ata_encontrada'] = True
+                    texto_lower = texto_limpo.lower()
+
+                    # ── Extrai AUTORES DO FATO ──
+                    # Só extrai se ainda não encontramos (evita que PDFs
+                    # sem texto sobrescrevam a extração do HTML)
+                    if dados['autores_do_fato']:
+                        continue
+
+                    autores = []
+
+                    # Padrão 1: "Autor do fato:" (HTML) - extrai só o nome
+                    for m in re.finditer(
+                        r'autor(?:es)?\s+do\s+fato\s*:?\s*([A-ZÀ-Ú\s]{5,60}?)(?:\s+(?:Aos|Aceitou|Aceita|para|nos|em|Na|Às|Ficou|Compromete|Presta|Condições|Deverá|Devera|Oficiará|Oficiara)|\s*$|\.)',
+                        texto_limpo, re.I):
+                        raw = m.group(1).strip()
+                        for nome in re.split(r'\s+e\s+|\s*,\s*', raw):
+                            nome = nome.strip().upper()
+                            if nome and len(nome) > 5:
+                                autores.append(nome)
+
+                    # Padrão 2: "AUTOR DO FATO" como cabeçalho de seção no PDF
+                    if not autores:
+                        blocos = re.split(
+                            r'\n(?=AUTORIDADE|TESTEMUNHA|VÍTIMA|VITIMA|ÓRGÃO|ORGAO|DISTRIBUI)',
+                            texto_limpo, flags=re.I)
+                        for bloco in blocos:
+                            if 'autor do fato' in bloco.lower():
+                                linhas = bloco.split('\n')
+                                dentro = False
+                                for linha in linhas:
+                                    if 'autor do fato' in linha.lower():
+                                        dentro = True
+                                        continue
+                                    if dentro:
+                                        nome = re.sub(r'\s+', ' ', linha).strip().upper()
+                                        if (nome and len(nome) > 8
+                                            and not any(x in nome.lower() for x in
+                                                ['juízo', 'juizo', 'vara', 'comarca',
+                                                 'paulo afonso', 'tribunal', 'justiça',
+                                                 'brasil', 'protocolado', 'distribuído',
+                                                 'distribuido', 'assinado',
+                                                 'código', 'codigo', 'validação',
+                                                 'documento', 'eletronicamente',
+                                                 'advogada', 'registrado',
+                                                 'termo', 'circunstanciado',
+                                                 'petição', 'peticao', 'inicial',
+                                                 'tamanho', 'assunto', 'autoridade',
+                                                 'distribuição', 'distribuicao',
+                                                 'audiência', 'audiencia', 'protocolo',
+                                                 'comprovante', 'tribunal'])):
+                                            if re.search(r'\b[A-Z]{2}$', nome):
+                                                continue
+                                            autores.append(nome)
+                                break
+
+                    # Padrão 3: tabelas HTML (fallback)
+                    if not autores and soup_ata:
+                        for table in soup_ata.find_all('table'):
+                            for td in table.find_all('td'):
+                                txt = td.get_text(strip=True).upper()
+                                if len(txt) > 10 and not any(
+                                    x in txt.lower()
+                                    for x in ['endereço', 'telefone', 'cpf', 'rg',
+                                              'e-mail', 'cep', 'página', 'protocolo']
+                                ):
+                                    if re.search(r'[A-ZÀ-Ú]{2,}\s+[A-ZÀ-Ú]{2,}', txt):
+                                        autores.append(txt)
+
+                    # Deduplica e limpa
+                    autores = list(dict.fromkeys(
+                        re.sub(r'\s+', ' ', a).strip()
+                        for a in autores if a
+                    ))
+                    # Remove sufixos de data/hora/local dos nomes
+                    autores_limpos = []
+                    for a in autores:
+                        a_clean = re.sub(
+                            r'(?:\s+|^)(?:AOS|ACEITOU|ACEITA|PARA|NOS|EM|NA|ÀS|FICOU|COMPROMETEU|PRESTA|DEVER[ÁA]|OFICIAR[ÁA])\s+.*', '', a, flags=re.I
+                        ).strip()
+                        if a_clean:
+                            autores_limpos.append(a_clean)
+                    autores = autores_limpos
+                    # Remove advogados
+                    if autores:
+                        texto_upper = texto_limpo.upper()
+                        autores_filtrados = []
+                        for nome in autores:
+                            if re.search(
+                                re.escape(nome) + r'\s*\(?\s*(ADVOGAD|OAB\b)',
+                                texto_upper, re.I):
+                                continue
+                            autores_filtrados.append(nome)
+                        autores = autores_filtrados
+                    dados['autores_do_fato'] = autores
+                    if autores:
+                        print(f'   👤 Autor(es) do fato: {", ".join(autores[:3])}')
+
+                    # ── 5. Extrai tipo de prestação ──
+                    if 'pecuniária' in texto_lower or 'pecuniaria' in texto_lower:
+                        dados['prestacao_tipo'] = 'PECUNIÁRIA'
+                    elif any(x in texto_lower for x in
+                             ['serviço', 'servico', 'comunitário', 'comunitario']):
+                        dados['prestacao_tipo'] = 'SERVIÇO COMUNITÁRIO'
+
+                    val_match = re.search(r'R\$\s*([\d.,]+)', texto_limpo)
+                    if val_match:
+                        dados['prestacao_valor'] = val_match.group(1)
+
+                    parc_match = re.search(r'(\d+)\s*parcelas?', texto_lower)
+                    if parc_match:
+                        dados['prestacao_parcelas'] = parc_match.group(1)
+
+                    desc_match = re.search(
+                        r'prestação\s*(.{100,500}?)(?:\.\s+[A-Z]|$)',
+                        texto_limpo, re.I | re.DOTALL)
+                    if desc_match:
+                        dados['prestacao_descricao'] = desc_match.group(1).strip()
+
+                    tipo = dados.get('prestacao_tipo') or 'tipo nao identificado'
+                    valor = dados.get('prestacao_valor', '')
+                    parcelas = dados.get('prestacao_parcelas', '')
+                    info = f'   📋 Ata de audiencia: {tipo}'
+                    if valor:
+                        info += f' R$ {valor}'
+                    if parcelas:
+                        info += f' {parcelas}x'
+                    print(info)
+                except Exception as e:
+                    print(f'   ⚠️ Erro ao baixar doc: {e}')
+    except Exception as e:
+        print(f'   ⚠️ Erro ao buscar ata: {e}')
+
+    return dados
+
+
+def _gerar_html(proc, part, rag, template, dados_ata=None):
     """Gera o HTML do documento com os dados corretos."""
     ctx = {
         'processo': proc.number,
@@ -417,6 +782,32 @@ def _gerar_html(proc, part, rag, template):
         # Se email do ente estiver vazio, deixa vazio
         if not ctx.get('ente_email'):
             ctx['ente_email'] = ''
+
+        # Dados da ata de audiência (CIAP)
+        if dados_ata:
+            ctx['prestacao_tipo'] = dados_ata.get('prestacao_tipo', '')
+            ctx['prestacao_valor'] = dados_ata.get('prestacao_valor', '')
+            ctx['prestacao_parcelas'] = dados_ata.get('prestacao_parcelas', '')
+            ctx['prestacao_descricao'] = dados_ata.get('prestacao_descricao', '')
+            ctx['ata_encontrada'] = dados_ata.get('ata_encontrada', False)
+            # Monta descricao_cumprimento com os dados reais da ata
+            partes_desc = []
+            tipo = dados_ata.get('prestacao_tipo', '')
+            valor = dados_ata.get('prestacao_valor', '')
+            parcelas = dados_ata.get('prestacao_parcelas', '')
+            if tipo:
+                partes_desc.append(tipo.lower())
+            if valor:
+                partes_desc.append(f'no valor de R$ {valor}')
+            if parcelas:
+                partes_desc.append(f'em {parcelas}x')
+            desc_ata = dados_ata.get('prestacao_descricao', '')
+            if desc_ata and not partes_desc:
+                ctx['descricao_cumprimento'] = desc_ata
+            elif partes_desc:
+                ctx['descricao_cumprimento'] = ' '.join(partes_desc)
+                if desc_ata:
+                    ctx['descricao_cumprimento'] += f' - {desc_ata}'
 
     try:
         html = Template(template.html_template).render(Context(ctx))
@@ -806,10 +1197,10 @@ def _expedir_oficio(proc, session, cookies_dict, html_oficio, part, template):
 
             page.select_option('select[name="codTipoDocumento"]', '53')
             time.sleep(1)
-                        # Observação com tipo de ofício e credor
+                        # Observação com tipo de ofício
             eh_ciap = 'ciap' in template.name.lower()
             if eh_ciap:
-                page.fill('#observacao', f'Solicitada Expedicao de Oficio CIAP - {nome_parte[:30]}')
+                page.fill('#observacao', f'Solicitada Expedicao de Oficio CIAP - {nome_parte[:50]}')
             else:
                 credor = Party.objects.filter(process=proc, role='autor').first()
                 nome_credor = credor.name if credor else nome_parte
@@ -823,30 +1214,50 @@ def _expedir_oficio(proc, session, cookies_dict, html_oficio, part, template):
 
             # Destinatário conforme o template
             eh_ciap = 'ciap' in template.name.lower()
+            # Busca o nome da parte no dropdown (igual mandados faz)
+            nome_dest = part.name if part else ''
             if eh_ciap:
-                page.select_option('#codigoDestinatario', '13809981')
-                page.click('#btnAddCumprimento')
-                time.sleep(1)
+                # CIAP: destinatário é o autor do fato (parte passada)
+                print(f'   🔍 Buscando destinatário: {nome_dest[:50]}')
             else:
-                # Seleciona destinatário pelo texto no dropdown (igual CIAP, mas por nome)
+                # RPV: destinatário é o ente devedor (réu)
                 ente = Party.objects.filter(process=proc, role='reu').first()
-                nome_dest = ente.name if ente else 'Empresa Baiana de Aguas e Saneamento'
-                try:
-                    page.select_option('#codigoDestinatario', label=nome_dest)
-                except:
-                    # Fallback: tenta pelo texto parcial
-                    page.evaluate("(nome) => {" +
-                        "var sel = document.getElementById('codigoDestinatario');" +
-                        "if (!sel) return;" +
-                        "for (var i = 0; i < sel.options.length; i++) {" +
-                            "var txt = sel.options[i].text.toLowerCase();" +
-                            "if (txt.includes('embasa') || txt.includes('agua') || txt.includes('saneamento')) {" +
-                                "sel.value = sel.options[i].value; break;" +
-                            "}" +
-                        "}" +
-                    "}", nome_dest)
-                page.click('#btnAddCumprimento')
-                time.sleep(2)
+                nome_dest = ente.name if ente else nome_dest
+
+            # Tenta encontrar option pelo nome (mesma lógica do mandado)
+            opt = page.locator(f'#codigoDestinatario option:text("{nome_dest}")').first
+            if opt.count():
+                val = opt.get_attribute('value')
+                page.select_option('#codigoDestinatario', val)
+                print(f'   ✅ Destinatário: {nome_dest[:40]} ({val})')
+            else:
+                # Fallback: texto parcial no dropdown
+                nome_lower = nome_dest.lower()
+                page.evaluate("""(termos) => {
+                    var sel = document.getElementById('codigoDestinatario');
+                    if (!sel) return;
+                    for (var i = 0; i < sel.options.length; i++) {
+                        var txt = sel.options[i].text.toLowerCase();
+                        if (termos.some(t => txt.includes(t))) {
+                            sel.value = sel.options[i].value;
+                            return;
+                        }
+                    }
+                    // Ultimo recurso: primeira opcao REAL (pula placeholder)
+                    for (var i = 1; i < sel.options.length; i++) {
+                        var v = sel.options[i].value;
+                        if (v && v !== '-1' && v !== '') {
+                            sel.value = v; return;
+                        }
+                    }
+                }""", [nome_lower] + ([] if eh_ciap else
+                      ['embasa', 'agua', 'saneamento', 'estado', 'municipio']))
+                txt_selecionado = page.evaluate(
+                    "() => { var s = document.getElementById('codigoDestinatario'); "
+                    "return s ? s.options[s.selectedIndex].text : ''; }")
+                print(f'   ✅ Destinatário (fallback): {txt_selecionado[:40]}')
+            page.click('#btnAddCumprimento')
+            time.sleep(2)
 
             page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
             time.sleep(0.5)
@@ -859,44 +1270,81 @@ def _expedir_oficio(proc, session, cookies_dict, html_oficio, part, template):
                 time.sleep(3)
             except:
                 pass
+            try:
+                page.wait_for_load_state('networkidle', timeout=10000)
+            except:
+                pass
 
-            # === 2. CumprimentoCartorio → Redigir sem AR ===
+            # Captura codCumprimento da URL (fallback)
+            cod_cump = ''
+            m_cump = re.search(r'codCumprimento=(\d+)', page.url)
+            if m_cump:
+                cod_cump = m_cump.group(1)
+            if not cod_cump:
+                cod_cump = page.evaluate(r'''() => {
+                    var body = document.body.innerHTML;
+                    var m = body.match(/codCumprimento["']?\s*[:=]\s*["']?(\d+)/i);
+                    return m ? m[1] : '';
+                }''')
+            print(f'   codCumprimento: {cod_cump or "não encontrado"}')
+
+            # === 2. CumprimentoCartorio → "Redigir sem AR" ou forms RPA ===
             url_cump = 'https://projudi.tjba.jus.br/projudi/listagens/CumprimentoCartorio?tipo=oficio&acao=expedir'
             page.goto(url_cump, wait_until='networkidle')
             time.sleep(3)
 
-            cump_result = page.evaluate('''() => {
-                var forms = document.querySelectorAll('form[name^="formCumprimento"]');
-                if (forms.length === 0) return {erro: 'nenhum form encontrado'};
-                var form = forms[forms.length - 1];
-                var sel = form.querySelector('select[name="codModelo"]');
-                if (!sel) return {erro: 'select codModelo nao encontrado', form: form.name};
-                var rpaValue = null;
-                for (var i = 0; i < sel.options.length; i++) {
-                    if (sel.options[i].text.toLowerCase().includes('rpa')) {
-                        rpaValue = sel.options[i].value; break;
-                    }
-                }
-                if (!rpaValue) return {erro: 'modelo RPA nao encontrado'};
-                sel.value = rpaValue;
-                return {ok: true, form: form.name, codModelo: rpaValue};
-            }''')
-            print(f'   📝 {cump_result}')
-            if not cump_result.get('ok'):
-                print(f'   ❌ ERRO: {cump_result}')
-                browser.close()
-                return False
-
-            form_name = cump_result['form']
-            with page.expect_navigation(timeout=15000):
-                page.evaluate(f'''() => {{
-                    var form = document.forms['{form_name}'];
-                    form.gerarar.value = 'false';
-                    form.submit();
-                }}''')
+            # Primeira tentativa: "Redigir sem AR" (mais preciso)
+            link_redigir = page.locator('a:has-text("Redigir sem AR")').last
+            if link_redigir.count():
+                with page.expect_navigation(timeout=20000):
+                    link_redigir.click()
                 time.sleep(3)
+                print(f'   ✅ Redigir sem AR: {page.url[:80]}')
+            else:
+                # Fallback: forms com codModelo RPA
+                cump_result = page.evaluate('''() => {
+                    var forms = document.querySelectorAll('form[name^="formCumprimento"]');
+                    if (forms.length === 0) return {erro: 'nenhum form encontrado'};
+                    var form = forms[forms.length - 1];
+                    var sel = form.querySelector('select[name="codModelo"]');
+                    if (!sel) return {erro: 'select codModelo nao encontrado', form: form.name};
+                    var rpaValue = null;
+                    for (var i = 0; i < sel.options.length; i++) {
+                        if (sel.options[i].text.toLowerCase().includes('rpa')) {
+                            rpaValue = sel.options[i].value; break;
+                        }
+                    }
+                    if (!rpaValue) {
+                        // Fallback: ultima opcao
+                        rpaValue = sel.options[sel.options.length - 1].value;
+                    }
+                    sel.value = rpaValue;
+                    return {ok: true, form: form.name, codModelo: rpaValue};
+                }''')
+                print(f'   📝 {cump_result}')
+                if not cump_result.get('ok'):
+                    print(f'   ❌ ERRO: {cump_result.get("erro")}')
+                    # Ultimo fallback: URL direta com codCumprimento
+                    if cod_cump:
+                        url_exp = f'https://projudi.tjba.jus.br/projudi/acoes/ExpedirCumprimentoCartorio?codCumprimento={cod_cump}&gerarar=false'
+                        page.goto(url_exp, wait_until='load')
+                        time.sleep(3)
+                        print(f'   ✅ Fallback URL direta: {page.url[:80]}')
+                    else:
+                        print('   ❌ Sem codCumprimento para fallback')
+                        browser.close()
+                        return False
+                else:
+                    form_name = cump_result['form']
+                    with page.expect_navigation(timeout=15000):
+                        page.evaluate(f'''() => {{
+                            var form = document.forms['{form_name}'];
+                            form.gerarar.value = 'false';
+                            form.submit();
+                        }}''')
+                    time.sleep(3)
 
-            time.sleep(3)
+            time.sleep(2)
             if 'ExpedirCumprimento' not in page.url:
                 print(f'   ❌ ERRO: nao foi pra ExpedirCumprimento. URL: {page.url}')
                 browser.close()
@@ -944,12 +1392,12 @@ def _expedir_oficio(proc, session, cookies_dict, html_oficio, part, template):
                 return False
 
             # === 5. Registrar ===
-            registrar = page.locator("input[value='Registrar'], input[src*='registrar']").first
+            registrar = page.locator("input[value='Registrar'], button:has-text('Registrar'), input[src*='registrar']").first
             if registrar.count():
                 registrar.scroll_into_view_if_needed()
                 time.sleep(1)
                 registrar.click()
-                time.sleep(3)
+                time.sleep(4)
                 print('   ✅ Registrar clicado!')
             else:
                 print('   ⚠️ Registrar nao encontrado')
