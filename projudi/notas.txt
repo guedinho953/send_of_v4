@@ -72,9 +72,70 @@
     |---------------|--------------------------|---------------------------------|
     | codigo_mov    | "581"                    | Código seqCategoriaMovimentacao |
     | descricao_mov | "Cumprimento de Decisão" | Texto descCategoriaMovimentacao |
+
+     [
+        {
+            "tipo": "intimacao_eletronica",
+            "codigo_mov": "581",
+            "descricao_mov": "Intimação",
+            "observacao": "Intimação eletrônica - ciência"
+        },
+        {
+            "tipo": "solicitar_expedicao",
+            "codigo_mov": "581",
+            "descricao_mov": "Solicitada a Expedição de Mandado",
+            "observacao": "Solicitada Expedicao de Mandado"
+        }
+    ]
     
     Se não preencher, usa 581 / "Cumprimento de Decisão". Se quiser que apareça "Intimação" no Projudi em vez do genérico, é só preencher "descricao_mov": "Intimação".
-
-    [{"tipo": "intimacao_eletronica", "codigo_mov": "581", 
-    "observacao": "Intimem-se as partes para manifestarem-se acerca do retorno dos autos da Turma Recursal, no prazo de 05 (cinco) dias,  aportando petição neste prazo sem necessidade de aguardar prazo da outra parte.", 
-    "descricao_mov": "Intimação"}]
+   [
+  
+    ]
+     [
+        {
+            "tipo": "intimacao_eletronica",
+            "codigo_mov": "581",
+            "descricao_mov": "Intimação",
+            "observacao": "Texto que aparece como observação da movimentação"
+        }
+    ]
+    
+    
+    Para solicitar expedição de mandado (só Mov 581, sem confeccionar)
+    
+    json
+    [
+        {
+            "tipo": "solicitar_expedicao",
+            "codigo_mov": "581",
+            "descricao_mov": "Solicitada a Expedição de Mandado",
+            "observacao": "Solicitada Expedicao de Mandado"
+        }
+    ]
+    
+    
+    Para fazer o mandado completo (Mov 581 + confecção)
+    
+    json
+    [
+        {
+            "tipo": "mandado",
+            "template_id": 6,
+            "subtipo": "3",
+            "observacao": "Solicitada Expedicao de Mandado - Intimação"
+        }
+    ]
+    
+    
+    Para fazer intimação eletrônica + se não tiver DJEN, solicitar mandado
+    
+    json
+    [
+        {
+            "tipo": "intimacao_eletronica",
+            "codigo_mov": "581",
+            "descricao_mov": "Intimação",
+            "observacao": "Intimação eletrônica via DJEN"
+        }
+    ]

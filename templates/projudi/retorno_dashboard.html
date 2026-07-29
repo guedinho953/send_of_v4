@@ -69,14 +69,12 @@
         {% csrf_token %}
         <button type="submit" class="btn">Importar do E-mail</button>
     </form>
-    {% if recebidos > 0 %}
-        <form method="post" action="{% url 'projudi:retorno_juntar_todos' %}" style="display:inline;">
-            {% csrf_token %}
-            <button type="submit" class="btn" style="background:#059669; color:white;">
-                📎 Juntar {{ recebidos }} Retornos Pendentes
-            </button>
-        </form>
-    {% endif %}
+    <form method="post" action="{% url 'projudi:retorno_juntar_todos' %}" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn" style="background:#059669; color:white; {% if recebidos == 0 %}opacity:0.5; pointer-events:none;{% endif %}">
+            📎 Juntar{% if recebidos > 0 %} {{ recebidos }}{% endif %} Retornos Pendentes
+        </button>
+    </form>
     <a href="{% url 'projudi:oficio_dashboard' %}" class="btn btn-outline">Ir para Envio de Oficios</a>
 </div>
 

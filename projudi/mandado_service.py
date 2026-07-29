@@ -198,6 +198,159 @@ class MandadoService:
 
         return {'expedido': True, 'mandado': record}
 
+    def solicitar_expedicao(self, record: MandadoRecord) -> Dict:
+        """
+        Abre Playwright e faz SOMENTE o Mov 581 (Solicitada a Expedição de Mandado),
+        SEM confeccionar o documento no FCKeditor.
+        """
+        import time, re
+        from playwright.sync_api import sync_playwright
+        from urllib.parse import urlparse, parse_qs
+        import requests
+
+        # 1. Descobrir número Projudi do processo
+        PROC_PROJUDI = None
+        if record.url_processo:
+            m = re.search(r'numeroProcesso=(\d+)', record.url_processo)
+            if m:
+                PROC_PROJUDI = m.group(1)
+
+        if not PROC_PROJUDI:
+            # Tenta pelo CNJ via consulta
+            session = self.projudi_service._get_session_from_cookie_jar()
+            if session and record.numero_processo_cnj:
+                r = session.post(
+                    'https://projudi.tjba.jus.br/projudi/processo/consultaProcesso',
+                    data={'numeroProcesso': record.numero_processo_cnj}, timeout=15
+                )
+                if r.status_code == 200:
+                    qs = parse_qs(urlparse(r.url).query)
+                    PROC_PROJUDI = qs.get('numeroProcesso', [None])[0]
+
+        if not PROC_PROJUDI:
+            return {'expedido': False, 'erro': 'Número Projudi do processo não encontrado'}
+
+        # 2. Capturar sessão e cookies
+        result = self.projudi_service._get_session_from_cookies()
+        if not result:
+            return {'expedido': False, 'erro': 'Sessão do Projudi não disponível. Sincronize primeiro.'}
+
+        _, cookies_dict = result
+
+        parte_nome = record.parte_nome or 'parte'
+        sucesso = False
+        browser = None
+        try:
+            with sync_playwright() as pw:
+                browser = pw.firefox.launch(headless=False, slow_mo=500)
+                ctx_b = browser.new_context(viewport={'width': 1500, 'height': 950}, locale='pt-BR')
+                ctx_b.add_cookies([
+                    {'name': k, 'value': v, 'domain': 'projudi.tjba.jus.br', 'path': '/'}
+                    for k, v in cookies_dict.items()
+                ])
+                page = ctx_b.new_page()
+
+                # ── MOV 581: Solicitar Expedição ──────────────────
+                url_mov = f'https://projudi.tjba.jus.br/projudi/movimentacao/MovimentarProcesso?numeroProcesso={PROC_PROJUDI}'
+                page.goto(url_mov, wait_until='load')
+                time.sleep(3)
+
+                if not page.evaluate('!!document.getElementById("seqCategoriaMovimentacao")'):
+                    browser.close()
+                    return {'expedido': False, 'erro': 'Formulário de movimentação não encontrado (sessão expirou?)'}
+
+                # Injetar Mov 581
+                page.evaluate('''() => {
+                    var c = document.getElementById('seqCategoriaMovimentacao');
+                    if (c) c.value = '581';
+                    var d = document.getElementById('descCategoriaMovimentacao');
+                    if (d) d.value = 'Solicitada a Expedição de Mandado';
+                    var tr = document.getElementById('trTipoDocumento');
+                    if (tr) tr.style.display = 'table-row';
+                    var div = document.getElementById('rowDadosMovimentacaoComplemento');
+                    if (div) div.style.display = 'block';
+                    var p = document.getElementById('divPanelCumprimento');
+                    if (p) p.style.display = 'block';
+                }''')
+                time.sleep(1)
+
+                page.select_option('select[name="codTipoDocumento"]', '51')
+                time.sleep(1)
+                page.fill('#observacao', f'Solicitada Expedicao de Mandado - {parte_nome[:30]}')
+                time.sleep(0.5)
+
+                # Aba Cumprimento
+                page.locator("a:text('Cumprimento')").first.click()
+                time.sleep(1)
+                page.select_option('#tipoCumprimento', '4')  # 4 = Mandado
+                time.sleep(0.5)
+
+                # Subtipo: tentar Intimação (3), fallback para primeira opção
+                try:
+                    st = page.locator('#subtipoCumprimento, select[name="subtipoCumprimento"]').first
+                    if st.count():
+                        st.select_option('3')
+                except Exception:
+                    pass
+
+                # Seleciona destinatário
+                nome_dest = parte_nome
+                if nome_dest:
+                    try:
+                        opt = page.locator(f'#codigoDestinatario option:text("{nome_dest}")').first
+                        if opt.count():
+                            val = opt.get_attribute('value')
+                            page.select_option('#codigoDestinatario', val)
+                    except Exception:
+                        pass
+
+                page.click('#btnAddCumprimento')
+                time.sleep(1)
+
+                # Concluir
+                page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+                time.sleep(0.5)
+                page.click('#Concluir')
+                time.sleep(2)
+
+                # Aceitar alerta
+                try:
+                    alert = page.wait_for_event('dialog', timeout=5000)
+                    alert.accept()
+                    time.sleep(2)
+                except Exception:
+                    pass
+
+                try:
+                    page.wait_for_load_state('networkidle', timeout=10000)
+                except Exception:
+                    pass
+
+                sucesso = True
+                print(f'   ✅ Mov 581 concluído para {record.numero_mandado}')
+
+        except Exception as e:
+            return {'expedido': False, 'erro': f'Erro no Playwright: {str(e)[:200]}'}
+        finally:
+            if browser:
+                try:
+                    browser.close()
+                except Exception:
+                    pass
+
+        if sucesso:
+            record.status = 'expedido'
+            record.save(update_fields=['status'])
+            MandadoLog.objects.create(
+                mandado=record,
+                tipo='expedicao',
+                mensagem=f"Solicitação de expedição realizada (Mov 581) - Mandado {record.numero_mandado}",
+                detalhes={'etapa': 'solicitar_expedicao', 'projudi': PROC_PROJUDI},
+            )
+            return {'expedido': True, 'mandado': record, 'projudi': PROC_PROJUDI}
+
+        return {'expedido': False, 'erro': 'Falha ao concluir Mov 581'}
+
     def dispensar_mandado(self, record: MandadoRecord) -> Dict:
         """Marca mandado como dispensado."""
         record.status = 'dispensado'

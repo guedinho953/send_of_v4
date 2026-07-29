@@ -105,6 +105,11 @@
             🔍 Rastrear &amp; Expedir Mandados
         </button>
     </form>
+    {% if pendentes > 0 %}
+        <a href="?status=pendente" class="btn" style="background:#7c3aed; color:white;">
+            📋 Solicitar Expedição ({{ pendentes }} Pendentes)
+        </a>
+    {% endif %}
     <a href="{% url 'projudi:mandado_list' %}" class="btn btn-outline">📋 Ver Lista Completa</a>
 </div>
 
@@ -165,6 +170,10 @@
                     <form method="post" action="{% url 'projudi:mandado_expedir_action' m.pk %}" style="display:inline;">
                         {% csrf_token %}
                         <button type="submit" class="btn btn-sm btn-green">📤 Expedir</button>
+                    </form>
+                    <form method="post" action="{% url 'projudi:mandado_solicitar_expedicao' m.pk %}" style="display:inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm" style="background:#7c3aed; color:white;">📋 Solicitar</button>
                     </form>
                 {% endif %}
                 {% if m.url_mandado %}

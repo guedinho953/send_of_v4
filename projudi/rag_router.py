@@ -112,6 +112,23 @@ def _executar_sequencia(sequencia, mov, proc_num, texto,
                 print(f' → Movimentação #{record.id}')
                 resumo['movimentacoes'] += 1
 
+            elif tipo == 'solicitar_expedicao':
+                """Mov581 para solicitar expedição (sem confecção)."""
+                service = MovimentacaoService(user)
+                desc_padrao = passo.get('descricao_mov', 'Solicitada a Expedição de Mandado')
+                record = service.importar(
+                    processo_numero=proc_num,
+                    act_verb='solicitar_expedicao',
+                    observacao=obs or f'Solicitada Expedicao - {desc_padrao}',
+                    categoria='outro',
+                    processo_cnj=proc_num,
+                    url_processo=mov.get('link_processo', ''),
+                    codigo_movimentacao=str(passo.get('codigo_mov', '581')),
+                    descricao_movimentacao=desc_padrao,
+                )
+                print(f' → Solicitação de expedição #{record.id}')
+                resumo['movimentacoes'] += 1
+
             elif tipo in ('mandado', 'oficio', 'intimacao'):
                 if not template_id:
                     print(f' ⚠️ sem template_id, pulando')
@@ -150,6 +167,8 @@ def _executar_sequencia(sequencia, mov, proc_num, texto,
                         observacao=obs or texto[:500],
                         codigo_mov=str(passo.get('codigo_mov', '581')),
                         descricao_mov=passo.get('descricao_mov', 'Intimação'),
+                        fallback_mov=passo.get('fallback_mov'),
+                        fallback_uf=passo.get('fallback_uf'),
                     )
                     if ok:
                         print(' → ✅ Intimação eletrônica concluída')

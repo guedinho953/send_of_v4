@@ -302,6 +302,8 @@ class MovimentacaoService:
         cookies_dict: dict = None,
         proc_projudi: str = None,
         cod_analise: str = None,
+        fallback_mov: str = None,
+        fallback_uf: str = None,
     ) -> bool:
         """Executa Mov581 + intimação no Projudi em um único Playwright.
 
@@ -317,6 +319,12 @@ class MovimentacaoService:
            - Preenche mov + seleciona "Intimação" no grid + observação
            - Navega até DadosProcesso para clicar link Intimar
            - Usado como fallback genérico (sempre funciona)
+
+        Args:
+            fallback_mov: Se definido e o link Intimar não for encontrado,
+                          registra um Mov 581 extra com esta descrição.
+            fallback_uf: Se definido, só executa o fallback se a parte
+                         estiver domiciliada nesta UF (ex: 'BA').
         """
         from playwright.sync_api import sync_playwright
 
@@ -583,7 +591,58 @@ class MovimentacaoService:
                         sucesso = True
                     else:
                         print('   ⚠️ Link de intimação não encontrado em DadosProcesso')
-                        print(f'      URL: {url_dados}')
+                        # ─── FALLBACK OPCIONAL ──────────────────────────
+                        if fallback_mov:
+                            uf_ok = True
+                            if fallback_uf:
+                                # Tenta extrair UF da parte na página
+                                try:
+                                    texto_pagina = page.content()
+                                    import re
+                                    # Procura padrão "CIDADE - UF" na página
+                                    uf_match = re.search(r'[A-ZÀ-Ú][A-ZÀ-Ú\s]+?\s*-\s*([A-Z]{2})', texto_pagina)
+                                    uf_encontrada = uf_match.group(1).upper() if uf_match else ''
+                                    uf_ok = (uf_encontrada == fallback_uf.upper())
+                                    print(f'      UF encontrada: {uf_encontrada or "não detectada"} | fallback_uf={fallback_uf} | uf_ok={uf_ok}')
+                                except Exception as e:
+                                    print(f'      ⚠️ Erro ao detectar UF: {e}')
+                            if uf_ok:
+                                print(f'      ▶️ Fallback: registrando Mov581 "{fallback_mov}"...')
+                                page.goto(
+                                    f'https://projudi.tjba.jus.br/projudi/movimentacao/MovimentarProcesso?numeroProcesso={proc_projudi}',
+                                    wait_until='load'
+                                )
+                                time.sleep(3)
+                                if page.evaluate('!!document.getElementById("seqCategoriaMovimentacao")'):
+                                    page.evaluate(f'''() => {{
+                                        var c = document.getElementById('seqCategoriaMovimentacao');
+                                        if (c) c.value = '{codigo_mov}';
+                                        var d = document.getElementById('descCategoriaMovimentacao');
+                                        if (d) d.value = '{fallback_mov}';
+                                    }}''')
+                                    time.sleep(1)
+                                    page.fill('#observacao', f'{fallback_mov} - {observacao[:100]}')
+                                    time.sleep(0.5)
+                                    page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+                                    time.sleep(0.5)
+                                    try:
+                                        page.click('#Concluir', timeout=10000)
+                                        time.sleep(3)
+                                        try:
+                                            alert = page.wait_for_event('dialog', timeout=5000)
+                                            alert.accept()
+                                            time.sleep(2)
+                                        except Exception:
+                                            pass
+                                        print(f'      ✅ Fallback registrado: {fallback_mov}')
+                                    except Exception as e:
+                                        print(f'      ❌ Fallback erro ao concluir: {e}')
+                                else:
+                                    print('      ⚠️ Fallback: formulário não carregou')
+                            else:
+                                print(f'      ⏭️ Fallback ignorado (UF não corresponde)')
+                        else:
+                            print(f'      URL: {url_dados}')
                         sucesso = True  # parcial
 
                 browser.close()

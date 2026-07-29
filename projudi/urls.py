@@ -35,6 +35,7 @@ urlpatterns = [
     path('mandados/sync/', mandado_views.MandadoSyncView.as_view(), name='mandado_sync'),
     path('mandados/<int:pk>/', mandado_views.MandadoDetailView.as_view(), name='mandado_detail'),
     path('mandados/<int:pk>/expedir/', mandado_views.MandadoExpedirActionView.as_view(), name='mandado_expedir_action'),
+    path('mandados/<int:pk>/solicitar-expedicao/', mandado_views.MandadoSolicitarExpedicaoView.as_view(), name='mandado_solicitar_expedicao'),
     path('mandados/<int:pk>/dispensar/', mandado_views.MandadoDispensarView.as_view(), name='mandado_dispensar'),
     path('mandados/<int:pk>/logs/json/', mandado_views.MandadoLogsJsonView.as_view(), name='mandado_logs_json'),
     path('mandados/<int:pk>/abrir-projudi/', mandado_views.MandadoAbrirProjudiView.as_view(), name='mandado_abrir_projudi'),

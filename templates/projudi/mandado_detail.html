@@ -52,6 +52,10 @@
             {% csrf_token %}
             <button type="submit" class="btn btn-green">📤 Expedir</button>
         </form>
+        <form method="post" action="{% url 'projudi:mandado_solicitar_expedicao' mandado.pk %}" style="display:inline;">
+            {% csrf_token %}
+            <button type="submit" class="btn" style="background:#7c3aed; color:white;">📋 Solicitar Expedição</button>
+        </form>
     {% endif %}
     {% if mandado.url_mandado %}
         <a href="{% url 'projudi:mandado_abrir_projudi' mandado.pk %}" class="btn btn-outline" target="_blank">🔗 Abrir no Projudi</a>

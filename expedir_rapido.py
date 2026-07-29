@@ -152,8 +152,10 @@ def rastrear_e_expedir(tipo=None):
                     if rag_cand.sequencia_cumprimento:
                         # Verifica tipo na sequência
                         seq_tipos = {p.get('tipo') for p in rag_cand.sequencia_cumprimento}
+                        # Quando tipo='movimentacao', considera também intimações eletrônicas
                         if tipo and tipo not in seq_tipos:
-                            continue
+                            if not (tipo == 'movimentacao' and 'intimacao_eletronica' in seq_tipos):
+                                continue
                         # Valida que template_id existe e é do tipo certo (quando aplicável)
                         if tipo in ('mandado', 'oficio'):
                             ids_validos = set(templates_validos.values_list('id', flat=True))
@@ -382,6 +384,24 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                 else:
                     print('   ⚠️ Mov581 pode ter falhado')
 
+            elif tipo == 'solicitar_expedicao':
+                """Mov581 para solicitar expedição de mandado (sem confecção)."""
+                service = MovimentacaoService(user)
+                desc_padrao = passo.get('descricao_mov', 'Solicitada a Expedição de Mandado')
+                record = service.importar(
+                    processo_numero=proc_num,
+                    act_verb='solicitar_expedicao',
+                    observacao=obs or f'Solicitada Expedicao - {desc_padrao}',
+                    categoria='outro',
+                    processo_cnj=proc_num,
+                    url_processo=mov.get('link_processo', ''),
+                    codigo_movimentacao=str(passo.get('codigo_mov', '581')),
+                    descricao_movimentacao=desc_padrao,
+                )
+                print(f'  ▶️ {desc_padrao}...')
+                ok = service.executar(record)
+                print(f'   {"✅" if ok else "⚠️"} Solicitação registrada (Mov581)')
+
             elif tipo == 'intimacao_eletronica':
                 """Mov581 + intimação automática (MovimentarAnalise ou MovimentarProcesso)."""
                 service = MovimentacaoService(user)
@@ -400,6 +420,8 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                     codigo_mov=str(passo.get('codigo_mov', '581')),
                     descricao_mov=passo.get('descricao_mov', 'Intimação'),
                     cod_analise=cod_analise,
+                    fallback_mov=passo.get('fallback_mov'),
+                    fallback_uf=passo.get('fallback_uf'),
                 )
                 if ok:
                     print('   ✅ Intimação eletrônica concluída')

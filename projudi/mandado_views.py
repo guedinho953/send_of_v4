@@ -158,6 +158,37 @@ class MandadoExpedirActionView(LoginRequiredMixin, View):
         return HttpResponseRedirect(reverse('projudi:mandado_detail', kwargs={'pk': pk}))
 
 
+class MandadoSolicitarExpedicaoView(LoginRequiredMixin, View):
+    """
+    POST /projudi/mandados/<pk>/solicitar-expedicao/
+    Faz SOMENTE o Mov 581 (Solicitar Expedição de Mandado) via Playwright,
+    SEM confeccionar o documento.
+    """
+    def post(self, request, pk):
+        record = get_object_or_404(MandadoRecord, pk=pk, user=request.user)
+        service = MandadoService(request.user)
+        try:
+            resultado = service.solicitar_expedicao(record)
+            if resultado.get('expedido'):
+                messages.success(
+                    request,
+                    f"✅ Solicitação de expedição registrada (Mov 581) para mandado {record.numero_mandado}!"
+                )
+            else:
+                messages.error(
+                    request,
+                    f"Falha ao solicitar expedição: {resultado.get('erro', 'Erro desconhecido')}"
+                )
+        except Exception as e:
+            messages.error(request, f"Erro: {str(e)[:200]}")
+        finally:
+            try:
+                service.fechar()
+            except Exception:
+                pass
+        return HttpResponseRedirect(reverse('projudi:mandado_detail', kwargs={'pk': pk}))
+
+
 class MandadoDispensarView(LoginRequiredMixin, View):
     """
     POST /projudi/mandados/<pk>/dispensar/

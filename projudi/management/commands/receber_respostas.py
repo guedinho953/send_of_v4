@@ -184,9 +184,14 @@ class Command(BaseCommand):
                 return True
         return False
 
+    def _sanitizar_header(self, valor: str) -> str:
+        """Remove caracteres de quebra de linha de valores de header de email."""
+        return valor.replace("\r\n", " ").replace("\n", " ").replace("\r", " ").strip()
+
     def _encaminhar_email(self, msg) -> bool:
         email = EmailMessage()
-        email["Subject"] = f"Enc: {msg.subject or '(sem assunto)'}"
+        assunto_seguro = self._sanitizar_header(msg.subject or "(sem assunto)")
+        email["Subject"] = f"Enc: {assunto_seguro}"
         email["From"] = GMAIL_USER
         email["To"] = DESTINATARIO_INTERNO
 
@@ -287,7 +292,7 @@ class Command(BaseCommand):
         oficio.status_retorno = "recebido"
         oficio.data_retorno = data_resp
         oficio.remetente_retorno = _limpar_remetente(msg.from_ or "")
-        oficio.assunto_retorno = msg.subject or ""
+        oficio.assunto_retorno = self._sanitizar_header(msg.subject or "")[:300]
         oficio.conteudo_retorno = texto_resp
         anexos = [
             {"nome": a.filename, "tipo": a.content_type}
