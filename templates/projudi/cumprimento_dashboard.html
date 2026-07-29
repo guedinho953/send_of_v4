@@ -147,13 +147,23 @@
     </form>
     {% endif %}
     <a href="{% url 'projudi:cumprimento_list' %}" class="btn btn-outline">📋 Lista Completa</a>
+    <form method="post" action="{% url 'projudi:rastrear_movimentacoes' %}" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn" style="background:#0891b2; color:white;">📋 Só Movimentações</button>
+    </form>
+    <form method="post" action="{% url 'projudi:auto_rastrear_toggle' %}" style="display:inline;">
+        {% csrf_token %}
+        {% if auto_rastrear_ativo %}
+            <button type="submit" class="btn" style="background:#dc2626; color:white;">⏹️ Auto (Ligado)</button>
+        {% else %}
+            <button type="submit" class="btn" style="background:#059669; color:white;">▶️ Auto (Desligado)</button>
+        {% endif %}
+    </form>
 </div>
 
 {% if not session_active %}
 <div class="alert alert-warning">
     ⚠️ Sessão do Projudi não está ativa. <a href="{% url 'projudi:sync_session' %}">Clique aqui para sincronizar</a> antes de buscar cumprimentos.
-</div>
-{% endif %}
 
 <!-- Filtros -->
 <div class="filtro-bar">

@@ -43,6 +43,7 @@ urlpatterns = [
     path('oficios/rastrear/', mandado_views.OficioRastrearView.as_view(), name='oficio_rastrear'),
     path('rastrear-expedir/', mandado_views.RastrearExpedirView.as_view(), name='rastrear_expedir'),
     path('rastrear-movimentacoes/', mandado_views.RastrearMovimentacoesView.as_view(), name='rastrear_movimentacoes'),
+    path('auto-rastrear/toggle/', mandado_views.AutoRastrearToggleView.as_view(), name='auto_rastrear_toggle'),
 
     # Aba Retornos (GERENCIAMENTO DE RESPOSTAS)
     path('retornos/dashboard/', oficio_views.RetornoDashboardView.as_view(), name='retorno_dashboard'),

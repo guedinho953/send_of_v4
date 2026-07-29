@@ -2,7 +2,7 @@
 
 Segue o mesmo padrão de mandado_views.py e oficio_views.py.
 """
-
+from datetime import datetime
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import JsonResponse, HttpResponseRedirect
 from django.shortcuts import render, get_object_or_404
@@ -13,6 +13,7 @@ from django.contrib import messages
 from django.conf import settings
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
+import os
 
 from .models import CumprimentoRecord, CumprimentoLog, ProjudiSession
 from .cumprimento_service import CumprimentoService
@@ -53,6 +54,7 @@ class CumprimentoDashboardView(LoginRequiredMixin, TemplateView):
 
         context['cumprimentos'] = qs.order_by('-created_at')[:50]
         context['session_active'] = self._session_ativa(user)
+        context['auto_rastrear_ativo'] = os.path.exists('/tmp/auto_rastrear.pid')
         return context
 
     def _session_ativa(self, user):

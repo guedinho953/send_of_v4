@@ -370,3 +370,35 @@ class OficioRastrearView(LoginRequiredMixin, View):
             messages.error(request, f'❌ Erro: {str(e)[:200]}')
 
         return HttpResponseRedirect(reverse('projudi:oficio_dashboard'))
+
+
+class AutoRastrearToggleView(LoginRequiredMixin, View):
+    """
+    POST /projudi/auto-rastrear/toggle/
+    Liga/desliga o loop de auto-rastreamento (a cada 5min).
+    """
+    def post(self, request):
+        import subprocess, os, sys
+        from django.conf import settings
+        script = os.path.join(settings.BASE_DIR, 'auto_rastrear.py')
+        pid_file = '/tmp/auto_rastrear.pid'
+
+        if os.path.exists(pid_file):
+            try:
+                subprocess.run([sys.executable, script, '--stop'], capture_output=True, timeout=10)
+                messages.success(request, '⏹️ Auto-rastrear desligado')
+            except Exception as e:
+                messages.error(request, f'Erro ao desligar: {e}')
+        else:
+            try:
+                subprocess.Popen(
+                    [sys.executable, script],
+                    cwd=settings.BASE_DIR,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                messages.success(request, '▶️ Auto-rastrear ligado (a cada 5 minutos)')
+            except Exception as e:
+                messages.error(request, f'Erro ao ligar: {e}')
+
+        return HttpResponseRedirect(reverse('projudi:cumprimento_dashboard'))
