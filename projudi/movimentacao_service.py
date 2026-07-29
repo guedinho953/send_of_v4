@@ -231,6 +231,16 @@ class MovimentacaoService:
                 page.fill('#observacao', obs_texto[:500])
                 time.sleep(0.5)
 
+                # PASSO 3.2: Adicionar cumprimento (obrigatório para Concluir)
+                try:
+                    page.locator("a:text('Cumprimento')").first.click()
+                    time.sleep(0.5)
+                    page.click('#btnAddCumprimento')
+                    time.sleep(1)
+                    print('   ✅ Cumprimento adicionado')
+                except Exception as e:
+                    print(f'   ⚠️ Cumprimento: {e}')
+
                 # PASSO 3.5: Localizador (se informado)
                 if record.localizador or record.tipo_localizador:
                     # Expandir painel de localizadores
@@ -257,8 +267,16 @@ class MovimentacaoService:
                                 return True
                             else:
                                 sel.select_option(record.tipo_localizador)
-                                print(f'   📍 Tipo localizador alterado: {valor_atual} → {record.tipo_localizador}')
+                                print(f'   📍 Localizador alterado: {record.tipo_localizador}')
                                 time.sleep(0.5)
+                            # Recolhe painel
+                            try:
+                                btn = page.locator('#imgBotao_panelLocalizador').first
+                                if btn.count():
+                                    btn.click()
+                                    time.sleep(0.5)
+                            except Exception:
+                                pass
                     except Exception:
                         pass
                 if record.localizador:
@@ -266,21 +284,16 @@ class MovimentacaoService:
                         sel = page.locator('#codLocalizador').first
                         if sel.count():
                             sel.select_option(record.localizador)
-                            print(f'   📍 Localizador: {record.localizador}')
                             time.sleep(0.5)
                     except Exception:
                         pass
 
                 # PASSO 4: Clicar Concluir
-                # Scroll específico para o botão Concluir (após expandir localizador)
-                page.evaluate('''() => {
-                    var btn = document.getElementById('Concluir');
-                    if (btn) btn.scrollIntoView(true);
-                    window.scrollBy(0, -100);
-                }''')
                 time.sleep(1)
+                page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+                time.sleep(0.5)
                 page.click('#Concluir')
-                time.sleep(2)
+                time.sleep(3)
                 # Aceita alerta primeiro (ele bloqueia a navegação)
                 try:
                     alert = page.wait_for_event('dialog', timeout=5000)
