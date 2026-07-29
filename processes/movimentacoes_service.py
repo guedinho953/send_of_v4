@@ -312,7 +312,7 @@ def buscar_cumprimentos_similares(texto_movimentacao: str, top_k: int = 3) -> Li
             texto_busca += ' ' + c.get('ato', '') + ' ' + c.get('observacao', '')
         palavras_hist = set(texto_busca.split())
         intersecao = palavras_atual & palavras_hist
-        if len(intersecao) > 2:
+        if len(intersecao) >= 2:
             resultados.append({
                 'similaridade': len(intersecao),
                 'id': ex.id,

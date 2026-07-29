@@ -164,6 +164,8 @@
 {% if not session_active %}
 <div class="alert alert-warning">
     ⚠️ Sessão do Projudi não está ativa. <a href="{% url 'projudi:sync_session' %}">Clique aqui para sincronizar</a> antes de buscar cumprimentos.
+</div>
+{% endif %}
 
 <!-- Filtros -->
 <div class="filtro-bar">

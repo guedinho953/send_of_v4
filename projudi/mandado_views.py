@@ -320,7 +320,7 @@ class RastrearExpedirView(LoginRequiredMixin, View):
         except Exception as e:
             messages.error(request, f'❌ Erro: {str(e)[:200]}')
 
-        return HttpResponseRedirect(reverse('dashboard'))
+        return HttpResponseRedirect(reverse('projudi:cumprimento_dashboard'))
 
 
 class RastrearMovimentacoesView(LoginRequiredMixin, View):

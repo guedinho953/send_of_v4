@@ -139,3 +139,14 @@
             "observacao": "Intimação eletrônica via DJEN"
         }
     ]
+
+# INTIMAÇÃO ELETRÔNICA + SISBAJUD
+    [
+        {
+            "tipo": "intimacao_eletronica",
+            "codigo_mov": "581",
+            "descricao_mov": "Intimação",
+            "observacao": "Intimem-se as partes para ciência da Decisão (NÃO CONCEDIDA A MEDIDA LIMINAR)",
+            "tipo_localizador": "22614"
+        }
+    ]

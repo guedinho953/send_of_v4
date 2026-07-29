@@ -118,8 +118,11 @@ def rastrear_e_expedir(tipo=None):
                 # A observacao tem o conteúdo real da decisão (ex: detalhes do CIAP/RPV)
                 texto_rag = s['despacho_ato'] + ' ' + s.get('despacho_observacao', '')
                 palavras_rag_s = set(texto_rag.lower().split())
-                total_s = max(len(palavras_rag_s), 1)
-                if len(palavras_texto & palavras_rag_s) / total_s < 0.70:
+                total_s = max(len(palavras_texto & palavras_rag_s), 1)
+                # Usa o menor dos dois textos como base para o threshold
+                # Isso evita que RAGs com texto muito longo sejam penalizados
+                base_s = min(len(palavras_texto), len(palavras_rag_s))
+                if base_s > 0 and len(palavras_texto & palavras_rag_s) / base_s < 0.70:
                     continue
                 try:
                     rag_cand = RAGExample.objects.get(id=s['id'])
@@ -152,9 +155,9 @@ def rastrear_e_expedir(tipo=None):
                     if rag_cand.sequencia_cumprimento:
                         # Verifica tipo na sequência
                         seq_tipos = {p.get('tipo') for p in rag_cand.sequencia_cumprimento}
-                        # Quando tipo='movimentacao', considera também intimações eletrônicas
+                        # Quando tipo='movimentacao', considera também intimações eletrônicas e localizador
                         if tipo and tipo not in seq_tipos:
-                            if not (tipo == 'movimentacao' and 'intimacao_eletronica' in seq_tipos):
+                            if not (tipo == 'movimentacao' and ('intimacao_eletronica' in seq_tipos or 'localizar' in seq_tipos)):
                                 continue
                         # Valida que template_id existe e é do tipo certo (quando aplicável)
                         if tipo in ('mandado', 'oficio'):
@@ -364,6 +367,7 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
         try:
             if tipo == 'movimentacao':
                 service = MovimentacaoService(user)
+                desc_mov = passo.get('descricao_mov', 'Cumprimento de Decisão')
                 record = service.importar(
                     processo_numero=proc_num,
                     act_verb='movimentacao',
@@ -372,8 +376,9 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                     processo_cnj=proc_num,
                     url_processo=mov.get('link_processo', ''),
                     codigo_movimentacao=str(passo.get('codigo_mov', '581')),
-                    descricao_movimentacao=passo.get(
-                        'descricao_mov', 'Cumprimento de Decisão'),
+                    descricao_movimentacao=desc_mov,
+                    localizador=passo.get('localizador', ''),
+                    tipo_localizador=passo.get('tipo_localizador', ''),
                 )
                 print(f'Movimentação #{record.id}')
                 # Executa a Mov581 automaticamente
@@ -397,10 +402,37 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                     url_processo=mov.get('link_processo', ''),
                     codigo_movimentacao=str(passo.get('codigo_mov', '581')),
                     descricao_movimentacao=desc_padrao,
+                    localizador=passo.get('localizador', ''),
+                    tipo_localizador=passo.get('tipo_localizador', ''),
                 )
                 print(f'  ▶️ {desc_padrao}...')
                 ok = service.executar(record)
                 print(f'   {"✅" if ok else "⚠️"} Solicitação registrada (Mov581)')
+
+            elif tipo == 'localizar':
+                """Só altera o localizador do processo (movimentação simples)."""
+                service = MovimentacaoService(user)
+                cod_mov = str(passo.get('codigo_mov', '581'))
+                desc_padrao = 'TD - Tipo Documental' if cod_mov == '581' else 'Cumprimento de Decisão'
+                desc_mov = passo.get('descricao_mov', desc_padrao)
+                record = service.importar(
+                    processo_numero=proc_num,
+                    act_verb='localizar',
+                    observacao=obs or desc_mov,
+                    categoria='outro',
+                    processo_cnj=proc_num,
+                    url_processo=mov.get('link_processo', ''),
+                    codigo_movimentacao=str(passo.get('codigo_mov', '581')),
+                    descricao_movimentacao=desc_mov,
+                    localizador=passo.get('localizador', ''),
+                    tipo_localizador=passo.get('tipo_localizador', ''),
+                )
+                print(f'  ▶️ Alterando localizador...')
+                ok = service.executar(record)
+                if ok:
+                    print(f'   ✅ Localizador alterado')
+                else:
+                    print(f'   ⚠️ Falha ao alterar localizador')
 
             elif tipo == 'intimacao_eletronica':
                 """Mov581 + intimação automática (MovimentarAnalise ou MovimentarProcesso)."""

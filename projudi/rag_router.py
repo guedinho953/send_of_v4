@@ -108,6 +108,8 @@ def _executar_sequencia(sequencia, mov, proc_num, texto,
                     codigo_movimentacao=str(passo.get('codigo_mov', '581')),
                     descricao_movimentacao=passo.get(
                         'descricao_mov', 'Cumprimento de Decisão'),
+                    localizador=passo.get('localizador', ''),
+                    tipo_localizador=passo.get('tipo_localizador', ''),
                 )
                 print(f' → Movimentação #{record.id}')
                 resumo['movimentacoes'] += 1
@@ -125,8 +127,31 @@ def _executar_sequencia(sequencia, mov, proc_num, texto,
                     url_processo=mov.get('link_processo', ''),
                     codigo_movimentacao=str(passo.get('codigo_mov', '581')),
                     descricao_movimentacao=desc_padrao,
+                    localizador=passo.get('localizador', ''),
+                    tipo_localizador=passo.get('tipo_localizador', ''),
                 )
                 print(f' → Solicitação de expedição #{record.id}')
+                resumo['movimentacoes'] += 1
+
+            elif tipo == 'localizar':
+                """Só altera o localizador do processo."""
+                service = MovimentacaoService(user)
+                cod_mov = str(passo.get('codigo_mov', '581'))
+                desc_padrao = 'TD - Tipo Documental' if cod_mov == '581' else 'Cumprimento de Decisão'
+                desc_mov = passo.get('descricao_mov', desc_padrao)
+                record = service.importar(
+                    processo_numero=proc_num,
+                    act_verb='localizar',
+                    observacao=obs or desc_mov,
+                    categoria='outro',
+                    processo_cnj=proc_num,
+                    url_processo=mov.get('link_processo', ''),
+                    codigo_movimentacao=str(passo.get('codigo_mov', '581')),
+                    descricao_movimentacao=desc_mov,
+                    localizador=passo.get('localizador', ''),
+                    tipo_localizador=passo.get('tipo_localizador', ''),
+                )
+                print(f' → Localizador alterado #{record.id}')
                 resumo['movimentacoes'] += 1
 
             elif tipo in ('mandado', 'oficio', 'intimacao'):

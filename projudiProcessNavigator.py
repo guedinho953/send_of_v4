@@ -1203,4 +1203,42 @@ class ProcessoParser:
             "links": self.extrair_links(soup, base_url),
         }
 
+    # =========================
+    # LOCALIZADOR
+    # =========================
+    def extrair_localizador(self, soup=None) -> dict:
+        """Extrai o localizador atual do processo da página DadosProcesso.
+
+        Retorna:
+            {'codigo': '22614', 'descricao': 'SISBAJUD'} ou {}
+        """
+        soup = soup or self.soup
+        try:
+            # Tenta encontrar o select codTipoLocalizador (presente na página de movimentação)
+            sel = soup.find('select', {'id': 'codTipoLocalizador'})
+            if sel:
+                opt = sel.find('option', selected=True)
+                if opt and opt.get('value', '-1') != '-1':
+                    return {
+                        'codigo': opt['value'],
+                        'descricao': opt.get_text(strip=True),
+                    }
+            # Fallback: procura na tabela de dados do processo
+            for td in soup.find_all('td'):
+                texto = td.get_text(' ', strip=True).lower()
+                if 'localizador' in texto:
+                    # Pega o próximo td
+                    prox = td.find_next_sibling('td')
+                    if prox:
+                        cod = prox.get_text(' ', strip=True)
+                        # Tenta extrair código numérico
+                        m = re.search(r'(\d{4,6})', cod)
+                        return {
+                            'codigo': m.group(1) if m else cod,
+                            'descricao': cod,
+                        }
+        except Exception:
+            pass
+        return {}
+
 

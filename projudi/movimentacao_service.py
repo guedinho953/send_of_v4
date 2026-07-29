@@ -45,6 +45,8 @@ class MovimentacaoService:
         url_processo: str = '',
         codigo_movimentacao: str = '581',
         descricao_movimentacao: str = 'Cumprimento de Decisão',
+        localizador: str = '',
+        tipo_localizador: str = '',
     ) -> MovimentacaoRecord:
         """Cria MovimentacaoRecord no banco."""
         record = MovimentacaoRecord.objects.create(
@@ -60,8 +62,10 @@ class MovimentacaoService:
             rag_example=rag_example,
             template_used=template,
             url_processo=url_processo,
-            status='pendente',
             user=self.user,
+            localizador=localizador,
+            tipo_localizador=tipo_localizador,
+            status='pendente',
         )
         self._log(record, 'info',
                   f"Movimentação criada: {act_verb} — {observacao[:80]}...")
@@ -105,6 +109,32 @@ class MovimentacaoService:
         record.status = 'processando'
         record.save(update_fields=['status'])
 
+        # ─── PRE-CHECK: localizador já está definido? ───
+        if record.tipo_localizador:
+            try:
+                session, _ = self.projudi_service._get_session_from_cookies()
+                if session:
+                    from projudiProcessNavigator import ProcessoParser
+                    url_dados = (
+                        'https://projudi.tjba.jus.br/projudi/listagens/'
+                        f'DadosProcesso?numeroProcesso={proc_projudi}'
+                    )
+                    r = session.get(url_dados, timeout=15)
+                    if r.status_code == 200:
+                        parser = ProcessoParser(r.text)
+                        atual = parser.extrair_localizador()
+                        if atual.get('codigo') == record.tipo_localizador:
+                            print(f'   ✅ Localizador já é {record.tipo_localizador} ({atual.get("descricao")}) — pulando')
+                            record.status = 'cumprido'
+                            record.save(update_fields=['status'])
+                            self._log(record, 'info',
+                                      f'Localizador já definido: {record.tipo_localizador}')
+                            return True
+                        elif atual:
+                            print(f'   📍 Localizador atual: {atual.get("codigo")} ({atual.get("descricao")}) → desejado: {record.tipo_localizador}')
+            except Exception as e:
+                print(f'   ⚠️ Erro no pre-check localizador: {e}')
+
         sucesso = False
         try:
             with sync_playwright() as pw:
@@ -145,13 +175,54 @@ class MovimentacaoService:
                 desc_mov = record.descricao_movimentacao or 'Cumprimento de Decisão'
                 page.evaluate(f'''() => {{
                     var camp = document.getElementById('seqCategoriaMovimentacao');
-                    if (camp) camp.value = '{cod_mov}';
-                    var desc = document.getElementById('descCategoriaMovimentacao');
-                    if (desc) desc.value = '{desc_mov}';
-                    var tr = document.getElementById('trTipoDocumento');
-                    if (tr) tr.style.display = 'none';
+                    if (camp) {{ camp.value = '{cod_mov}'; camp.dispatchEvent(new Event('change', {{bubbles:true}})); }}
                 }}''')
                 time.sleep(1)
+
+                # Clicar btnBuscaMovimentacao para carregar o grid
+                try:
+                    page.click('#btnBuscaMovimentacao', timeout=5000)
+                    time.sleep(2)
+                except Exception:
+                    pass
+                # Tratar alerta do grid
+                try:
+                    alert = page.wait_for_event('dialog', timeout=5000)
+                    alert.accept()
+                    time.sleep(1)
+                except Exception:
+                    pass
+
+                # Selecionar opção no grid (pela descrição, se informada)
+                if desc_mov:
+                    try:
+                        link = page.query_selector(f'a:has-text("{desc_mov}")')
+                        if not link:
+                            link = page.query_selector(f'td:has-text("{desc_mov}")')
+                        if link:
+                            link.click()
+                            print(f'   ✅ Selecionado: {desc_mov}')
+                            time.sleep(1)
+                        else:
+                            # Fallback: injeta direto na descrição
+                            page.evaluate(f'''() => {{
+                                var desc = document.getElementById('descCategoriaMovimentacao');
+                                if (desc) desc.value = '{desc_mov}';
+                            }}''')
+                            time.sleep(0.5)
+                    except Exception:
+                        page.evaluate(f'''() => {{
+                            var desc = document.getElementById('descCategoriaMovimentacao');
+                            if (desc) desc.value = '{desc_mov}';
+                        }}''')
+                        time.sleep(0.5)
+                else:
+                    # Fallback: injeta descrição manualmente
+                    page.evaluate(f'''() => {{
+                        var desc = document.getElementById('descCategoriaMovimentacao');
+                        if (desc) desc.value = '{desc_mov}';
+                    }}''')
+                    time.sleep(0.5)
 
                 # PASSO 3: Preencher observação
                 obs_texto = record.observacao or f"Cumprimento de {record.act_verb}"
@@ -160,18 +231,67 @@ class MovimentacaoService:
                 page.fill('#observacao', obs_texto[:500])
                 time.sleep(0.5)
 
-                # PASSO 4: Clicar Concluir
-                page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
-                time.sleep(0.5)
-                page.click('#Concluir')
-                time.sleep(4)
+                # PASSO 3.5: Localizador (se informado)
+                if record.localizador or record.tipo_localizador:
+                    # Expandir painel de localizadores
+                    try:
+                        btn_painel = page.locator('#imgBotao_panelLocalizador').first
+                        if btn_painel.count():
+                            btn_painel.click()
+                            time.sleep(1)
+                            print('   📍 Painel localizador expandido')
+                    except Exception:
+                        pass
 
-                # Tratar alerta se aparecer
+                if record.tipo_localizador:
+                    try:
+                        sel = page.locator('#codTipoLocalizador').first
+                        if sel.count():
+                            valor_atual = sel.input_value()
+                            if valor_atual == record.tipo_localizador:
+                                print(f'   ✅ Localizador já está como {record.tipo_localizador} — pulando movimentação')
+                                browser.close()
+                                record.status = 'cumprido'
+                                record.save(update_fields=['status'])
+                                self._log(record, 'info', f'Localizador já definido como {record.tipo_localizador} — pulo')
+                                return True
+                            else:
+                                sel.select_option(record.tipo_localizador)
+                                print(f'   📍 Tipo localizador alterado: {valor_atual} → {record.tipo_localizador}')
+                                time.sleep(0.5)
+                    except Exception:
+                        pass
+                if record.localizador:
+                    try:
+                        sel = page.locator('#codLocalizador').first
+                        if sel.count():
+                            sel.select_option(record.localizador)
+                            print(f'   📍 Localizador: {record.localizador}')
+                            time.sleep(0.5)
+                    except Exception:
+                        pass
+
+                # PASSO 4: Clicar Concluir
+                # Scroll específico para o botão Concluir (após expandir localizador)
+                page.evaluate('''() => {
+                    var btn = document.getElementById('Concluir');
+                    if (btn) btn.scrollIntoView(true);
+                    window.scrollBy(0, -100);
+                }''')
+                time.sleep(1)
+                page.click('#Concluir')
+                time.sleep(2)
+                # Aceita alerta primeiro (ele bloqueia a navegação)
                 try:
                     alert = page.wait_for_event('dialog', timeout=5000)
                     self._log(record, 'info', f'Alerta: {alert.message}')
                     alert.accept()
-                    time.sleep(3)
+                    time.sleep(2)
+                except Exception:
+                    pass
+                # Aguarda navegação
+                try:
+                    page.wait_for_load_state('networkidle', timeout=10000)
                 except Exception:
                     pass
 

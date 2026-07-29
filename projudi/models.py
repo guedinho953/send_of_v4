@@ -495,6 +495,12 @@ class MovimentacaoRecord(TimeStampedModel):
     url_processo = models.URLField('URL Processo', max_length=500, blank=True)
     url_movimentacao = models.URLField('URL Movimentação', max_length=500, blank=True)
 
+    # Localizador
+    localizador = models.CharField('Localizador', max_length=20, blank=True,
+        help_text='Código do localizador (ex: 1, 2, 3...)')
+    tipo_localizador = models.CharField('Tipo Localizador', max_length=20, blank=True,
+        help_text='Tipo de localizador (ex: 1=Cartório, 2=Físico...)')
+
     # Status
     status = models.CharField('Status', max_length=20, choices=STATUS_CHOICES, default='pendente')
 
