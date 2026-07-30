@@ -75,13 +75,13 @@ class MovimentacaoService:
     # EXECUTAR (Playwright — apenas Mov581)
     # =================================================================
     def executar(self, record: MovimentacaoRecord) -> bool:
-        """Executa a movimentação no Projudi via Playwright.
+        """Executa a movimentação no Projudi via Playwright (+ fallback requests).
 
-        FLUXO (simplificado — sem CumprimentoCartorio):
+        FLUXO:
           1. Abre MovimentarProcesso
-          2. Injeta código 581 (TD - Tipo Documental)
-          3. Preenche descrição e observação
-          4. Clica Concluir
+          2. Injeta código (581 = grid+TD, 11383 = direto sem grid)
+          3. Preenche observação + cumprimento + localizador
+          4. Clica Concluir (com 3 tentativas: click normal → JS dispatch → POST direto)
           5. Verifica sucesso
         """
         from playwright.sync_api import sync_playwright
@@ -179,50 +179,58 @@ class MovimentacaoService:
                 }}''')
                 time.sleep(1)
 
-                # Clicar btnBuscaMovimentacao para carregar o grid
-                try:
-                    page.click('#btnBuscaMovimentacao', timeout=5000)
-                    time.sleep(2)
-                except Exception:
-                    pass
-                # Tratar alerta do grid
-                try:
-                    alert = page.wait_for_event('dialog', timeout=5000)
-                    alert.accept()
+                if cod_mov == '11383':
+                    # 11383 (Cumprimento de Ofício) — não precisa de grid
+                    # Só injeta a descrição direto
+                    page.evaluate(f'''() => {{
+                        var desc = document.getElementById('descCategoriaMovimentacao');
+                        if (desc) {{ desc.value = '{desc_mov}'; desc.dispatchEvent(new Event('change', {{bubbles:true}})); }}
+                    }}''')
                     time.sleep(1)
-                except Exception:
-                    pass
-
-                # Selecionar opção no grid (pela descrição, se informada)
-                if desc_mov:
+                    print(f'   ✅ Código 11383 injetado: {desc_mov}')
+                else:
+                    # Código 581 (TD) — precisa abrir grid e selecionar documento
                     try:
-                        link = page.query_selector(f'a:has-text("{desc_mov}")')
-                        if not link:
-                            link = page.query_selector(f'td:has-text("{desc_mov}")')
-                        if link:
-                            link.click()
-                            print(f'   ✅ Selecionado: {desc_mov}')
-                            time.sleep(1)
-                        else:
-                            # Fallback: injeta direto na descrição
+                        page.click('#btnBuscaMovimentacao', timeout=5000)
+                        time.sleep(2)
+                    except Exception:
+                        pass
+                    # Tratar alerta do grid
+                    try:
+                        alert = page.wait_for_event('dialog', timeout=5000)
+                        alert.accept()
+                        time.sleep(1)
+                    except Exception:
+                        pass
+
+                    # Selecionar opção no grid (pela descrição, se informada)
+                    if desc_mov:
+                        try:
+                            link = page.query_selector(f'a:has-text("{desc_mov}")')
+                            if not link:
+                                link = page.query_selector(f'td:has-text("{desc_mov}")')
+                            if link:
+                                link.click()
+                                print(f'   ✅ Selecionado: {desc_mov}')
+                                time.sleep(1)
+                            else:
+                                page.evaluate(f'''() => {{
+                                    var desc = document.getElementById('descCategoriaMovimentacao');
+                                    if (desc) desc.value = '{desc_mov}';
+                                }}''')
+                                time.sleep(0.5)
+                        except Exception:
                             page.evaluate(f'''() => {{
                                 var desc = document.getElementById('descCategoriaMovimentacao');
                                 if (desc) desc.value = '{desc_mov}';
                             }}''')
                             time.sleep(0.5)
-                    except Exception:
+                    else:
                         page.evaluate(f'''() => {{
                             var desc = document.getElementById('descCategoriaMovimentacao');
                             if (desc) desc.value = '{desc_mov}';
                         }}''')
                         time.sleep(0.5)
-                else:
-                    # Fallback: injeta descrição manualmente
-                    page.evaluate(f'''() => {{
-                        var desc = document.getElementById('descCategoriaMovimentacao');
-                        if (desc) desc.value = '{desc_mov}';
-                    }}''')
-                    time.sleep(0.5)
 
                 # PASSO 3: Preencher observação
                 obs_texto = record.observacao or f"Cumprimento de {record.act_verb}"
@@ -292,23 +300,94 @@ class MovimentacaoService:
                 time.sleep(1)
                 page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
                 time.sleep(0.5)
-                page.click('#Concluir')
-                time.sleep(3)
-                # Aceita alerta primeiro (ele bloqueia a navegação)
+
+                # Tenta clique normal no Concluir (input type=image)
+                concluir_ok = False
                 try:
-                    alert = page.wait_for_event('dialog', timeout=5000)
-                    self._log(record, 'info', f'Alerta: {alert.message}')
-                    alert.accept()
-                    time.sleep(2)
-                except Exception:
-                    pass
-                # Aguarda navegação
-                try:
-                    page.wait_for_load_state('networkidle', timeout=10000)
+                    # Usa locator com posição explícita para <input type="image">
+                    btn_concluir = page.locator('#Concluir')
+                    if btn_concluir.count():
+                        btn_concluir.click(position={'x': 5, 'y': 5})
+                        time.sleep(3)
+                        # Aceita alerta (se houver)
+                        try:
+                            alert = page.wait_for_event('dialog', timeout=5000)
+                            self._log(record, 'info', f'Alerta: {alert.message}')
+                            alert.accept()
+                            time.sleep(2)
+                        except Exception:
+                            pass
+                        # Aguarda navegação
+                        try:
+                            page.wait_for_load_state('networkidle', timeout=10000)
+                        except Exception:
+                            pass
+                        # Verifica se navegou
+                        url_apos = page.url
+                        if 'DadosProcesso' in url_apos or 'Historico' in url_apos or 'movimentacao incluida' in page.content().lower():
+                            concluir_ok = True
                 except Exception:
                     pass
 
-                # PASSO 5: Verificar sucesso
+                if not concluir_ok:
+                    # Fallback 1: Tenta via JavaScript submit com coordenadas
+                    print('   ⚠️ Clique normal falhou, tentando submit via JS...')
+                    try:
+                        page.evaluate('''() => {
+                            var concluir = document.getElementById('Concluir');
+                            if (concluir) {
+                                // Cria evento de clique com coordenadas
+                                var rect = concluir.getBoundingClientRect();
+                                var event = new MouseEvent('click', {
+                                    bubbles: true,
+                                    cancelable: true,
+                                    clientX: rect.left + 5,
+                                    clientY: rect.top + 5,
+                                    button: 0
+                                });
+                                concluir.dispatchEvent(event);
+                            }
+                        }''')
+                        time.sleep(3)
+                        try:
+                            alert = page.wait_for_event('dialog', timeout=5000)
+                            alert.accept()
+                            time.sleep(2)
+                        except Exception:
+                            pass
+                        try:
+                            page.wait_for_load_state('networkidle', timeout=10000)
+                        except Exception:
+                            pass
+                        url_apos = page.url
+                        if 'DadosProcesso' in url_apos or 'Historico' in url_apos or 'movimentacao incluida' in page.content().lower():
+                            concluir_ok = True
+                    except Exception:
+                        pass
+
+                if not concluir_ok:
+                    # Fallback 2: Tenta submit direto via requests (extrai form HTML da página)
+                    print('   ⚠️ JS submit falhou, tentando POST direto via requests...')
+                    try:
+                        html_form = page.content()
+                        result_fb = self.projudi_service._get_session_from_cookies()
+                        session_fb = result_fb[0] if result_fb else None
+                        if session_fb:
+                            ok_post, msg_post = self._submeter_via_requests(
+                                session=session_fb,
+                                html=html_form,
+                                record=record,
+                                proc_projudi=proc_projudi,
+                            )
+                            if ok_post:
+                                concluir_ok = True
+                                print(f'   ✅ POST direto funcionou: {msg_post}')
+                            else:
+                                print(f'   ⚠️ POST direto falhou: {msg_post}')
+                    except Exception as e:
+                        print(f'   ⚠️ Erro no POST direto: {e}')
+
+                # PASSO 5: Verificar sucesso (executa sempre, mesmo se concluir_ok = False)
                 html_check = page.content()
                 url_final = page.url
                 record.url_movimentacao = url_final
@@ -324,6 +403,11 @@ class MovimentacaoService:
                     sucesso = True
                     self._log(record, 'execucao',
                               f"✅ Redirecionado ao processo. Mov581 concluída.")
+                elif concluir_ok:
+                    # Se algum fallback funcionou mas a verificação normal não pegou
+                    sucesso = True
+                    self._log(record, 'execucao',
+                              f"✅ Concluir acionado via fallback. URL: {url_final}")
                 else:
                     self._log(record, 'erro',
                               f"Mov581 pode não ter sido registrada. "
@@ -343,6 +427,671 @@ class MovimentacaoService:
         if sucesso:
             self._log(record, 'execucao',
                       f"Movimentação cumprida com sucesso.")
+        return sucesso
+
+    # =================================================================
+    # EXECUTAR VIA REQUESTS (sem Playwright — ideal para 11383)
+    # =================================================================
+    def executar_requests(self, record: MovimentacaoRecord,
+                           tipo_documento: str = 'PESQUISA DE ENDEREÇO SISBAJUD ORDENADA',
+                           envia_mp: bool = False,
+                           cod_nucleo_mp: str = '31',
+                           certidao_html: str = None) -> bool:
+        """Executa movimentação via Playwright headless + submit via JavaScript.
+
+        Args:
+            record: MovimentacaoRecord com os dados da movimentação.
+            tipo_documento: Rótulo/texto do Tipo de Documento no select
+                           (ex: 'PESQUISA DE ENDEREÇO SISBAJUD ORDENADA').
+            envia_mp: Se True, ativa Vistas ao MP.
+            cod_nucleo_mp: Código do Núcleo (default '31' = Paulo Afonso).
+            certidao_html: Se informado, insere documento certidão no FCKeditor
+                          antes de Concluir (SelectArquivo + redigirTexto).
+
+        FLUXO:
+          1. Abre MovimentarProcesso via Playwright (headless)
+          2. Injeta código, descrição
+          3. [581] Mostra campos ocultos + btnBuscaMovimentacao + seleciona Tipo Documento
+          4. [envia_mp] Expande painel envio órgão externo + marca enviaMP + seleciona Núcleo
+          5. Preenche observação
+          6. Ativa Cumprimento + btnAddCumprimento
+          7. Configura localizador
+          8. Submete o form via JavaScript com Concluir.x/y
+          9. Verifica redirect / mensagem de sucesso
+          9. Fecha browser
+
+        Tudo no mesmo contexto do browser — sem risco de token mismatch.
+        """
+        result = self.projudi_service._get_session_from_cookies()
+        if not result:
+            self._log(record, 'erro', 'Sessão do Projudi não disponível.')
+            record.status = 'falha'
+            record.save(update_fields=['status'])
+            return False
+
+        _, cookies_dict = result
+
+        # Descobre número Projudi
+        proc_projudi = self._extrair_numero_projudi(record)
+        if not proc_projudi:
+            self._log(record, 'erro', 'Número Projudi não encontrado.')
+            record.status = 'falha'
+            record.save(update_fields=['status'])
+            return False
+
+        self._log(record, 'execucao',
+                  f"Iniciando execução (Playwright + JS submit) para {record.act_verb}...")
+        record.status = 'processando'
+        record.save(update_fields=['status'])
+
+        # ─── PRE-CHECK: localizador já está definido? ───
+        session, _ = result
+        if record.tipo_localizador:
+            try:
+                url_dados = (
+                    'https://projudi.tjba.jus.br/projudi/listagens/'
+                    f'DadosProcesso?numeroProcesso={proc_projudi}'
+                )
+                r = session.get(url_dados, timeout=15)
+                if r.status_code == 200:
+                    from projudiProcessNavigator import ProcessoParser
+                    parser = ProcessoParser(r.text)
+                    atual = parser.extrair_localizador()
+                    if atual.get('codigo') == record.tipo_localizador:
+                        print(f'   ✅ Localizador já é {record.tipo_localizador} ({atual.get("descricao")}) — pulando')
+                        record.status = 'cumprido'
+                        record.save(update_fields=['status'])
+                        self._log(record, 'info',
+                                  f'Localizador já definido: {record.tipo_localizador}')
+                        return True
+                    elif atual:
+                        print(f'   📍 Localizador atual: {atual.get("codigo")} ({atual.get("descricao")}) → desejado: {record.tipo_localizador}')
+            except Exception as e:
+                print(f'   ⚠️ Erro no pre-check localizador: {e}')
+
+        sucesso = False
+        try:
+            from playwright.sync_api import sync_playwright
+            with sync_playwright() as pw:
+                browser = pw.firefox.launch(headless=False, slow_mo=500)
+                ctx_b = browser.new_context(
+                    viewport={'width': 1500, 'height': 950}, locale='pt-BR')
+                ctx_b.add_cookies([
+                    {'name': k, 'value': v,
+                     'domain': 'projudi.tjba.jus.br', 'path': '/'}
+                    for k, v in cookies_dict.items()
+                ])
+                page = ctx_b.new_page()
+
+                # Abre MovimentarProcesso
+                url_mov = (
+                    'https://projudi.tjba.jus.br/projudi/movimentacao/'
+                    f'MovimentarProcesso?numeroProcesso={proc_projudi}'
+                )
+                page.goto(url_mov, wait_until='networkidle')
+                time.sleep(2)
+
+                # Verifica se o formulário carregou
+                tem_form = page.evaluate(
+                    '!!document.getElementById("seqCategoriaMovimentacao")')
+                if not tem_form:
+                    self._log(record, 'erro', 'Formulário MovimentarProcesso não carregou.')
+                    browser.close()
+                    record.status = 'falha'
+                    record.save(update_fields=['status'])
+                    return False
+
+                # ─── PASSO 1: Mostrar campos ocultos (necessários para Cumprimento) ──
+                page.evaluate('''() => {
+                    var tr = document.getElementById('trTipoDocumento');
+                    if (tr) tr.style.display = 'table-row';
+                    var div = document.getElementById('rowDadosMovimentacaoComplemento');
+                    if (div) div.style.display = 'block';
+                    var p = document.getElementById('divPanelCumprimento');
+                    if (p) p.style.display = 'block';
+                }''')
+                time.sleep(0.5)
+
+                cod_mov = record.codigo_movimentacao or '581'
+                desc_mov = record.descricao_movimentacao or (
+                    'Cumprimento de Oficio' if cod_mov == '11383' else 'TD - Tipo Documental')
+
+                # ─── PASSO 2: Cumprimento + btnAddCumprimento (obrigatório) ──
+                # Ativa o grid MP para que os campos de documento fiquem disponíveis
+                try:
+                    page.locator("a:text('Cumprimento')").first.click()
+                    time.sleep(0.5)
+                    page.click('#btnAddCumprimento')
+                    time.sleep(1)
+                    print('   ✅ Cumprimento ativado')
+                except Exception as e:
+                    print(f'   ⚠️ Cumprimento: {e}')
+
+                # ─── PASSO 3: Inserir Documento (certidão) — ANTES do código ──
+                if certidao_html:
+                    try:
+                        radio = page.locator('input[name="SelectArquivo"][value="DigitarTexto"]')
+                        if radio.count():
+                            radio.check()
+                            print('   ✅ SelectArquivo: DigitarTexto')
+                            time.sleep(0.5)
+                    except Exception:
+                        pass
+
+                    try:
+                        sel_desc = page.locator('select[name="codDescricao1"]')
+                        if sel_desc.count():
+                            sel_desc.select_option('37')
+                            print('   ✅ Tipo doc: Certidão (37)')
+                            time.sleep(0.5)
+                    except Exception:
+                        pass
+
+                    try:
+                        campo_desc = page.locator('input[name="descricao"]')
+                        if campo_desc.count():
+                            campo_desc.fill('Certidão Criminal - art. 76 Lei 9.099/95')
+                            time.sleep(0.3)
+                    except Exception:
+                        pass
+
+                    # Clica redigirTexto → navega para FCKeditor
+                    try:
+                        with page.expect_navigation(timeout=15000):
+                            link = page.locator('a[href*="redigirTexto"]')
+                            if link.count():
+                                link.first.click()
+                            else:
+                                page.evaluate('redigirTexto()')
+                        time.sleep(3)
+                        print(f'   ✅ FCKeditor aberto: {page.url[:100]}')
+                    except Exception as e:
+                        print(f'   ⚠️ redigirTexto: {e}')
+                        try:
+                            page.evaluate('document.forms[0].submit()')
+                            time.sleep(3)
+                        except Exception:
+                            pass
+
+                    # Seta HTML no FCKeditor — tenta API, fallback Source button
+                    try:
+                        result = page.evaluate('''(html) => {
+                            // Tenta API direta (frame principal)
+                            try {
+                                var oEditor = FCKeditorAPI.GetInstance('FCKeditor1');
+                                oEditor.SetHTML(html);
+                                return 'OK:API';
+                            } catch(e) {}
+                            // Tenta parent
+                            try {
+                                var oEditor2 = window.parent.FCKeditorAPI.GetInstance('FCKeditor1');
+                                oEditor2.SetHTML(html);
+                                return 'OK:parent';
+                            } catch(e2) {}
+                            // Fallback: clica Source, seta textarea, volta
+                            try {
+                                var fckFrame = document.getElementById('FCKeditor1___Frame');
+                                if (fckFrame) {
+                                    var doc = fckFrame.contentDocument || fckFrame.contentWindow.document;
+                                    // Procura botão Source (último da toolbar)
+                                    var btns = doc.querySelectorAll('td.ToolbarActive');
+                                    if (btns.length > 0) {
+                                        btns[btns.length-1].click(); // Source
+                                        setTimeout(function() {
+                                            var ta = doc.getElementById('eEditorField');
+                                            if (ta) { ta.value = html; }
+                                            btns[btns.length-1].click(); // Volta
+                                        }, 200);
+                                    }
+                                }
+                                return 'OK:source_click';
+                            } catch(e3) {}
+                            return 'Erro: todas falharam';
+                        }''', certidao_html)
+                        print(f'   ✅ FCKeditor: {result}')
+                        time.sleep(1)
+                    except Exception as e:
+                        print(f'   ⚠️ FCKeditor: {e}')
+
+                    # Submeter
+                    try:
+                        btn_sub = page.locator('input[value="Submeter"]')
+                        if btn_sub.count():
+                            btn_sub.first.click()
+                            time.sleep(2)
+                            print('   ✅ Submeter')
+                    except Exception:
+                        pass
+
+                    # Tenta assinar automaticamente (só se tiver senha)
+                    senha = getattr(self.user, 'projudi_password', None)
+                    if senha:
+                        # Assinar 1ª
+                        try:
+                            page.locator('img[src*="bot-assinar"]').first.click()
+                            time.sleep(1)
+                            print('   ✅ Assinar 1ª')
+                        except Exception:
+                            pass
+                        # Senha
+                        try:
+                            camp_senha = page.locator('input[name="senha"]')
+                            if camp_senha.count() and senha:
+                                camp_senha.fill(senha)
+                                time.sleep(0.5)
+                                print('   ✅ Senha')
+                        except Exception:
+                            pass
+                        # Assinar 2ª
+                        try:
+                            page.locator('img[src*="bot-assinar"]').first.click()
+                            time.sleep(2)
+                            print('   ✅ Assinar 2ª')
+                        except Exception:
+                            pass
+                    else:
+                        print('   ⏳ Sem senha configurada — assine manualmente no navegador')
+                        print('   📌 Após assinar, volte a este terminal e pressione Enter')
+                        try:
+                            input('   🔄 Pressione Enter após assinar...')
+                        except Exception:
+                            # Se não tiver terminal (dashboard), espera 30s e tenta continuar
+                            print('   ⏳ Aguardando 30s...')
+                            time.sleep(30)
+
+                    # Aguarda redirect de volta pra Mov581 (ou página do processo)
+                    for _ in range(10):
+                        try:
+                            page.wait_for_load_state('networkidle', timeout=5000)
+                        except Exception:
+                            pass
+                        url_atual = page.url
+                        if 'MovimentarProcesso' in url_atual or 'DadosProcesso' in url_atual:
+                            print(f'   ✅ Redirecionado para Mov581')
+                            break
+                        if 'DigitarTexto' in url_atual or 'acoes' in url_atual:
+                            # Ainda no DigitarTexto, pode precisar de ação extra
+                            print(f'   ⏳ Aguardando redirect... {url_atual[:60]}')
+                            time.sleep(2)
+                        else:
+                            time.sleep(1)
+                    time.sleep(2)
+                    print(f'   📍 Pós-certidão: {page.url}')
+
+                # ─── PASSO 4: Injeta código da movimentação ──
+                page.evaluate(f'''() => {{
+                    var camp = document.getElementById('seqCategoriaMovimentacao');
+                    if (camp) {{ camp.value = '{cod_mov}'; camp.dispatchEvent(new Event('change', {{bubbles:true}})); }}
+                }}''')
+                time.sleep(0.5)
+
+                if cod_mov == '11383':
+                    page.evaluate(f'''() => {{
+                        var desc = document.getElementById('descCategoriaMovimentacao');
+                        if (desc) {{ desc.value = '{desc_mov}'; desc.dispatchEvent(new Event('change', {{bubbles:true}})); }}
+                    }}''')
+                    time.sleep(0.5)
+                else:
+                    # btnBuscaMovimentacao + seleciona Tipo Documento
+                    try:
+                        page.click('#btnBuscaMovimentacao', timeout=5000)
+                        time.sleep(2)
+                        try:
+                            alert = page.wait_for_event('dialog', timeout=5000)
+                            alert.accept()
+                            time.sleep(1)
+                        except Exception:
+                            pass
+                    except Exception:
+                        pass
+
+                    try:
+                        sel_tipo = page.locator('select[name="codTipoDocumento"]')
+                        if sel_tipo.count():
+                            try:
+                                sel_tipo.select_option(label=tipo_documento)
+                            except Exception:
+                                sel_tipo.select_option(tipo_documento)
+                            print(f'   ✅ Tipo Documento: {tipo_documento}')
+                            time.sleep(0.5)
+                    except Exception as e:
+                        print(f'   ⚠️ Tipo Documento: {e}')
+                    print('   ✅ Código 581 injetado + Tipo Documento selecionado')
+
+                # ─── PASSO 5: Vistas ao MP ──
+                if envia_mp:
+                    try:
+                        page.locator('#imgBotao_panelEnvioOrgaoExterno').first.click()
+                        time.sleep(0.5)
+                        print('   ✅ Painel envio órgão externo expandido')
+                    except Exception:
+                        pass
+                    try:
+                        cb = page.locator('input[name="enviaMP"]')
+                        if cb.count():
+                            cb.check()
+                            print('   ✅ enviaMP marcado')
+                            time.sleep(0.5)
+                    except Exception:
+                        pass
+                    try:
+                        sel_nucleo = page.locator('select[name="codNucleoMP"]')
+                        if sel_nucleo.count():
+                            sel_nucleo.select_option(cod_nucleo_mp)
+                            print(f'   ✅ Núcleo MP: {cod_nucleo_mp}')
+                            time.sleep(0.3)
+                    except Exception:
+                        pass
+
+                # ─── PASSO 6: Observação ──
+                obs_texto = record.observacao or f"Cumprimento de {record.act_verb}"
+                if record.parte_nome:
+                    obs_texto += f" — {record.parte_nome}"
+                page.fill('#observacao', obs_texto[:500])
+                time.sleep(0.5)
+
+                # Ativa Cumprimento + btnAddCumprimento
+                try:
+                    page.locator("a:text('Cumprimento')").first.click()
+                    time.sleep(0.5)
+                    page.click('#btnAddCumprimento')
+                    time.sleep(1)
+                    print('   ✅ Cumprimento ativado')
+                except Exception as e:
+                    print(f'   ⚠️ Cumprimento: {e}')
+
+                # ─── Inserir Documento (certidão) ──────────────────────
+                if certidao_html:
+                    try:
+                        # Radio SelectArquivo = DigitarTexto
+                        radio = page.locator('input[name="SelectArquivo"][value="DigitarTexto"]')
+                        if radio.count():
+                            radio.check()
+                            print('   ✅ SelectArquivo: DigitarTexto')
+                            time.sleep(0.5)
+                    except Exception:
+                        pass
+
+                    try:
+                        # Select codDescricao1 = 37 (Certidão)
+                        sel_desc = page.locator('select[name="codDescricao1"]')
+                        if sel_desc.count():
+                            sel_desc.select_option('37')
+                            print('   ✅ Tipo doc: Certidão (37)')
+                            time.sleep(0.5)
+                    except Exception:
+                        pass
+
+                    try:
+                        # Campo descricao (título da certidão)
+                        campo_desc = page.locator('input[name="descricao"]')
+                        if campo_desc.count():
+                            campo_desc.fill('Certidão Criminal - art. 76 Lei 9.099/95')
+                            time.sleep(0.3)
+                    except Exception:
+                        pass
+
+                    # Clica link redigirTexto() → abre FCKeditor
+                    try:
+                        with page.expect_navigation(timeout=15000):
+                            link = page.locator('a[href*="redigirTexto"]')
+                            if link.count():
+                                link.first.click()
+                            else:
+                                page.evaluate('redigirTexto()')
+                        time.sleep(3)
+                        print(f'   ✅ FCKeditor aberto: {page.url}')
+                    except Exception as e:
+                        print(f'   ⚠️ redigirTexto: {e}')
+                        # Se falhou, tenta submit do form
+                        try:
+                            page.evaluate('document.forms[0].submit()')
+                            time.sleep(3)
+                        except Exception:
+                            pass
+
+                    # Seta o HTML no FCKeditor
+                    try:
+                        result = page.evaluate('''(html) => {
+                            try {
+                                var oEditor = FCKeditorAPI.GetInstance('FCKeditor1');
+                                oEditor.SwitchToSourceMode();
+                                oEditor.SetHTML(html);
+                                oEditor.SwitchToWysiwygMode();
+                                return 'OK';
+                            } catch(e) {
+                                try {
+                                    var oEditor2 = window.parent.FCKeditorAPI.GetInstance('FCKeditor1');
+                                    oEditor2.SwitchToSourceMode();
+                                    oEditor2.SetHTML(html);
+                                    oEditor2.SwitchToWysiwygMode();
+                                    return 'OK:parent';
+                                } catch(e2) {
+                                    return 'Erro: ' + e2.message;
+                                }
+                            }
+                        }''', certidao_html)
+                        print(f'   ✅ FCKeditor HTML setado: {result}')
+                        time.sleep(1)
+                    except Exception as e:
+                        print(f'   ⚠️ FCKeditor API: {e}')
+
+                    # Submeter
+                    try:
+                        btn_sub = page.locator('input[value="Submeter"]')
+                        if btn_sub.count():
+                            btn_sub.first.click()
+                            time.sleep(2)
+                            print('   ✅ Submeter clicado')
+                    except Exception:
+                        try:
+                            page.evaluate('''() => {
+                                var b = document.querySelector('input[value="Submeter"]');
+                                if (b) b.click();
+                            }''')
+                            time.sleep(2)
+                        except Exception:
+                            pass
+
+                    # Assinar 1ª vez
+                    try:
+                        btn_ass = page.locator('img[src*="bot-assinar"]')
+                        if btn_ass.count():
+                            btn_ass.first.click()
+                            time.sleep(1)
+                            print('   ✅ Assinar 1ª vez')
+                    except Exception:
+                        pass
+
+                    # Preenche senha
+                    try:
+                        camp_senha = page.locator('input[name="senha"]')
+                        if camp_senha.count():
+                            senha = getattr(self.user, 'projudi_password', '')
+                            if not senha:
+                                print('   ⚠️ Senha do Projudi não encontrada no usuário')
+                            else:
+                                camp_senha.fill(senha)
+                                time.sleep(0.5)
+                                print('   ✅ Senha preenchida')
+                    except Exception as e:
+                        print(f'   ⚠️ Senha: {e}')
+
+                    # Assinar 2ª vez
+                    try:
+                        btn_ass2 = page.locator('img[src*="bot-assinar"]')
+                        if btn_ass2.count():
+                            btn_ass2.first.click()
+                            time.sleep(2)
+                            print('   ✅ Assinar 2ª vez')
+                    except Exception:
+                        pass
+
+                    # Aguarda processamento
+                    try:
+                        page.wait_for_load_state('networkidle', timeout=15000)
+                    except Exception:
+                        pass
+                    time.sleep(2)
+                    print(f'   📍 URL após certidão: {page.url}')
+
+                # ─── Garantir que estamos na página Mov581 ──
+                url_atual = page.url
+                if 'MovimentarProcesso' not in url_atual:
+                    print(f'   ⚠️ Não está no Mov581. Re-navegando...')
+                    url_mov = (
+                        'https://projudi.tjba.jus.br/projudi/movimentacao/'
+                        f'MovimentarProcesso?numeroProcesso={proc_projudi}'
+                    )
+                    page.goto(url_mov, wait_until='networkidle')
+                    time.sleep(2)
+                    # Re-mostra campos ocultos
+                    page.evaluate('''() => {
+                        var tr = document.getElementById('trTipoDocumento');
+                        if (tr) tr.style.display = 'table-row';
+                        var div = document.getElementById('rowDadosMovimentacaoComplemento');
+                        if (div) div.style.display = 'block';
+                        var p = document.getElementById('divPanelCumprimento');
+                        if (p) p.style.display = 'block';
+                    }''')
+                    time.sleep(0.5)
+                    print('   ✅ Re-navegado para Mov581')
+                else:
+                    print(f'   ✅ Ainda no Mov581')
+
+                # Configura localizador (via JS direto, mais robusto)
+                if record.tipo_localizador or record.localizador:
+                    try:
+                        # Expande painel via JS
+                        page.evaluate('''() => {
+                            var btn = document.getElementById('imgBotao_panelLocalizador');
+                            if (btn) btn.click();
+                        }''')
+                        time.sleep(0.5)
+                    except Exception:
+                        pass
+
+                    if record.tipo_localizador:
+                        try:
+                            page.evaluate(f'''() => {{
+                                var sel = document.getElementById('codTipoLocalizador');
+                                if (sel) {{ sel.value = '{record.tipo_localizador}';
+                                    sel.dispatchEvent(new Event('change', {{bubbles:true}})); }}
+                            }}''')
+                            print(f'   📍 Tipo localizador: {record.tipo_localizador}')
+                            time.sleep(0.3)
+                            # Clica botão "Adicionar" localizador
+                            try:
+                                btn_add = page.locator('img[src*="bot-adicionar"]')
+                                if btn_add.count():
+                                    btn_add.click()
+                                    print('   ✅ Localizador adicionado à lista')
+                                    time.sleep(0.5)
+                            except Exception:
+                                pass
+                        except Exception:
+                            pass
+                    if record.localizador:
+                        try:
+                            page.evaluate(f'''() => {{
+                                var sel = document.getElementById('codLocalizador');
+                                if (sel) {{ sel.value = '{record.localizador}';
+                                    sel.dispatchEvent(new Event('change', {{bubbles:true}})); }}
+                            }}''')
+                            print(f'   📍 Localizador: {record.localizador}')
+                            time.sleep(0.3)
+                        except Exception:
+                            pass
+
+                # Submete o form — tenta clique real no Concluir (input type=image)
+                # importante: clique real dispara JS handlers que serializam a certidão
+                time.sleep(0.5)
+                page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+                time.sleep(0.3)
+
+                concluir_submetido = False
+                try:
+                    btn = page.locator('#Concluir')
+                    if btn.count():
+                        btn.click(position={'x': 5, 'y': 5}, timeout=5000)
+                        time.sleep(3)
+                        # Verifica se navegou
+                        try:
+                            page.wait_for_load_state('networkidle', timeout=10000)
+                        except Exception:
+                            pass
+                        url_pos = page.url
+                        if 'DadosProcesso' in url_pos or 'Historico' in url_pos:
+                            concluir_submetido = True
+                            print('   ✅ Concluir clicado com coordenadas')
+                        else:
+                            print('   ⚠️ Clique no Concluir não navegou')
+                except Exception as e:
+                    print(f'   ⚠️ Clique Concluir: {e}')
+
+                if not concluir_submetido:
+                    # Fallback: submit via JS com Concluir.x/y hidden
+                    print('   ⚠️ Fallback: submit via JS')
+                    page.evaluate('''() => {
+                        var concluir = document.getElementById('Concluir');
+                        if (concluir && concluir.form) {
+                            var form = concluir.form;
+                            var x = document.createElement('input');
+                            x.type = 'hidden'; x.name = 'Concluir.x'; x.value = '10';
+                            form.appendChild(x);
+                            var y = document.createElement('input');
+                            y.type = 'hidden'; y.name = 'Concluir.y'; y.value = '10';
+                            form.appendChild(y);
+                            form.submit();
+                        }
+                    }''')
+                    time.sleep(3)
+                    try:
+                        page.wait_for_load_state('networkidle', timeout=10000)
+                    except Exception:
+                        pass
+
+                # Aguarda navegação
+                try:
+                    page.wait_for_load_state('networkidle', timeout=15000)
+                except Exception:
+                    pass
+                time.sleep(2)
+
+                # Verifica sucesso
+                html_check = page.content()
+                url_final = page.url
+                record.url_movimentacao = url_final
+
+                if any(k in html_check.lower() for k in
+                       ['movimentação incluída', 'movimentacao incluida',
+                        'operação realizada', 'operacao realizada',
+                        'dados gravados', 'redirect']):
+                    sucesso = True
+                    self._log(record, 'execucao',
+                              f"✅ Movimentação concluída. URL: {url_final}")
+                elif 'DadosProcesso' in url_final or 'Historico' in url_final:
+                    sucesso = True
+                    self._log(record, 'execucao',
+                              f"✅ Redirecionado ao processo. URL: {url_final}")
+                else:
+                    self._log(record, 'erro',
+                              f"Movimentação pode não ter sido registrada. "
+                              f"URL final: {url_final}")
+
+                browser.close()
+
+        except Exception as e:
+            self._log(record, 'erro', f'Erro no Playwright: {str(e)[:200]}')
+            import traceback
+            traceback.print_exc()
+
+        record.status = 'cumprido' if sucesso else 'falha'
+        record.save(update_fields=['status', 'url_movimentacao'])
+        if sucesso:
+            print(f'   ✅ Movimentação (JS submit) concluída')
+        else:
+            print(f'   ⚠️ Falha na movimentação (JS submit)')
         return sucesso
 
     def _extrair_numero_projudi(self, record: MovimentacaoRecord) -> Optional[str]:
@@ -369,6 +1118,133 @@ class MovimentacaoService:
                     qs = parse_qs(urlparse(r.url).query)
                     return qs.get('numeroProcesso', [None])[0]
         return None
+
+    # =================================================================
+    # SUBMETER VIA REQUESTS (fallback quando Playwright não consegue Concluir)
+    # =================================================================
+    def _submeter_via_requests(self, session, html: str, record: MovimentacaoRecord,
+                                proc_projudi: str) -> Tuple[bool, str]:
+        """Extrai o form MovimentarProcesso do HTML e submete via POST direto.
+
+        Funciona como _juntar_via_requests do OficioService:
+        parseia o formulário, adiciona Concluir.x/y, e posta.
+        """
+        from bs4 import BeautifulSoup
+        import re as _re
+
+        soup = BeautifulSoup(html, 'html.parser')
+        form = soup.find('form')
+        if not form:
+            return False, "Formulário não encontrado no HTML"
+
+        post_url = form.get('action', '')
+        if post_url and post_url.startswith('/'):
+            post_url = f'https://projudi.tjba.jus.br{post_url}'
+        elif not post_url:
+            post_url = (f'https://projudi.tjba.jus.br/projudi/movimentacao/'
+                        f'MovimentarProcesso?numeroProcesso={proc_projudi}')
+
+        # Extrai todos os campos do formulário
+        payload = {}
+        for inp in form.find_all(['input', 'select', 'textarea']):
+            name = inp.get('name')
+            if not name or name in ('Concluir.x', 'Concluir.y'):
+                continue
+            if inp.name == 'select':
+                selected = inp.find('option', selected=True)
+                val = selected.get('value', '') if selected else ''
+            elif inp.name == 'textarea':
+                val = inp.get_text()
+            else:
+                # input type="image" (submit de imagem) — ignorar, usamos Concluir.x/y
+                if inp.get('type') == 'image':
+                    continue
+                val = inp.get('value', '')
+            if val:
+                payload[name] = val
+
+        # Sobrescreve com dados do record
+        payload['seqCategoriaMovimentacao'] = record.codigo_movimentacao or '581'
+        if record.codigo_movimentacao == '11383':
+            payload['descCategoriaMovimentacao'] = record.descricao_movimentacao or 'Cumprimento de Oficio'
+        else:
+            payload['descCategoriaMovimentacao'] = record.descricao_movimentacao or 'TD - Tipo Documental'
+        if record.observacao:
+            payload['observacao'] = record.observacao[:500]
+
+        # Concluir.x e Concluir.y (obrigatório para input type=image)
+        payload['Concluir.x'] = '10'
+        payload['Concluir.y'] = '10'
+
+        # Remove campos indesejados que podem causar erro de validação
+        for campo in ['codDelegacia', 'codPrazoEnviaDelegacia',
+                        'enviaDelegacia', 'enviaMP', 'enviaTurmaRecursal',
+                        'enviaCartorioExtrajudicial', 'arquivar',
+                        'psicossocial', 'contador']:
+            payload.pop(campo, None)
+
+        # Localizador
+        if record.tipo_localizador:
+            payload['codTipoLocalizador'] = record.tipo_localizador
+        if record.localizador:
+            payload['codLocalizador'] = record.localizador
+
+        # Envia multipart/form-data
+        from io import BytesIO
+        import time as _time
+        _time.sleep(1)
+        multipart = {}
+        for k, v in payload.items():
+            val_bytes = str(v).encode('latin-1', errors='replace')
+            multipart[k] = (None, val_bytes)
+
+        resp = session.post(post_url, files=multipart, timeout=15)
+
+        # Verifica sucesso
+        if resp.status_code != 200:
+            return False, f"HTTP {resp.status_code}"
+
+        texto = resp.text.lower()
+        url_resp = resp.url.lower()
+
+        if 'login' in url_resp:
+            return False, "Sessão expirada"
+
+        if any(k in texto for k in
+               ['movimentação incluída', 'movimentacao incluida',
+                'operação realizada', 'operacao realizada',
+                'dados gravados']):
+            record.url_movimentacao = resp.url
+            return True, "Movimentação registrada via POST direto"
+
+        if 'DadosProcesso' in resp.url or 'Historico' in resp.url:
+            record.url_movimentacao = resp.url
+            return True, "Redirect para DadosProcesso via POST direto"
+
+        # Tenta extrair mensagem de validação do HTML de resposta
+        try:
+            soup_resp = BeautifulSoup(resp.text, 'html.parser')
+            # Procura spans/labels com mensagens de erro
+            erros = []
+            for tag in soup_resp.find_all(['span', 'label', 'div', 'li']):
+                texto_tag = tag.get_text(strip=True)
+                if any(p in texto_tag.lower() for p in
+                       ['obrigatório', 'obrigatorio', 'inválido', 'invalido',
+                        'erro', 'não permitido', 'nao permitido',
+                        'preenchimento', 'campo']):
+                    if len(texto_tag) < 200:
+                        erros.append(texto_tag)
+            if erros:
+                return False, f"Validação: {'; '.join(erros[:3])}"
+
+            # Verifica se o form ainda está na página (com validação específica)
+            form_resp = soup_resp.find('form')
+            if form_resp and 'MovimentarProcesso' in str(form_resp.get('action', '')):
+                return False, f"Formulário ainda presente (possível erro de validação)"
+        except Exception:
+            pass
+
+        return False, f"Resposta inesperada: {resp.url}"
 
     # =================================================================
     # DISPENSAR
@@ -412,7 +1288,12 @@ class MovimentacaoService:
             if rec.status not in ('pendente', 'falha'):
                 continue
             try:
-                if self.executar(rec):
+                # 11383 = requests direto (sem Playwright)
+                if rec.codigo_movimentacao == '11383':
+                    ok = self.executar_requests(rec)
+                else:
+                    ok = self.executar(rec)
+                if ok:
                     cumpridos += 1
                 else:
                     falhas += 1

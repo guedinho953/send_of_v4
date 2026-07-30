@@ -155,9 +155,9 @@ def rastrear_e_expedir(tipo=None):
                     if rag_cand.sequencia_cumprimento:
                         # Verifica tipo na sequência
                         seq_tipos = {p.get('tipo') for p in rag_cand.sequencia_cumprimento}
-                        # Quando tipo='movimentacao', considera também intimações eletrônicas e localizador
+                        # Quando tipo='movimentacao', considera também intimações eletrônicas, localizar e vistas_mp
                         if tipo and tipo not in seq_tipos:
-                            if not (tipo == 'movimentacao' and ('intimacao_eletronica' in seq_tipos or 'localizar' in seq_tipos)):
+                            if not (tipo == 'movimentacao' and ('intimacao_eletronica' in seq_tipos or 'localizar' in seq_tipos or 'vistas_mp' in seq_tipos or 'buscar_processo' in seq_tipos or 'certidao_criminal' in seq_tipos)):
                                 continue
                         # Valida que template_id existe e é do tipo certo (quando aplicável)
                         if tipo in ('mandado', 'oficio'):
@@ -410,10 +410,14 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                 print(f'   {"✅" if ok else "⚠️"} Solicitação registrada (Mov581)')
 
             elif tipo == 'localizar':
-                """Só altera o localizador do processo (movimentação simples)."""
+                """Só altera o localizador do processo (movimentação simples, via requests)."""
                 service = MovimentacaoService(user)
                 cod_mov = str(passo.get('codigo_mov', '581'))
-                desc_padrao = 'TD - Tipo Documental' if cod_mov == '581' else 'Cumprimento de Decisão'
+                tipo_doc = passo.get('tipo_documento', 'PESQUISA DE ENDEREÇO SISBAJUD ORDENADA')
+                if cod_mov == '11383':
+                    desc_padrao = passo.get('descricao_mov', 'Cumprimento de Oficio')
+                else:
+                    desc_padrao = passo.get('descricao_mov', 'TD - Tipo Documental')
                 desc_mov = passo.get('descricao_mov', desc_padrao)
                 record = service.importar(
                     processo_numero=proc_num,
@@ -428,11 +432,163 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                     tipo_localizador=passo.get('tipo_localizador', ''),
                 )
                 print(f'  ▶️ Alterando localizador...')
-                ok = service.executar(record)
+                ok = service.executar_requests(record, tipo_documento=tipo_doc)
                 if ok:
                     print(f'   ✅ Localizador alterado')
                 else:
                     print(f'   ⚠️ Falha ao alterar localizador')
+
+            elif tipo == 'vistas_mp':
+                """Vistas ao Ministério Público (Mov581 + enviaMP)."""
+                service = MovimentacaoService(user)
+                cod_mov = str(passo.get('codigo_mov', '581'))
+                tipo_doc = passo.get('tipo_documento', 'VISTA AO MINISTÉRIO PÚBLICO')
+                desc_padrao = passo.get('descricao_mov', 'TD - Tipo Documental')
+                desc_mov = passo.get('descricao_mov', desc_padrao)
+                obs_padrao = passo.get('observacao') or 'Vistas ao Ministério Público'
+                nucleo_mp = str(passo.get('cod_nucleo_mp', '31'))
+                record = service.importar(
+                    processo_numero=proc_num,
+                    act_verb='vistas_mp',
+                    observacao=obs_padrao,
+                    categoria='outro',
+                    processo_cnj=proc_num,
+                    url_processo=mov.get('link_processo', ''),
+                    codigo_movimentacao=str(passo.get('codigo_mov', '581')),
+                    descricao_movimentacao=desc_mov,
+                    localizador=passo.get('localizador', ''),
+                    tipo_localizador=passo.get('tipo_localizador', ''),
+                )
+                print(f'  ▶️ Vistas ao MP...')
+                ok = service.executar_requests(
+                    record,
+                    tipo_documento=tipo_doc,
+                    envia_mp=True,
+                    cod_nucleo_mp=nucleo_mp,
+                )
+                if ok:
+                    print(f'   ✅ Vistas ao MP registrada')
+                else:
+                    print(f'   ⚠️ Falha ao registrar Vistas ao MP')
+
+            elif tipo == 'buscar_processo':
+                """Busca processos no Projudi pelo nome da parte."""
+                from projudi.busca_service import BuscaService
+                bs = BuscaService(user)
+                # Tenta pegar nomes das partes do processo
+                nomes = passo.get('nomes', [])
+                if not nomes and mov:
+                    # Tenta do contexto: partes disponíveis via session
+                    pass
+                if not nomes:
+                    nomes = [obs or ''] if obs else []
+                for nome in nomes:
+                    if not nome.strip():
+                        continue
+                    print(f'  ▶️ Buscando: {nome}')
+                    resultados = bs.buscar_por_nome(nome.strip())
+                    bs.exibir_resultados(resultados)
+                    time.sleep(1)
+
+            elif tipo == 'certidao_criminal':
+                """Gera certidão criminal de reincidência (art. 76 Lei 9.099/95)."""
+                from projudi.busca_service import BuscaService
+                bs = BuscaService(user)
+                autores = passo.get('autores', [])
+                if not autores:
+                    autores = [obs or ''] if obs else ['(nome do autor)']
+                vitima = passo.get('vitima', '(nome da vítima)')
+                todos_1_resultado = True
+                resultados_autores = []
+                for autor in autores:
+                    if not autor.strip():
+                        continue
+                    print(f'  ▶️ Buscando autor: {autor}')
+                    res = bs.buscar_por_nome(autor.strip())
+                    bs.exibir_resultados(res)
+                    resultados_autores.append((autor, res))
+                    if len(res) != 1:
+                        todos_1_resultado = False
+                if todos_1_resultado and autores:
+                    from datetime import date
+                    data = date.today().strftime('%d/%m/%Y')
+                    servidor = getattr(user, 'full_name', 'Servidor')
+                    if len(autores) == 1:
+                        autor_nome = autores[0]
+                        texto = f'''<html>
+<body style="font-family: Tahoma, Arial; font-size: 10pt;">
+<p style="text-align:center">
+<img src="/projudi/imagens/brasao.jpg" width="80"><br>
+<strong>PODER JUDICIÁRIO DO ESTADO DA BAHIA</strong><br>
+2ª VARA DO SISTEMA DOS JUIZADOS ESPECIAIS DE PAULO AFONSO<br>
+Rua das Caraibeiras, 420, Quadra 04 – 1º Andar, General Dutra – PAULO AFONSO<br>
+pafonso-2vsj@tjba.jus.br // Tel.: (75) 3281-8372
+</p>
+<p style="text-align:center"><strong>CERTIDÃO</strong></p>
+<table style="width:100%; border-collapse:collapse;">
+<tr><td style="width:120px"><strong>PROCESSO N.º</strong></td><td>-</td><td>{proc_num}</td></tr>
+<tr><td><strong>AUTOR DO FATO</strong></td><td>-</td><td>{autor_nome}</td></tr>
+<tr><td><strong>VÍTIMA</strong></td><td>-</td><td>{vitima}</td></tr>
+</table>
+<p>Em observância ao art. 76, §2º, II, e §4º da Lei nº. 9.099/95 fiz busca no sistema Projudi e constatei que o(a) autor(a) do fato, <strong>{autor_nome}</strong> qualificado(a) nos autos do processo supra mencionado, <strong>NÃO FOI BENEFICIADO(A) anteriormente no prazo de 05 (cinco) anos, pela aplicação de pena restritiva ou multa.</strong></p>
+<p>O referido é verdade,<br>Dou fé.</p>
+<p style="text-align:right">Paulo Afonso-BA, {data}.<br><strong>{servidor}</strong><br>Servidor Secretaria 2<br>Documento Assinado Eletronicamente¹</p>
+<p style="font-size:8pt">1. Documento assinado eletronicamente conforme arts. 1º e 2º da Lei n.º 11.419/06, que dispõe sobre a informatização do processo digital. O documento pode ser acessado no endereço eletrônico https://projudi.tjba.jus.br/projudi/</p>
+</body>
+</html>'''
+                    else:
+                        autores_str = ' / '.join(autores)
+                        texto = f'''<html>
+<body style="font-family: Tahoma, Arial; font-size: 10pt;">
+<p style="text-align:center">
+<img src="/projudi/imagens/brasao.jpg" width="80"><br>
+<strong>PODER JUDICIÁRIO DO ESTADO DA BAHIA</strong><br>
+2ª VARA DO SISTEMA DOS JUIZADOS ESPECIAIS DE PAULO AFONSO<br>
+Rua das Caraibeiras, 420, Quadra 04, 1º Andar, General Dutra, PAULO AFONSO<br>
+pafonso-2vsj@tjbacotec.onmicrosoft.com // Tel.: (75) 3281-8372
+</p>
+<p style="text-align:center"><strong>CERTIDÃO</strong></p>
+<table style="width:100%; border-collapse:collapse;">
+<tr><td style="width:120px"><strong>PROCESSO N.º</strong></td><td>-</td><td>{proc_num}</td></tr>
+<tr><td><strong>AUTOR DO FATO</strong></td><td>-</td><td>{autores_str}</td></tr>
+<tr><td><strong>VÍTIMA</strong></td><td>-</td><td>{vitima}</td></tr>
+</table>
+<p>Em observância ao art. 76, §2º, II, e §4º da Lei nº. 9.099/95 fiz busca no sistema Projudi e constatei que os(as) autores(as) do fato, qualificados(as) nos autos do processo supra mencionado, <strong>NÃO FOI BENEFICIADO anteriormente no prazo de 05 (cinco) anos pela aplicação de pena restritiva ou multa.</strong></p>
+<p>O referido é verdade,<br>Dou fé.</p>
+<p style="text-align:right">Paulo Afonso-BA, {data}.<br><strong>{servidor}</strong><br>Servidor Secretaria 2<br>Documento Assinado Eletronicamente¹</p>
+<p style="font-size:8pt">1. Documento assinado eletronicamente conforme arts. 1º e 2º da Lei n.º 11.419/06...</p>
+</body>
+</html>'''
+                    print(f'\n   ✅ Certidão gerada. Inserindo no Projudi...')
+
+                    # Cria record e executa Mov581 com inserção da certidão
+                    service = MovimentacaoService(user)
+                    cod_mov = str(passo.get('codigo_mov', '581'))
+                    tipo_doc = passo.get('tipo_documento', 'TD - Tipo Documental')
+                    obs_texto = passo.get('observacao') or f'Certidão Criminal - {proc_num}'
+                    record = service.importar(
+                        processo_numero=proc_num,
+                        act_verb='certidao_criminal',
+                        observacao=obs_texto,
+                        categoria='outro',
+                        processo_cnj=proc_num,
+                        url_processo=mov.get('link_processo', ''),
+                        codigo_movimentacao=cod_mov,
+                        descricao_movimentacao=tipo_doc,
+                        localizador=passo.get('localizador', ''),
+                        tipo_localizador=passo.get('tipo_localizador', ''),
+                    )
+                    ok = service.executar_requests(
+                        record,
+                        tipo_documento=tipo_doc,
+                        certidao_html=texto,
+                    )
+                    if ok:
+                        print(f'   ✅ Certidão criminal concluída')
+                    else:
+                        print(f'   ⚠️ Falha na certidão criminal')
+                else:
+                    print(f'   ⚠️ Algum autor possui mais de 1 processo — certidão não gerada')
 
             elif tipo == 'intimacao_eletronica':
                 """Mov581 + intimação automática (MovimentarAnalise ou MovimentarProcesso)."""

@@ -101,6 +101,7 @@ class FluxoDecisor:
         partes_raw: List[Dict],
         partes_classificadas: List[Dict],
         ato_data: Optional[Dict] = None,
+        processo_natureza: Optional[Dict] = None,
     ):
         """
         Args:
@@ -111,10 +112,14 @@ class FluxoDecisor:
                       { 'tipo_ato': 'intimacao'|'citacao'|'certificar'|...,
                         'act_verb': 'intime-se'|'cite-se'|...,
                         'destinatario_texto': 'parte autora'|'executado'|... }
+            processo_natureza: opcional, dict do ProcessoParser.extrair_classe():
+                      { 'classe': 'Ação Penal', 'natureza': 'criminal'|'civel',
+                        'e_criminal': bool }
         """
         self._partes_raw = partes_raw
         self._partes_classif = partes_classificadas
         self._ato_data = ato_data or {}
+        self._processo_natureza = processo_natureza or {}
         self._resultado: Optional[Dict] = None
 
     # =================================================================
@@ -437,6 +442,7 @@ class FluxoDecisor:
                              f"apenas movimentação interna (Mov581) necessária.",
             'partes': [],
             'resumo': {'fluxos': {'movimentacao_simples': []}},
+            'processo_natureza': self._processo_natureza,
         }
 
     def _resposta_oficio(self) -> Dict:
@@ -462,6 +468,7 @@ class FluxoDecisor:
             'partes': partes_oficio,
             'justificativa': f"'{act_verb}' → ofício {tipo_oficio}",
             'resumo': {'fluxos': {f'oficio_{tipo_oficio.lower()}': [p['nome'] for p in partes_oficio]}},
+            'processo_natureza': self._processo_natureza,
         }
 
     def _montar_saida(self, resultados: List[Dict]) -> Dict:
@@ -484,4 +491,5 @@ class FluxoDecisor:
                 'tem_eletronico': any(r['fluxo'] == 'eletronico' for r in resultados),
                 'tem_edital': any(r['fluxo'] == 'edital' for r in resultados),
             },
+            'processo_natureza': self._processo_natureza,
         }

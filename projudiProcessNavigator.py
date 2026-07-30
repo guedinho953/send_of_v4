@@ -1204,6 +1204,68 @@ class ProcessoParser:
         }
 
     # =========================
+    # CLASSE / NATUREZA DO PROCESSO
+    # =========================
+    PADROES_CRIMINAIS = [
+        'ação penal', 'acao penal', 'procedimento criminal',
+        'termo circunstanciado', 'transação penal', 'transacao penal',
+        'inquérito policial', 'inquerito policial',
+        'ação penal', 'representação criminal', 'representacao criminal',
+        'habeas corpus', 'mandado de segurança criminal',
+        'recurso criminal', 'execução penal', 'execucao penal',
+        'medida protetiva', 'violência doméstica', 'violencia domestica',
+        'crime', 'penal',
+    ]
+
+    def extrair_classe(self, soup=None) -> dict:
+        """Extrai a classe/natureza do processo da página DadosProcesso.
+
+        Retorna:
+            {
+                'classe': 'Procedimento do Juizado Especial Cível',
+                'natureza': 'civel' | 'criminal' | None,
+                'e_criminal': bool,
+            }
+        """
+        soup = soup or self.soup
+        classe = None
+
+        try:
+            # Procura na tabela de dados do processo um td com "Classe:"
+            for td in soup.find_all('td'):
+                texto_label = td.get_text(' ', strip=True).lower().strip()
+                # Pode ser "Classe:" ou "Classe Judicial:" etc.
+                if texto_label.startswith('classe') and texto_label.endswith(':'):
+                    prox = td.find_next_sibling('td')
+                    if prox:
+                        classe = prox.get_text(' ', strip=True)
+                        break
+
+            if not classe:
+                # Fallback: procura em qualquer lugar da página
+                for tag in soup.find_all(['td', 'th', 'span', 'div']):
+                    texto = tag.get_text(' ', strip=True)
+                    m = re.search(r'Classe[:\s]+(.+)', texto, re.I)
+                    if m:
+                        classe = m.group(1).strip()
+                        break
+        except Exception:
+            pass
+
+        if not classe:
+            return {'classe': None, 'natureza': None, 'e_criminal': False}
+
+        # Detecta se é criminal
+        classe_lower = classe.lower()
+        e_criminal = any(p in classe_lower for p in self.PADROES_CRIMINAIS)
+        natureza = 'criminal' if e_criminal else 'civel'
+
+        return {
+            'classe': classe,
+            'natureza': natureza,
+            'e_criminal': e_criminal,
+        }
+    # =========================
     # LOCALIZADOR
     # =========================
     def extrair_localizador(self, soup=None) -> dict:

@@ -137,7 +137,10 @@ def _executar_sequencia(sequencia, mov, proc_num, texto,
                 """Só altera o localizador do processo."""
                 service = MovimentacaoService(user)
                 cod_mov = str(passo.get('codigo_mov', '581'))
-                desc_padrao = 'TD - Tipo Documental' if cod_mov == '581' else 'Cumprimento de Decisão'
+                if cod_mov == '11383':
+                    desc_padrao = passo.get('descricao_mov', 'Cumprimento de Oficio')
+                else:
+                    desc_padrao = passo.get('descricao_mov', 'TD - Tipo Documental')
                 desc_mov = passo.get('descricao_mov', desc_padrao)
                 record = service.importar(
                     processo_numero=proc_num,
@@ -152,6 +155,29 @@ def _executar_sequencia(sequencia, mov, proc_num, texto,
                     tipo_localizador=passo.get('tipo_localizador', ''),
                 )
                 print(f' → Localizador alterado #{record.id}')
+                resumo['movimentacoes'] += 1
+
+            elif tipo == 'vistas_mp':
+                """Vistas ao MP (Mov581 + enviaMP)."""
+                service = MovimentacaoService(user)
+                cod_mov = str(passo.get('codigo_mov', '581'))
+                tipo_doc = passo.get('tipo_documento', 'VISTA AO MINISTÉRIO PÚBLICO')
+                desc_padrao = passo.get('descricao_mov', 'TD - Tipo Documental')
+                desc_mov = passo.get('descricao_mov', desc_padrao)
+                obs_padrao = passo.get('observacao') or 'Vistas ao Ministério Público'
+                record = service.importar(
+                    processo_numero=proc_num,
+                    act_verb='vistas_mp',
+                    observacao=obs_padrao,
+                    categoria='outro',
+                    processo_cnj=proc_num,
+                    url_processo=mov.get('link_processo', ''),
+                    codigo_movimentacao=str(passo.get('codigo_mov', '581')),
+                    descricao_movimentacao=desc_mov,
+                    localizador=passo.get('localizador', ''),
+                    tipo_localizador=passo.get('tipo_localizador', ''),
+                )
+                print(f' → Vistas ao MP #{record.id}')
                 resumo['movimentacoes'] += 1
 
             elif tipo in ('mandado', 'oficio', 'intimacao'):
