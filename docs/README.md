@@ -13,6 +13,7 @@
 | 02 | [SESSAO-PROJUDI](02-SESSAO-PROJUDI.md) | JSESSIONID, captura de cookies | Manter sessão ativa |
 | 03 | [PROCESSAR-PENDENTES](03-PROCESSAR-PENDENTES.md) | View, fluxo de impossibilidade | Como funciona o botão |
 | 04 | [MODO-ESTUDANTE](04-MODO-ESTUDANTE.md) | Explicação linha por linha | Aprender o código |
+| 05 | [CONFIGURAR-RAGS](05-CONFIGURAR-RAGS.md) | sequencia_cumprimento: tipos de passo, códigos (localizador, subtipo, prazo), polo, exemplos | Configurar RAGExamples |
 
 ---
 

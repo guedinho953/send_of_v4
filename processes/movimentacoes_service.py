@@ -295,6 +295,21 @@ def extrair_contexto_para_template(rag, parte) -> Dict:
     return ctx
 
 
+def normalizar_texto(texto: str) -> str:
+    """Minúsculas + remove acentos (endereço → endereco, audiência → audiencia).
+
+    Usado no matching RAG para que variações de acentuação não quebrem
+    a sobreposição de palavras.
+    """
+    import unicodedata
+    if not texto:
+        return ''
+    return ''.join(
+        c for c in unicodedata.normalize('NFD', texto.lower())
+        if unicodedata.category(c) != 'Mn'
+    )
+
+
 def buscar_cumprimentos_similares(texto_movimentacao: str, top_k: int = 3) -> List[Dict]:
     """
     Busca exemplos RAG similares ao texto da movimentacao.
@@ -304,12 +319,14 @@ def buscar_cumprimentos_similares(texto_movimentacao: str, top_k: int = 3) -> Li
     exemplos = RAGExample.objects.filter(active=True)[:200]
     resultados = []
 
-    palavras_atual = set(texto_movimentacao.lower().split())
+    palavras_atual = set(normalizar_texto(texto_movimentacao).split())
     for ex in exemplos:
         # Usa despacho_ato + despacho_observacao (conteúdo real da decisão)
-        texto_busca = ex.despacho_ato.lower() + ' ' + ex.despacho_observacao.lower()
+        texto_busca = normalizar_texto(
+            ex.despacho_ato + ' ' + ex.despacho_observacao)
         for c in ex.cumprimentos:
-            texto_busca += ' ' + c.get('ato', '') + ' ' + c.get('observacao', '')
+            texto_busca += ' ' + normalizar_texto(
+                c.get('ato', '') + ' ' + c.get('observacao', ''))
         palavras_hist = set(texto_busca.split())
         intersecao = palavras_atual & palavras_hist
         if len(intersecao) >= 2:

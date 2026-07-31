@@ -28,6 +28,11 @@ from projudi.services import ProjudiService
 from projudi_client import ProjudiClient
 from processo_parser_ext import ProcessoParserExt
 
+# Certidão criminal — reativada em 2026-07-31 após resolver o retorno
+# pós-Submeter (detecção por conteúdo, não URL). Manter True apenas se
+# houver bloqueio conhecido.
+CERTIDAO_CRIMINAL_ADIADA = False
+
 
 def session_projudi():
     """Obtém sessão Projudi via captura robusta de cookies."""
@@ -111,13 +116,15 @@ def rastrear_e_expedir(tipo=None):
             melhor = None
             template = None
             rag = None
-            palavras_texto = set(texto.lower().split())
+            from processes.movimentacoes_service import normalizar_texto
+            palavras_texto = set(normalizar_texto(texto).split())
 
             for s in similares:
                 # Usa despacho_ato + observacao para comparação (mais preciso)
                 # A observacao tem o conteúdo real da decisão (ex: detalhes do CIAP/RPV)
-                texto_rag = s['despacho_ato'] + ' ' + s.get('despacho_observacao', '')
-                palavras_rag_s = set(texto_rag.lower().split())
+                texto_rag = normalizar_texto(
+                    s['despacho_ato'] + ' ' + s.get('despacho_observacao', ''))
+                palavras_rag_s = set(texto_rag.split())
                 total_s = max(len(palavras_texto & palavras_rag_s), 1)
                 # Usa o menor dos dois textos como base para o threshold
                 # Isso evita que RAGs com texto muito longo sejam penalizados
@@ -393,12 +400,81 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                 """Mov581 para solicitar expedição de mandado (sem confecção)."""
                 service = MovimentacaoService(user)
                 desc_padrao = passo.get('descricao_mov', 'Solicitada a Expedição de Mandado')
+
+                # Identifica a(s) parte(s) correta(s). 'polo' no JSON (igual ao
+                # mandado): reu_especifico (padrão) | autor_especifico | autores |
+                # res | todos | lista (ex: ["autor_especifico", "reu_especifico"]).
+                # Nomes juntados com " / " → destinatário múltiplo no formulário.
+                parte_nome = ''
+                try:
+                    proc_db = Process.objects.filter(number=proc_num).first()
+                    if not proc_db:
+                        proc_db = _criar_processo(session, mov, proc_num, user)
+                    if proc_db:
+                        polos = passo.get('polo', 'reu_especifico')
+                        if isinstance(polos, str):
+                            polos = [polos]
+                        if not isinstance(polos, (list, tuple)) or not polos:
+                            polos = ['reu_especifico']
+                        nomes = []
+                        for polo in polos:
+                            polo = str(polo).lower().strip()
+                            if polo in ('autores', 'autoras', 'promoventes', 'exequentes'):
+                                qs = Party.objects.filter(
+                                    process=proc_db,
+                                    role__in=['autor', 'exequente', 'PROMOVENTE', 'EXEQUENTE'])
+                                nomes.extend((p.name or '').strip() for p in qs if p.name)
+                            elif polo in ('autor_especifico', 'autora_especifica',
+                                          'autora_especifico', 'especifico_autor',
+                                          'especifica_autora'):
+                                cands = list(Party.objects.filter(
+                                    process=proc_db,
+                                    role__in=['autor', 'exequente', 'PROMOVENTE', 'EXEQUENTE']))
+                                if len(cands) > 1:
+                                    parte_esp = _buscar_parte_especifica(
+                                        session, proc_db, mov, cands)
+                                    if parte_esp:
+                                        cands = [parte_esp]
+                                nomes.extend((p.name or '').strip() for p in cands if p.name)
+                            elif polo in ('res', 'rés', 'reus', 'réus', 'executados', 'promovidos'):
+                                qs = Party.objects.filter(
+                                    process=proc_db,
+                                    role__in=['reu', 'executado', 'PROMOVIDO', 'EXECUTADO'])
+                                nomes.extend((p.name or '').strip() for p in qs if p.name)
+                            else:  # 'reu_especifico', 'reu_especifica', 'especifico' ou default
+                                cands = list(Party.objects.filter(
+                                    process=proc_db,
+                                    role__in=['reu', 'executado', 'PROMOVIDO', 'EXECUTADO']))
+                                if len(cands) > 1:
+                                    parte_esp = _buscar_parte_especifica(
+                                        session, proc_db, mov, cands)
+                                    if parte_esp:
+                                        cands = [parte_esp]
+                                nomes.extend((p.name or '').strip() for p in cands if p.name)
+                        # Dedupe preservando a ordem
+                        parte_nome = ' / '.join(dict.fromkeys(n for n in nomes if n))
+                        if not parte_nome:
+                            # Fallback: autor do fato da ata (casos de TP)
+                            dados_ata = _extrair_dados_ata(session, proc_db, mov)
+                            autores = [n.strip() for n in
+                                       (dados_ata.get('autores_do_fato') or []) if n.strip()]
+                            if autores:
+                                parte_nome = autores[0]
+                        if parte_nome:
+                            print(f'   🎯 Parte: {parte_nome[:60]}')
+                except Exception as e:
+                    print(f'   ⚠️ Identificação da parte: {e}')
+
+                obs_solic = obs or f'Solicitada Expedicao - {desc_padrao}'
+                if parte_nome:
+                    obs_solic = f'{obs_solic} - {parte_nome[:60]}'
                 record = service.importar(
                     processo_numero=proc_num,
                     act_verb='solicitar_expedicao',
-                    observacao=obs or f'Solicitada Expedicao - {desc_padrao}',
+                    observacao=obs_solic,
                     categoria='outro',
                     processo_cnj=proc_num,
+                    parte_nome=parte_nome,
                     url_processo=mov.get('link_processo', ''),
                     codigo_movimentacao=str(passo.get('codigo_mov', '581')),
                     descricao_movimentacao=desc_padrao,
@@ -413,7 +489,7 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                 """Só altera o localizador do processo (movimentação simples, via requests)."""
                 service = MovimentacaoService(user)
                 cod_mov = str(passo.get('codigo_mov', '581'))
-                tipo_doc = passo.get('tipo_documento', 'PESQUISA DE ENDEREÇO SISBAJUD ORDENADA')
+                tipo_doc = passo.get('tipo_documento', 'CUMPRIMENTO')
                 if cod_mov == '11383':
                     desc_padrao = passo.get('descricao_mov', 'Cumprimento de Oficio')
                 else:
@@ -475,120 +551,103 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                 """Busca processos no Projudi pelo nome da parte."""
                 from projudi.busca_service import BuscaService
                 bs = BuscaService(user)
-                # Tenta pegar nomes das partes do processo
+                cod_vara = str(passo.get('cod_vara', '1'))
+                cod_natureza = str(passo.get('cod_natureza', '2'))
+                # Nomes dinâmicos: extrai autores do fato da ata (nunca
+                # hardcoded no JSON). Fallback: observação do passo.
                 nomes = passo.get('nomes', [])
                 if not nomes and mov:
-                    # Tenta do contexto: partes disponíveis via session
-                    pass
-                if not nomes:
-                    nomes = [obs or ''] if obs else []
+                    from types import SimpleNamespace
+                    proc_ctx = SimpleNamespace(
+                        number=proc_num,
+                        projudi_url=mov.get('link_processo', ''),
+                    )
+                    try:
+                        dados_ata = _extrair_dados_ata(session, proc_ctx, mov)
+                        nomes = [n.strip() for n in
+                                 (dados_ata.get('autores_do_fato') or []) if n.strip()]
+                    except Exception:
+                        nomes = []
+                    if not nomes:
+                        nomes = [obs or ''] if obs else []
                 for nome in nomes:
                     if not nome.strip():
                         continue
                     print(f'  ▶️ Buscando: {nome}')
-                    resultados = bs.buscar_por_nome(nome.strip())
+                    resultados = bs.buscar_por_nome(
+                        nome.strip(),
+                        cod_natureza=cod_natureza,
+                        cod_vara=cod_vara,
+                    )
                     bs.exibir_resultados(resultados)
+                    # REGRA: busca ambígua (>1 processo) ou vazia → ABORTA a
+                    # sequência. A certidão só pode ser feita quando a busca
+                    # pelo nome retorna EXATAMENTE 1 processo.
+                    if len(resultados) > 1:
+                        print(f'   ⛔ Busca encontrou {len(resultados)} processos — '
+                              f'abortando sequência (certidão NÃO será feita).')
+                        return False
+                    if len(resultados) == 0:
+                        print('   ⛔ Nenhum processo encontrado na busca — '
+                              'abortando sequência (certidão NÃO será feita).')
+                        return False
                     time.sleep(1)
 
             elif tipo == 'certidao_criminal':
-                """Gera certidão criminal de reincidência (art. 76 Lei 9.099/95)."""
-                from projudi.busca_service import BuscaService
-                bs = BuscaService(user)
-                autores = passo.get('autores', [])
-                if not autores:
-                    autores = [obs or ''] if obs else ['(nome do autor)']
-                vitima = passo.get('vitima', '(nome da vítima)')
-                todos_1_resultado = True
-                resultados_autores = []
-                for autor in autores:
-                    if not autor.strip():
-                        continue
-                    print(f'  ▶️ Buscando autor: {autor}')
-                    res = bs.buscar_por_nome(autor.strip())
-                    bs.exibir_resultados(res)
-                    resultados_autores.append((autor, res))
-                    if len(res) != 1:
-                        todos_1_resultado = False
-                if todos_1_resultado and autores:
-                    from datetime import date
-                    data = date.today().strftime('%d/%m/%Y')
-                    servidor = getattr(user, 'full_name', 'Servidor')
-                    if len(autores) == 1:
-                        autor_nome = autores[0]
-                        texto = f'''<html>
-<body style="font-family: Tahoma, Arial; font-size: 10pt;">
-<p style="text-align:center">
-<img src="/projudi/imagens/brasao.jpg" width="80"><br>
-<strong>PODER JUDICIÁRIO DO ESTADO DA BAHIA</strong><br>
-2ª VARA DO SISTEMA DOS JUIZADOS ESPECIAIS DE PAULO AFONSO<br>
-Rua das Caraibeiras, 420, Quadra 04 – 1º Andar, General Dutra – PAULO AFONSO<br>
-pafonso-2vsj@tjba.jus.br // Tel.: (75) 3281-8372
-</p>
-<p style="text-align:center"><strong>CERTIDÃO</strong></p>
-<table style="width:100%; border-collapse:collapse;">
-<tr><td style="width:120px"><strong>PROCESSO N.º</strong></td><td>-</td><td>{proc_num}</td></tr>
-<tr><td><strong>AUTOR DO FATO</strong></td><td>-</td><td>{autor_nome}</td></tr>
-<tr><td><strong>VÍTIMA</strong></td><td>-</td><td>{vitima}</td></tr>
-</table>
-<p>Em observância ao art. 76, §2º, II, e §4º da Lei nº. 9.099/95 fiz busca no sistema Projudi e constatei que o(a) autor(a) do fato, <strong>{autor_nome}</strong> qualificado(a) nos autos do processo supra mencionado, <strong>NÃO FOI BENEFICIADO(A) anteriormente no prazo de 05 (cinco) anos, pela aplicação de pena restritiva ou multa.</strong></p>
-<p>O referido é verdade,<br>Dou fé.</p>
-<p style="text-align:right">Paulo Afonso-BA, {data}.<br><strong>{servidor}</strong><br>Servidor Secretaria 2<br>Documento Assinado Eletronicamente¹</p>
-<p style="font-size:8pt">1. Documento assinado eletronicamente conforme arts. 1º e 2º da Lei n.º 11.419/06, que dispõe sobre a informatização do processo digital. O documento pode ser acessado no endereço eletrônico https://projudi.tjba.jus.br/projudi/</p>
-</body>
-</html>'''
-                    else:
-                        autores_str = ' / '.join(autores)
-                        texto = f'''<html>
-<body style="font-family: Tahoma, Arial; font-size: 10pt;">
-<p style="text-align:center">
-<img src="/projudi/imagens/brasao.jpg" width="80"><br>
-<strong>PODER JUDICIÁRIO DO ESTADO DA BAHIA</strong><br>
-2ª VARA DO SISTEMA DOS JUIZADOS ESPECIAIS DE PAULO AFONSO<br>
-Rua das Caraibeiras, 420, Quadra 04, 1º Andar, General Dutra, PAULO AFONSO<br>
-pafonso-2vsj@tjbacotec.onmicrosoft.com // Tel.: (75) 3281-8372
-</p>
-<p style="text-align:center"><strong>CERTIDÃO</strong></p>
-<table style="width:100%; border-collapse:collapse;">
-<tr><td style="width:120px"><strong>PROCESSO N.º</strong></td><td>-</td><td>{proc_num}</td></tr>
-<tr><td><strong>AUTOR DO FATO</strong></td><td>-</td><td>{autores_str}</td></tr>
-<tr><td><strong>VÍTIMA</strong></td><td>-</td><td>{vitima}</td></tr>
-</table>
-<p>Em observância ao art. 76, §2º, II, e §4º da Lei nº. 9.099/95 fiz busca no sistema Projudi e constatei que os(as) autores(as) do fato, qualificados(as) nos autos do processo supra mencionado, <strong>NÃO FOI BENEFICIADO anteriormente no prazo de 05 (cinco) anos pela aplicação de pena restritiva ou multa.</strong></p>
-<p>O referido é verdade,<br>Dou fé.</p>
-<p style="text-align:right">Paulo Afonso-BA, {data}.<br><strong>{servidor}</strong><br>Servidor Secretaria 2<br>Documento Assinado Eletronicamente¹</p>
-<p style="font-size:8pt">1. Documento assinado eletronicamente conforme arts. 1º e 2º da Lei n.º 11.419/06...</p>
-</body>
-</html>'''
-                    print(f'\n   ✅ Certidão gerada. Inserindo no Projudi...')
+                """Gera certidão criminal de reincidência (art. 76 Lei 9.099/95).
 
-                    # Cria record e executa Mov581 com inserção da certidão
-                    service = MovimentacaoService(user)
-                    cod_mov = str(passo.get('codigo_mov', '581'))
-                    tipo_doc = passo.get('tipo_documento', 'TD - Tipo Documental')
-                    obs_texto = passo.get('observacao') or f'Certidão Criminal - {proc_num}'
-                    record = service.importar(
-                        processo_numero=proc_num,
-                        act_verb='certidao_criminal',
-                        observacao=obs_texto,
-                        categoria='outro',
-                        processo_cnj=proc_num,
-                        url_processo=mov.get('link_processo', ''),
-                        codigo_movimentacao=cod_mov,
-                        descricao_movimentacao=tipo_doc,
-                        localizador=passo.get('localizador', ''),
-                        tipo_localizador=passo.get('tipo_localizador', ''),
-                    )
-                    ok = service.executar_requests(
-                        record,
-                        tipo_documento=tipo_doc,
-                        certidao_html=texto,
-                    )
-                    if ok:
-                        print(f'   ✅ Certidão criminal concluída')
-                    else:
-                        print(f'   ⚠️ Falha na certidão criminal')
+                Autores/vítima NÃO vêm do JSON do RAGExample — são extraídos da
+                movimentação (ata de audiência vinculada ao processo).
+                """
+                if CERTIDAO_CRIMINAL_ADIADA:
+                    print('   ⏸️ Certidão criminal adiada (redirect pós-Submeter não tratado) — pulando')
+                    continue
+
+                # ── Autores/vítima extraídos da movimentação (ata) ──
+                from types import SimpleNamespace
+                proc_ctx = SimpleNamespace(
+                    number=proc_num,
+                    projudi_url=mov.get('link_processo', '') if mov else '',
+                )
+                dados_ata = _extrair_dados_ata(session, proc_ctx, mov)
+                autores = [n.strip() for n in (dados_ata.get('autores_do_fato') or []) if n.strip()]
+                vitima = dados_ata.get('vitima') or '(nome da vítima)'
+                if not autores:
+                    print('   ⚠️ Nenhum autor do fato encontrado na movimentação — pulando')
+                    continue
+
+                from datetime import date
+                data = date.today().strftime('%d/%m/%Y')
+                servidor = getattr(user, 'full_name', 'Servidor')
+                texto = _gerar_html_certidao(proc_num, autores, vitima, servidor, data)
+                print(f'\n   ✅ Certidão gerada. Inserindo no Projudi...')
+
+                # Cria record e executa Mov581 com inserção da certidão
+                service = MovimentacaoService(user)
+                cod_mov = str(passo.get('codigo_mov', '581'))
+                tipo_doc = passo.get('tipo_documento', 'CUMPRIMENTO')
+                obs_texto = passo.get('observacao') or f'Certidão Criminal - {proc_num}'
+                record = service.importar(
+                    processo_numero=proc_num,
+                    act_verb='certidao_criminal',
+                    observacao=obs_texto,
+                    categoria='outro',
+                    processo_cnj=proc_num,
+                    url_processo=mov.get('link_processo', ''),
+                    codigo_movimentacao=cod_mov,
+                    descricao_movimentacao=tipo_doc,
+                    localizador=passo.get('localizador', ''),
+                    tipo_localizador=passo.get('tipo_localizador', ''),
+                )
+                ok = service.executar_requests(
+                    record,
+                    tipo_documento=tipo_doc,
+                    certidao_html=texto,
+                )
+                if ok:
+                    print(f'   ✅ Certidão criminal concluída')
                 else:
-                    print(f'   ⚠️ Algum autor possui mais de 1 processo — certidão não gerada')
+                    print(f'   ⚠️ Falha na certidão criminal')
 
             elif tipo == 'intimacao_eletronica':
                 """Mov581 + intimação automática (MovimentarAnalise ou MovimentarProcesso)."""
@@ -596,20 +655,41 @@ pafonso-2vsj@tjbacotec.onmicrosoft.com // Tel.: (75) 3281-8372
                 print('  ▶️ Executando intimação eletrônica...')
                 
                 # Tenta extrair cod_analise da movimentação (se veio da lista de análises)
+                # Default: usa MovimentarAnalise. Com "fluxo_processo": true no JSON,
+                # usa o link genérico (MovimentarProcesso) em vez do de analisar.
                 cod_analise = None
-                if mov:
+                if not passo.get('fluxo_processo') and mov:
                     mov_link = mov.get('movimentar', '')
                     if mov_link and 'codAnalise=' in mov_link:
                         cod_analise = mov_link.split('codAnalise=')[1].split('&')[0]
-                
+
+                # Número Projudi INTERNO do processo (link_processo) — as páginas
+                # DadosProcesso/MovimentarProcesso exigem o interno, não o CNJ.
+                proc_projudi = None
+                link_proc = (mov or {}).get('link_processo', '')
+                m_proc = re.search(r'numeroProcesso=(\d+)', link_proc)
+                if m_proc:
+                    proc_projudi = m_proc.group(1)
+
                 ok = service.executar_com_intimacao(
                     processo_numero=proc_num,
                     observacao=obs or texto[:500],
                     codigo_mov=str(passo.get('codigo_mov', '581')),
                     descricao_mov=passo.get('descricao_mov', 'Intimação'),
+                    proc_projudi=proc_projudi,
                     cod_analise=cod_analise,
                     fallback_mov=passo.get('fallback_mov'),
                     fallback_uf=passo.get('fallback_uf'),
+                    fallback_mandado=(
+                        passo.get('fallback') == 'mandado'
+                        or bool(passo.get('fallback_mandado'))
+                    ),
+                    mandado_explicito=any(
+                        p.get('tipo') in ('solicitar_expedicao', 'mandado')
+                        for p in sequencia
+                    ),
+                    prazo_intimacao=passo.get('prazo_intimacao', '3'),
+                    fallback_polo=passo.get('fallback_polo'),
                 )
                 if ok:
                     print('   ✅ Intimação eletrônica concluída')
@@ -636,12 +716,66 @@ pafonso-2vsj@tjbacotec.onmicrosoft.com // Tel.: (75) 3281-8372
                 # Filtra partes: mandado → réu; ofício → role-based (exceto CIAP)
                 dados_ata = None
                 if tipo == 'mandado':
-                    partes = Party.objects.filter(
-                        process=proc,
-                        role__in=['reu', 'executado', 'PROMOVIDO', 'EXECUTADO']
-                    )
+                    # 'polo' no JSON (nunca nome de parte) — string OU lista:
+                    #   'reu_especifico' (padrão) → busca no polo passivo (réus);
+                    #                               não achou → TODOS os réus
+                    #   'autor_especifico'        → busca no polo ativo (autoras);
+                    #                               não achou → TODAS as autoras
+                    #   'autores'                 → todas as autoras
+                    #   'res'                     → todos os réus
+                    #   'todos'                   → todas as partes
+                    #   Ex: ["autor_especifico", "reu_especifico"] → os DOIS polos
+                    polos = passo.get('polo', 'reu_especifico')
+                    if isinstance(polos, str):
+                        polos = [polos]
+                    if not isinstance(polos, (list, tuple)) or not polos:
+                        polos = ['reu_especifico']
+                    lista_partes = []
+                    for polo in polos:
+                        polo = str(polo).lower().strip()
+                        if polo in ('todos', 'ambos', 'todas', 'todas_as_partes',
+                                    'autores_e_res', 'autoreseres'):
+                            lista_partes.extend(list(Party.objects.filter(process=proc)))
+                        elif polo in ('autores', 'autoras', 'promoventes', 'exequentes'):
+                            lista_partes.extend(list(Party.objects.filter(
+                                process=proc,
+                                role__in=['autor', 'exequente', 'PROMOVENTE', 'EXEQUENTE'])))
+                        elif polo in ('res', 'rés', 'reus', 'réus', 'executados', 'promovidos'):
+                            lista_partes.extend(list(Party.objects.filter(
+                                process=proc,
+                                role__in=['reu', 'executado', 'PROMOVIDO', 'EXECUTADO'])))
+                        elif polo in ('autor_especifico', 'autora_especifica',
+                                      'autora_especifico', 'especifico_autor',
+                                      'especifica_autora'):
+                            cands = list(Party.objects.filter(
+                                process=proc,
+                                role__in=['autor', 'exequente', 'PROMOVENTE', 'EXEQUENTE']))
+                            if len(cands) > 1:
+                                parte_esp = _buscar_parte_especifica(session, proc, mov, cands)
+                                if parte_esp:
+                                    print(f'   🎯 Autora específica: {getattr(parte_esp, "name", parte_esp)}')
+                                    cands = [parte_esp]
+                            lista_partes.extend(cands)
+                        else:  # 'reu_especifico', 'reu_especifica', 'especifico' ou default
+                            cands = list(Party.objects.filter(
+                                process=proc,
+                                role__in=['reu', 'executado', 'PROMOVIDO', 'EXECUTADO']))
+                            if len(cands) > 1:
+                                parte_esp = _buscar_parte_especifica(session, proc, mov, cands)
+                                if parte_esp:
+                                    print(f'   🎯 Réu específico: {getattr(parte_esp, "name", parte_esp)}')
+                                    cands = [parte_esp]
+                            lista_partes.extend(cands)
+                    # Dedupe preservando a ordem
+                    partes = []
+                    vistos = set()
+                    for p in lista_partes:
+                        key = getattr(p, 'id', None) or (p.name or '').strip().upper()
+                        if key not in vistos:
+                            vistos.add(key)
+                            partes.append(p)
                     if not partes:
-                        partes = Party.objects.filter(process=proc)[:1]
+                        partes = list(Party.objects.filter(process=proc)[:1])
                 else:
                     # CIAP: autor do fato vem EXCLUSIVAMENTE da ata (não usa role)
                     eh_oficio_ciap = (
@@ -694,11 +828,22 @@ pafonso-2vsj@tjbacotec.onmicrosoft.com // Tel.: (75) 3281-8372
                         if not partes:
                             partes = [Party.objects.filter(process=proc).first()]
 
+                # Prazo do mandado: 'prazo' no JSON (conforme o modelo) →
+                # senão extrai da movimentação (ex: "prazo de 15 dias") →
+                # senão deixa vazio (o próprio template tem default, ex:
+                # {{ prazo_dias |default:"15" }} no modelo #8)
+                m_prazo = re.search(
+                    r'(\d+)\s*(?:\([^)]*\))?\s*(?:dias?|dia)', texto, re.I)
+                prazo_dias = (passo.get('prazo')
+                              or (m_prazo.group(1) if m_prazo else None)
+                              or '')
+
                 for part in partes:
                     rag_ctx = rag or SimpleNamespace(
                         despacho_ato='', despacho_observacao='',
                         despacho_data='', despacho_autor='MARTINHO FERRAZ DA NOBREGA JUNIOR')
-                    html_doc = _gerar_html(proc, part, rag_ctx, tmpl, dados_ata=dados_ata)
+                    html_doc = _gerar_html(proc, part, rag_ctx, tmpl, dados_ata=dados_ata,
+                                           prazo_dias=prazo_dias)
                     if not html_doc:
                         continue
 
@@ -801,6 +946,117 @@ def _criar_processo(session, mov, proc_num, user):
         return None
 
 
+def _buscar_parte_especifica(session, proc, mov, partes):
+    """Tenta identificar a parte específica do mandado pelo histórico.
+
+    Quando o polo tem várias partes (ex: 2 réus), o algoritmo busca no
+    histórico de comunicações do processo o destinatário das intimações
+    (extrair_parte_movimentacao — 'p/ FULANO') e casa com as partes do polo.
+
+    Returns:
+        Party/objeto da parte específica ou None (aí mantém todas).
+    """
+    from projudiProcessNavigator import ProcessoParser
+    url = getattr(proc, 'projudi_url', None) or (
+        mov.get('link_processo', '') if mov else '')
+    if not url:
+        return None
+    try:
+        r = session.get(url, timeout=30)
+        if r.status_code != 200 or 'expirou' in r.text.lower():
+            return None
+        parser = ProcessoParser(r.text)
+        movs, _ = parser.extrair_movimentacoes()
+        # Destinatários de intimações/citações, mais recentes primeiro
+        nomes_mov = []
+        for m in movs:
+            dest = m.get('destinatario')
+            if dest and m.get('categoria') in ('intimacao', 'citacao'):
+                nomes_mov.append((m.get('data_obj') or date.min, str(dest).upper()))
+        nomes_mov.sort(key=lambda x: x[0], reverse=True)
+        for _, nome in nomes_mov:
+            if not nome or len(nome) < 5:
+                continue
+            for p in partes:
+                p_nome = (getattr(p, 'name', '') or '').upper()
+                if nome in p_nome or p_nome in nome:
+                    return p
+    except Exception as e:
+        print(f'   ⚠️ Busca parte específica: {e}')
+    return None
+
+
+def _gerar_html_certidao(proc_num, autores, vitima, servidor, data):
+    """Certidão criminal (art. 76, §2º, II e §4º da Lei 9.099/95) com a mesma
+    base de formatação dos ofícios (Times New Roman + cabeçalho do juízo) e o
+    logo/brasão inserido DIRETO no HTML — o DigitarTexto abre com codModelo=-1
+    (editor vazio), então não há modelo pra extrair o brasão (fluxo dos ofícios).
+    """
+    logo_url = ('https://projudi.tjba.jus.br/projudi/imagens/'
+                'brasaoPetroBranco.jpg')
+    autores_str = ' / '.join(a for a in autores if a)
+    if len(autores) <= 1:
+        art76 = (f'Em observância ao art. 76, §2º, II, e §4º da Lei nº. 9.099/95 '
+                 f'fiz busca no sistema Projudi e constatei que o(a) autor(a) do fato, '
+                 f'<strong>{autores_str}</strong> qualificado(a) nos autos do processo '
+                 f'supra mencionado, <strong>NÃO FOI BENEFICIADO(A) anteriormente no '
+                 f'prazo de 05 (cinco) anos, pela aplicação de pena restritiva ou multa.</strong>')
+    else:
+        art76 = (f'Em observância ao art. 76, §2º, II, e §4º da Lei nº. 9.099/95 '
+                 f'fiz busca no sistema Projudi e constatei que os(as) autores(as) do fato, '
+                 f'qualificados(as) nos autos do processo supra mencionado, '
+                 f'<strong>NÃO FOI BENEFICIADO anteriormente no prazo de 05 (cinco) anos '
+                 f'pela aplicação de pena restritiva ou multa.</strong>')
+    return f'''<div style="font-family:'Times New Roman',serif; font-size:12pt; max-width:750px; margin:0 auto;">
+  <div style="text-align:center; margin-bottom:6px;">
+    <img src="{logo_url}" style="width:80px; margin-bottom:4px;">
+    <div style="font-size:11pt; font-weight:bold; text-transform:uppercase;">Poder Judiciário do Estado da Bahia</div>
+    <div style="font-size:11pt; font-weight:bold;">Tribunal de Justiça do Estado da Bahia</div>
+    <div style="font-size:10pt; font-weight:bold;">2ª Vara do Sistema dos Juizados Especiais</div>
+    <div style="font-size:10pt; font-weight:bold;">Paulo Afonso</div>
+  </div>
+  <hr style="border:0.5px solid #000; margin:4px 0;">
+  <div style="font-size:9pt; text-align:center; margin:2px 0; line-height:1.2;">
+    Rua das Caraibeiras, 420, Quadra 04 - 1º Andar, General Dutra - PAULO AFONSO<br>
+    <strong>pafonso-2vsj@tjba.jus.br</strong> | Funcionamento: 13:00 às 19:00 | Tel.: (75)3281-8372
+  </div>
+  <hr style="border:0.5px solid #000; margin:4px 0;">
+
+  <div style="font-size:12pt; font-weight:bold; text-align:center; margin:22px 0 30px;">CERTIDÃO</div>
+
+  <div style="font-size:10pt; font-family:'Courier New',monospace; margin:0 0 30px;">
+    <table style="width:100%; border-collapse:collapse;">
+      <tr><td style="width:140px;"><strong>PROCESSO N.º</strong></td><td>-</td><td>{proc_num}</td></tr>
+      <tr><td><strong>AUTOR DO FATO</strong></td><td>-</td><td>{autores_str}</td></tr>
+      <tr><td><strong>VÍTIMA</strong></td><td>-</td><td>{vitima}</td></tr>
+    </table>
+  </div>
+
+  <div style="font-size:10pt; font-family:'Courier New',monospace; margin:0 0 18px; text-align:justify; text-indent:80px; line-height:1.4;">
+    {art76}
+  </div>
+
+  <div style="font-size:10pt; font-family:'Courier New',monospace; margin:0 0 10px; text-align:justify; text-indent:80px;">
+    O referido é verdade,<br>Dou fé.
+  </div>
+
+  <div style="font-size:10pt; font-family:'Courier New',monospace; margin:30px 0 6px; text-align:center;">
+    <div style="margin-bottom:16px;">Paulo Afonso-BA, {data}.</div>
+    <strong>{servidor}</strong><br>
+    Servidor Secretaria 2<br>
+    Documento Assinado Eletronicamente<sup>1</sup>
+  </div>
+
+  <div style="font-size:7pt; font-family:'Courier New',monospace; margin:10px 0 0; text-align:justify; line-height:1.2;">
+    <sup>1</sup> Documento assinado eletronicamente conforme arts. 1º e 2º da Lei nº. 11.419/06, que dispõe sobre a informatização do processo digital. O documento pode ser acessado no endereço eletrônico https://projudi.tjba.jus.br/projudi/ sob o número acima epigrafado.
+  </div>
+
+  <div style="font-size:7pt; font-family:'Courier New',monospace; text-align:right; margin-top:16px; margin-bottom:24px;">
+    {proc_num}
+  </div>
+</div>'''
+
+
 def _extrair_dados_ata(session, proc, mov=None):
     """Extrai dados da ata de audiência (autores do fato, prestação, parcelas).
 
@@ -819,6 +1075,7 @@ def _extrair_dados_ata(session, proc, mov=None):
         'prestacao_parcelas': '',
         'prestacao_descricao': '',
         'autores_do_fato': [],  # nomes extraídos da ata
+        'vitima': '',           # nome da vítima extraído da ata
         'ata_encontrada': False,
     }
 
@@ -1044,6 +1301,47 @@ def _extrair_dados_ata(session, proc, mov=None):
                     if autores:
                         print(f'   👤 Autor(es) do fato: {", ".join(autores[:3])}')
 
+                    # ── Extrai VÍTIMA (mesma ata) ──
+                    if not dados.get('vitima'):
+                        # Padrão 1: linha direta "VÍTIMA: NOME"
+                        for linha in texto_limpo.split('\n'):
+                            if re.match(r'.*\bv[íi]tima\b\s*:', linha, re.I):
+                                vit = linha.split(':', 1)[1].strip()
+                                vit = re.sub(
+                                    r'\s+(?:CPF|C\.P\.F|RG|ENDEREÇO|ENDEREÇO|TEL|NASC|NACIONALIDADE).*',
+                                    '', vit, flags=re.I
+                                ).strip()
+                                if vit and len(vit) > 5:
+                                    dados['vitima'] = re.sub(r'\s+', ' ', vit).upper()
+                                    break
+                        # Padrão 2: bloco de seção (ata em PDF com cabeçalho VÍTIMA)
+                        if not dados.get('vitima'):
+                            blocos_vit = re.split(
+                                r'\n(?=AUTOR|AUTORIDADE|TESTEMUNHA|V[ÍI]TIMA|ÓRGÃO|ORGAO|DISTRIBUI|ENDEREÇO)',
+                                texto_limpo, flags=re.I)
+                            for bloco in blocos_vit:
+                                if not re.search(r'\bv[íi]tima\b', bloco, re.I):
+                                    continue
+                                linhas = bloco.split('\n')
+                                dentro = False
+                                for linha in linhas:
+                                    if re.search(r'\bv[íi]tima\b', linha, re.I):
+                                        dentro = True
+                                        continue
+                                    if dentro:
+                                        nome_v = re.sub(r'\s+', ' ', linha).strip().upper()
+                                        if (nome_v and len(nome_v) > 8
+                                            and not any(x in nome_v.lower() for x in
+                                                ['cpf', 'rg ', 'nasc', 'telefone',
+                                                 'endereço', 'endereco', 'juízo',
+                                                 'vara', 'comarca'])):
+                                            dados['vitima'] = nome_v
+                                            break
+                                if dados.get('vitima'):
+                                    break
+                        if dados.get('vitima'):
+                            print(f'   👤 Vítima: {dados["vitima"][:60]}')
+
                     # ── 5. Extrai tipo de prestação ──
                     if 'pecuniária' in texto_lower or 'pecuniaria' in texto_lower:
                         dados['prestacao_tipo'] = 'PECUNIÁRIA'
@@ -1085,7 +1383,7 @@ def _extrair_dados_ata(session, proc, mov=None):
     return dados
 
 
-def _gerar_html(proc, part, rag, template, dados_ata=None):
+def _gerar_html(proc, part, rag, template, dados_ata=None, prazo_dias=None):
     """Gera o HTML do documento com os dados corretos."""
     ctx = {
         'processo': proc.number,
@@ -1104,7 +1402,7 @@ def _gerar_html(proc, part, rag, template, dados_ata=None):
             'email': part.email or '', 'telefone': part.phone or '',
             'cpf_cnpj': part.cpf_cnpj or '', 'rg': part.rg or '',
         }],
-        'prazo_dias': '05', 'data': date.today().strftime('%d/%m/%Y'),
+        'prazo_dias': prazo_dias or '', 'data': date.today().strftime('%d/%m/%Y'),
     }
 
     if template.template_type == 'mandado':

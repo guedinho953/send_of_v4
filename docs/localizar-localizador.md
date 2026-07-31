@@ -36,7 +36,7 @@ No JSON da `sequencia_cumprimento` do RAG:
 {
     "tipo": "localizar",
     "codigo_mov": "581",
-    "tipo_documento": "PESQUISA DE ENDEREÇO SISBAJUD ORDENADA",
+    "tipo_documento": "CUMPRIMENTO",
     "tipo_localizador": "9376",
     "observacao": "Ao Localizador de Pesquisa de Endereco"
 }
@@ -48,7 +48,7 @@ No JSON da `sequencia_cumprimento` do RAG:
 |---|---|---|---|
 | `tipo` | sim | — | `"localizar"` |
 | `codigo_mov` | não | `"581"` | Código da movimentação |
-| `tipo_documento` | não | `"PESQUISA DE ENDEREÇO SISBAJUD ORDENADA"` | Rótulo do Tipo de Documento no select `codTipoDocumento` |
+| `tipo_documento` | não | `"CUMPRIMENTO"` | Rótulo do Tipo de Documento no select `codTipoDocumento` (genérico; ex: `"9376"` = PESQUISA DE ENDEREÇO) |
 | `tipo_localizador` | sim | — | Código do localizador (ex: 9376) |
 | `descricao_mov` | não | `"TD - Tipo Documental"` | Descrição exibida no form |
 | `observacao` | não | — | Texto da observação |

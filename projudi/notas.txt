@@ -42,13 +42,40 @@
     
     Exemplo 1 — Só intimação (padrão)
     
+    | 1      | Citação e Intimação para Audiência           |
+    | 2      | Intimação para Audiência                     |
+    | 3      | Intimação                                    |
+    | 4      | Citação                                      |
+    | 5      | Intimação Despacho                           |
+    | 6      | Intimação de Sentença                        |
+    | 7      | Busca e Apreensão                            |
+    | 8      | Citação e/ou Intimação com Liminar           |
+    | 9      | Mandado genérico                             |
+    | 10     | Alvará de soltura                            |
+    | 11     | Citação/Penhora/Avaliação/Intimação/Depósito |
+    | 12     | Ofício                                       |
+    | 24     | Notificação                                  |
+    | 26     | Penhora e/ou avaliação                       |
+    | 27     | Reintegração de Posse                        |
+    | 34     | Prisão     
+    
+    Sequência completa: intimação eletrônica + mandado proposital depois:
     json
     [
-      {"tipo": "movimentacao", "observacao": "Intime-se a parte autora para pagar no prazo de 15 dias.",
-       "codigo_mov": "581", "descricao_mov": "Intimação"}
+      {
+        "tipo": "intimacao_eletronica",
+        "codigo_mov": "581",
+        "descricao_mov": "Intimação",
+        "observacao": "Intimem-se as partes para ciência"
+      },
+      {
+        "tipo": "mandado",
+        "template_id": 8,
+        "subtipo": "11",
+        "polo": "reu",
+        "prazo": "15"
+      }
     ]
-    
-    
     Exemplo 2 — Intimação + certidão
     
     json
@@ -73,6 +100,14 @@
     | codigo_mov    | "581"                    | Código seqCategoriaMovimentacao |
     | descricao_mov | "Cumprimento de Decisão" | Texto descCategoriaMovimentacao |
 
+     [
+        {
+            "tipo": "intimacao_eletronica", "codigo_mov": "581", 
+            "observacao": "Intimem-se as partes para ciência da Sentença (Julgada PROCEDENTE a Ação) ", 
+            "descricao_mov": "Intimação"
+        }
+     ]
+     
      [
         {
             "tipo": "intimacao_eletronica",

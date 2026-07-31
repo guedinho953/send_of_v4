@@ -3,8 +3,15 @@ BuscaService — Busca processos no Projudi por nome da parte.
 """
 
 import time
+import os
 import re
 from typing import List, Dict, Optional
+
+# WSLg: sem renderização por software o Firefox do Playwright abre a janela
+# EM BRANCO (só o ícone "pinguim") — o usuário não vê a busca pra conferir.
+_FIREFOX_ENV = {**os.environ, 'MOZ_DISABLE_GPU_SANDBOX': '1',
+                'LIBGL_ALWAYS_SOFTWARE': '1'}
+_FIREFOX_PREFS = {'gfx.webrender.software': True}
 
 
 class BuscaService:
@@ -28,8 +35,10 @@ class BuscaService:
         Args:
             nome_parte: Nome completo ou parcial.
             cod_natureza: '2' = Criminal, '1' = Cível.
-            cod_vara: '-1' = todas.
-
+            cod_vara: '-1' = "Selecione Para Busca" (vara SEM nome — busca em
+                      TODAS as varas; é o correto para não restringir à vara
+                      do usuário). Valor específico restringe (ex: '411' =
+                      2ª Vara do Sistema dos Juizados - PAULO AFONSO).
         Retorna:
             Lista de dicts com processos encontrados.
         """
@@ -45,7 +54,9 @@ class BuscaService:
             from playwright.sync_api import sync_playwright
 
             with sync_playwright() as pw:
-                browser = pw.firefox.launch(headless=False, slow_mo=500)
+                browser = pw.firefox.launch(headless=False, slow_mo=500,
+                                            env=_FIREFOX_ENV,
+                                            firefox_user_prefs=_FIREFOX_PREFS)
                 ctx_b = browser.new_context(
                     viewport={'width': 1500, 'height': 950}, locale='pt-BR')
                 ctx_b.add_cookies([
@@ -72,10 +83,23 @@ class BuscaService:
                     sel = page.locator('select[name="codNatureza"]')
                     if sel.count():
                         sel.select_option(cod_natureza)
-                        print(f'   ✅ Natureza: Criminal')
+                        print(f'   ✅ Natureza: {cod_natureza} (Criminal)' if cod_natureza == '2' else f'   ✅ Natureza: {cod_natureza}')
                         time.sleep(0.3)
                 except Exception as e:
                     print(f'   ⚠️ codNatureza: {e}')
+
+                # Vara = -1 (opção SEM nome = busca em todas as varas)
+                try:
+                    sel_vara = page.locator('select[name="codVara"]')
+                    if sel_vara.count():
+                        sel_vara.select_option(cod_vara)
+                        if cod_vara == '-1':
+                            print('   ✅ Vara: sem filtro (todas as varas)')
+                        else:
+                            print(f'   ✅ Vara: {cod_vara}')
+                        time.sleep(0.3)
+                except Exception as e:
+                    print(f'   ⚠️ codVara: {e}')
 
                 # Nome da parte (campo 'nome')
                 try:
