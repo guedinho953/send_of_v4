@@ -1,0 +1,197 @@
+{
+  "COMO_USAR": "CONSULTA RÁPIDA e 100% VALIDADA — só campos que o código lê. Copie o trecho que precisar no campo sequencia_cumprimento do RAGExample (Admin). Campo 'tipo' define qual bloco roda; o resto é opcional (default documentado). Ordem = execução. [] = abstenção.",
+
+  "TIPOS_DE_PASSO": {
+    "movimentacao": "Mov581 genérico (certidões, certificações)",
+    "intimacao_eletronica": "Mov581 + intimação DJEN (painel Autoras/Rés)",
+    "intimacao_correio": "Intimação pelos CORREIOS (AR digital — 2º clique 'expedir com ar digital')",
+    "solicitar_expedicao": "Só Mov581: SOLICITA o mandado (NÃO confecciona)",
+    "mandado": "Expede o mandado COMPLETO (tipoCumprimento=4+subtipo+destinatário+FCKeditor)",
+    "oficio": "Expede ofício completo",
+    "localizar": "Só altera o localizador (requests)",
+    "vistas_mp": "Vistas ao MP (Mov581 + enviaMP)",
+    "certidao_criminal": "Certidão criminal art. 76 (DigitarTexto)",
+    "buscar_processo": "Só busca processo por nome (sem movimentar)"
+  },
+
+  "DICIONARIO_DE_TIPOS_DE_MANDADO": {
+    "campo": "subtipo (passo mandado) ou fallback_subtipo (fallback de intimação)",
+    "1": "Citação e Intimação para Audiência",
+    "2": "Intimação para Audiência",
+    "3": "Intimação",
+    "4": "Citação",
+    "5": "Intimação Despacho",
+    "6": "Intimação de Sentença",
+    "7": "Busca e Apreensão",
+    "8": "Citação e/ou Intimação com Liminar",
+    "9": "Mandado genérico",
+    "10": "Alvará de soltura",
+    "11": "Citação/Penhora/Avaliação/Intimação/Depósito (DEFAULT)",
+    "12": "Ofício",
+    "24": "Notificação",
+    "26": "Penhora e/ou avaliação",
+    "27": "Reintegração de Posse"
+  },
+
+  "POLOS_DESTINATARIO": {
+    "campo": "polo (mandado/solicitar_expedicao) ou fallback_polo (fallback de intimação)",
+    "explicacao": "Quem vira destinatário no #codigoDestinatario. NUNCA coloque nome de parte solto — sempre use o polo (nome dinâmico vem do banco/processo).",
+    "reu_especifico": "DEFAULT — réu específico (se 1 réu, direto; se vários, escolhe pelo histórico da última intimação/citação; não achou → TODOS os réus)",
+    "autor_especifico": "autor específico (mesma lógica, no polo ATIVO/autores)",
+    "autores": "TODOS os autores (polo ativo)",
+    "res": "TODOS os réus (polo passivo)",
+    "todos": "TODAS as partes",
+    "lista": "ex [\"autor_especifico\", \"reu_especifico\"] → os DOIS polos (vários nomes viram destinatário múltiplo 'nome1 / nome2')"
+  },
+
+  "NOME_DA_PARTE_NA_OBSERVACAO": {
+    "campo": "parte_na_observacao (mandado/solicitar_expedicao/oficio)",
+    "false": "DEFAULT — observação SEM nome da parte",
+    "true": "só o 1º nome resolvido entra na observação",
+    "primeiro": "igual a true (1º nome)",
+    "parte": "igual a true (1º nome)",
+    "todas": "TODOS os nomes entram na observação",
+    "todos": "igual a 'todas'",
+    "all": "igual a 'todas'",
+    "obs": "O nome NUNCA leva acento na observação (Projudi latin-1)"
+  },
+
+  "PRAZOS_DO_PAINEL_DE_INTIMACAO": {
+    "campo": "prazo_intimacao",
+    "2": "05 dias",
+    "3": "10 dias (DEFAULT)",
+    "4": "15 dias",
+    "7": "30 dias",
+    "29": "6 meses"
+  },
+  "MOTIVO_DO_PAINEL": {
+    "campo": "motivo_intimacao",
+    "3": "conhecimento / ciência (DEFAULT)"
+  },
+
+  "LOCALIZADORES": {
+    "campo": "tipo_localizador",
+    "22614": "SISBAJUD",
+    "11916": "RENAJUD",
+    "24012": "SERASAJUD",
+    "22644": "SNIPER",
+    "9376": "PESQUISA DE ENDEREÇO",
+    "9205": "AGUARDAR CUMPRIR TRANSAÇÃO",
+    "30586": "AGUARDAR DISTRIBUIÇÃO",
+    "14396": "AGUARDAR RETORNO DE AR",
+    "15286": "AGUARDAR DECURSO DO PRAZO",
+    "10248": "CERTIFICAÇÃO TRÂNSITO EM JULGADO",
+    "5624": "SEM LOCALIZADOR"
+  },
+
+  "VISTAS_MP": {
+        "campo": "passo vistas_mp",
+        "cod_mov_usado": "493 — Mov de Vistas ao MP. NÃO use 581 nem 11383. Este tipo NÃO usa tipo documental (só observação). Não informe descricao_mov nem tipo_documento",
+        "cod_nucleo_mp": "código do NÚCLEO do MP (default 31 = Paulo Afonso). Seleciona primeiro (dispara DWR que popula o promotor)",
+        "tipo_parecer_mp": "tipo de parecer (codTipoEnvioMP). default '6' = Ciência (mais usado). 0=Parecer genérico, 4=Denúncia, 5=Desistência, 7=Alegações Finais, 8=Parte não Localizada, 9=Prescrição, 10=Decadência, 11=Recurso/Contrarrazões, 12=Acordo Cível, 13=Medida Cautelar, 14=Proposta de TP, 15=TP Cumprida, 16=TP Aceita",
+        "prazo_mp": "prazo (codPrazoEnviaMP). default '5' = 30 dias (padrão). '4'=15dias, '3'=10dias, '2'=5dias, '1'=2dias",
+        "promotor_mp": "NOME (parcial) do promotor no select loginPromotorNucleoMP — ex 'SOSTENYS MARINHO BARRETO'. Aparece só DEPOIS do núcleo (via DWR)",
+        "exemplo": {
+          "tipo": "vistas_mp",
+          "codigo_mov": "493",
+          "observacao": "Vistas ao Ministério Público",
+          "cod_nucleo_mp": "31",
+          "tipo_parecer_mp": "6",
+          "prazo_mp": "5",
+          "promotor_mp": "SOSTENYS MARINHO BARRETO"
+        }
+      },
+
+  "TEMPLATES": {
+    "campo": "template_id",
+    "8": "Mandado de Citação, Intimação, Penhora e Avaliação",
+    "6": "Mandado de Intimação (Transação Penal)",
+    "2": "Mandado (genérico)",
+    "5": "Ofício CIAP (Transação Penal)",
+    "7": "Ofício RPV",
+    "9": "Certidão negativa (1 autor)",
+    "10": "Certidão negativa (vários autores)"
+  },
+
+  "MODELOS_COJE_AR": {
+    "campo": "tipo_intimacao x natureza (passo intimacao_correio)",
+    "civel_geral": "12066 INTIMAÇÃO GERAL CÍVEL",
+    "criminal_geral": "14032 INTIMAÇÃO GERAL CRIMINAL",
+    "civel_audiencia": "56061 AUDIÊNCIA CÍVEL TELEPRESENCIAL",
+    "criminal_audiencia": "55794 AUDIÊNCIA CRIMINAL TELEPRESENCIAL",
+    "override": "codigo_tipo_ar força um código direto, ignora a tabela"
+  },
+
+  "CAMPOS_DA_INTIMACAO_ELETRONICA": {
+    "fluxo": "'analisar' (default, MovimentarAnalise/codAnalise) | 'movimentar' (link genérico)",
+    "fluxo_fallback": "true = sem codAnalise, cai para 'movimentar'. NUNCA o contrário",
+    "fluxo_processo": "ATALHO antigo para fluxo='movimentar' (true = link genérico direto)",
+    "motivo_intimacao": "motivo do painel (3 = ciência)",
+    "prazo_intimacao": "prazo do painel (2=05d 3=10d 4=15d 7=30d 29=6m)",
+    "fallback": "'mandado' → parte sem DJEN cai p/ mandado/AR-falho",
+    "fallback_mandado": "true = igual a fallback='mandado' (redundante, compat)",
+    "fallback_template_id": "SE presente → EXPEDE o mandado COMPLETO (ex 8)",
+    "fallback_subtipo": "subtipo do mandado no fallback (default '11')",
+    "fallback_prazo": "prazo em dias no corpo do mandado do fallback (ex '15')",
+    "fallback_uf": "só faz o fallback se a parte estiver nessa UF (ex 'BA')",
+    "fallback_polo": "destinatário no fallback (mesmos valores de polo)",
+    "fallback_mov": "descrição alternativa p/ o Mov581 quando NÃO há template",
+    "mandado_explicito": "true = sequência já tem passo de mandado → não duplica (só pula a intimação)"
+  },
+
+  "EXEMPLO_3_PASSOS_NA_PRATICA": [
+    {
+      "tipo": "intimacao_eletronica",
+      "fluxo": "analisar",
+      "fluxo_fallback": true,
+      "descricao_mov": "Intimação",
+      "observacao": "Intimem-se as partes para ciência",
+      "motivo_intimacao": "3",
+      "prazo_intimacao": "3",
+      "fallback": "mandado",
+      "fallback_template_id": 8,
+      "fallback_subtipo": "11",
+      "fallback_prazo": "15"
+    },
+    {
+      "tipo": "intimacao_correio",
+      "tipo_intimacao": "geral",
+      "natureza": "criminal",
+      "assinar_ar": true,
+      "observacao": "Intimação pelos Correios (AR digital)"
+    },
+    {
+      "tipo": "mandado",
+      "template_id": 8,
+      "subtipo": "3",
+      "polo": "reu_especifico",
+      "prazo": "15",
+      "parte_na_observacao": false,
+      "observacao": "Solicitada Expedicao de Mandado - Intimação"
+    }
+  ],
+
+  "SOLICITAR_MANDADO": {
+    "exemplo": {
+      "tipo": "solicitar_expedicao",
+      "codigo_mov": "581",
+      "descricao_mov": "Solicitada a Expedição de Mandado",
+      "observacao": "Solicitada Expedicao de Mandado",
+      "polo": "autor_especifico",
+      "parte_na_observacao": false,
+      "localizador": "",
+      "tipo_localizador": ""
+    },
+    "campos_validos": {
+      "tipo": "'solicitar_expedicao'",
+      "codigo_mov": "581 (default)",
+      "descricao_mov": "default 'Solicitada a Expedição de Mandado'",
+      "observacao": "texto da observação",
+      "polo": "autores | autor_especifico | reu_especifico | res | todos | lista",
+      "parte_na_observacao": "false (default) | true | 'todas'",
+      "localizador": "opcional",
+      "tipo_localizador": "opcional (ex 9376)"
+    },
+    "identifica_a_parte": "Busca no banco pelo polo → conta com histórico p/ escolher a parte específica → não achou, usa 'autor do fato' da ata (TP). SEM destinatário o Projudi NÃO registra (falha silenciosa)"
+  }
+}

@@ -120,8 +120,14 @@ class CumprimentoService:
                     'tipo_ato': tipo_ato,
                     'act_verb': rag.despacho_ato[:50] if rag.despacho_ato else '',
                     'destinatario_texto': '',
+                    # 'forcar_mandado': o passo JSON explícito (não fallback)
+                    # é sinalizado pelo chamador quando for caso
                 }
-                decisor = FluxoDecisor(partes_raw, partes_classif, ato_data)
+                historico = self._extrair_historico_comunicacao(proc)
+                decisor = FluxoDecisor(
+                    partes_raw, partes_classif, ato_data,
+                    historico_comunicacao=historico,
+                )
                 decisao = decisor.decidir()
 
                 resultados.append({
@@ -252,6 +258,56 @@ class CumprimentoService:
             return parser.extrair_partes(parser.soup)
         except Exception:
             return None
+
+    def _extrair_historico_comunicacao(self, proc) -> List[Dict]:
+        """Lê o histórico de comunicações do processo do BANCO (Movement).
+
+        Fonte do rastreamento de comunicações usada pelo FluxoDecisor para
+        detectar AR que NÃO deu certo (→ queda para mandado/precatória).
+        Fallback: Se não há Movement cadastrado, baixa a página DadosProcesso
+        e extrai as movimentações do Projudi.
+        """
+        from processes.models import Movement
+        try:
+            mvs = list(Movement.objects.filter(process=proc)[:200])
+        except Exception:
+            mvs = []
+        if mvs:
+            return self._movs_para_fluxo(mvs)
+
+        # Fallback: baixa a página DadosProcesso
+        if not proc.projudi_url:
+            return []
+        try:
+            session = self.projudi_service._get_session_from_cookies() or (None, None)
+            session = session[0] if isinstance(session, tuple) else session
+            if not session:
+                return []
+            r = session.get(proc.projudi_url, timeout=15)
+            if r.status_code != 200 or 'expirou' in r.text.lower():
+                return []
+            from projudiProcessNavigator import ProcessoParser
+            parser = ProcessoParser(r.text)
+            movs, _ = parser.extrair_movimentacoes()
+            return self._movs_para_fluxo(movs)
+        except Exception:
+            return []
+
+    @staticmethod
+    def _movs_para_fluxo(movs) -> List[Dict]:
+        """Normaliza movimentações para o FluxoDecisor ler AR falho."""
+        out = []
+        for m in movs:
+            out.append({
+                'ato_normalizado': m.get('ato_normalizado', ''),
+                'ato': m.get('ato', '') or m.get('act_description', ''),
+                'meio_comunicacao': m.get('meio_comunicacao', '')
+                                    or m.get('communication_means', ''),
+                'situacao_comunicacao': m.get('situacao_comunicacao', '')
+                                        or m.get('communication_status', ''),
+                'destinatario': m.get('destinatario', '') or m.get('recipient', ''),
+            })
+        return out
 
     # =================================================================
     # IMPORTAR (criar CumprimentoRecord a partir da decisão)
@@ -394,15 +450,45 @@ class CumprimentoService:
         return {'status': 'cumprido', 'fluxo': 'movimentacao_simples'}
 
     def _executar_ar(self, record: CumprimentoRecord) -> Dict:
-        """Gera e expede AR.
-        Implementação real: gerar documento AR + juntada no Projudi.
+        """Expende a intimação PELOS CORREIOS (AR digital) no Projudi.
+
+        Roteia para MovimentacaoService.executar_com_intimacao_ar() — o
+        método dedicado para intimação via AR/correios (Mov581 + painel +
+        Concluir + 2º clique: MovimentarProcessoAvancado → select tipo COJE
+        → 'expedir com ar digital' → assinar).
         """
+        from projudi.movimentacao_service import MovimentacaoService
         record.status = 'processando'
         record.save(update_fields=['status'])
         self._log(record, 'execucao',
-                  f"AR para {record.parte_nome} em preparação. "
-                  f"Endereço: {record.endereco_analisado}.")
-        return {'status': 'pendente', 'fluxo': 'ar'}
+                  f"AR para {record.parte_nome} — expedindo pelos correios.")
+
+        # Número Projudi interno (do projudi_url salvo)
+        proc_projudi = None
+        url_proc = record.url_processo or ''
+        import re as _re
+        m_proc = _re.search(r'numeroProcesso=(\d+)', url_proc)
+        if m_proc:
+            proc_projudi = m_proc.group(1)
+
+        try:
+            svc = MovimentacaoService(self.user)
+            ok = svc.executar_com_intimacao_ar(
+                processo_numero=record.numero_processo_cnj or record.processo,
+                observacao=record.snippet or 'Intimação pelos Correios (AR digital)',
+                proc_projudi=proc_projudi,
+            )
+            record.status = 'cumprido' if ok else 'falha'
+            record.save(update_fields=['status'])
+            self._log(record, 'execucao',
+                      "AR digital expedido com sucesso." if ok
+                      else "Falha ao expedir AR digital.")
+            return {'status': record.status, 'fluxo': 'ar'}
+        except Exception as e:
+            record.status = 'falha'
+            record.save(update_fields=['status'])
+            self._log(record, 'erro', f'Erro ao expedir AR: {e}')
+            return {'status': 'falha', 'fluxo': 'ar', 'erro': str(e)}
 
     def _executar_email(self, record: CumprimentoRecord) -> Dict:
         """Envia e-mail com o documento.

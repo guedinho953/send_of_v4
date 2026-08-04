@@ -61,127 +61,113 @@
     
     Sequência completa: intimação eletrônica + mandado proposital depois:
     json
+
++
++  "TIPOS_DE_LOCALIZADOR": {
++    "explicacao": "Valores para campo tipo_localizador (quando usar passo localizar ou em mov/intimações)",
++    "22614": "SISBAJUD",
++    "11916": "RENAJUD",
++    "24012": "SERASAJUD",
++    "22644": "SNIPER",
++    "9376": "PESQUISA DE ENDEREÇO",
++    "9205": "AGUARDAR CUMPRIR TRANSAÇÃO",
++    "30586": "AGUARDAR DISTRIBUIÇÃO",
++    "14396": "AGUARDAR RETORNO DE AR",
++    "15286": "AGUARDAR DECURSO DO PRAZO",
++    "10248": "CERTIFICAÇÃO TRANSITO EM JULGADO",
++    "5624": "SEM LOCALIZADOR"
++  },
+
+   json
     [
       {
+        "tipo": "movimentacao",
+        "codigo_mov": "581",
+        "descricao_mov": "Cumprimento de Decisão",
+        "observacao": "Certifique-se a tempestividade do recurso."
+      },
+      {
         "tipo": "intimacao_eletronica",
+        "fluxo": "analisar",
+        "fluxo_fallback": true,
         "codigo_mov": "581",
         "descricao_mov": "Intimação",
-        "observacao": "Intimem-se as partes para ciência"
+        "observacao": "Intimem-se as partes para ciência da Decisão",
+        "motivo_intimacao": "3",
+        "prazo_intimacao": "3",
+        "fallback": "mandado",
+        "fallback_template_id": 8,
+        "fallback_subtipo": "11",
+        "fallback_prazo": "15",
+        "fallback_polo": "reu_especifico",
+        "mandado_explicito": false
+      },
+      {
+        "tipo": "intimacao_correio",
+        "fluxo": "movimentar",
+        "codigo_mov": "581",
+        "descricao_mov": "Intimação",
+        "observacao": "Intimem-se as partes pelos Correios (AR digital)",
+        "motivo_intimacao": "3",
+        "prazo_intimacao": "3",
+        "tipo_intimacao": "geral",
+        "natureza": "criminal",
+        "codigo_tipo_ar": null,
+        "assinar_ar": true
+      },
+      {
+        "tipo": "solicitar_expedicao",
+        "codigo_mov": "581",
+        "descricao_mov": "Solicitada a Expedição de Mandado",
+        "observacao": "Solicitada Expedicao de Mandado",
+        "polo": "autor_especifico",
+        "parte_na_observacao": false
       },
       {
         "tipo": "mandado",
         "template_id": 8,
         "subtipo": "11",
-        "polo": "reu",
-        "prazo": "15"
+        "polo": "reu_especifico",
+        "prazo": "15",
+        "parte_na_observacao": false,
+        "observacao": "Solicitada Expedicao de Mandado"
+      },
+      {
+        "tipo": "oficio",
+        "template_id": 7,
+        "polo": "reu_especifico",
+        "parte_na_observacao": false,
+        "observacao": "Solicitada Expedicao de Oficio"
+      },
+      {
+        "tipo": "localizar",
+        "codigo_mov": "11383",
+        "descricao_mov": "TD - Tipo Documental",
+        "tipo_localizador": "22614",
+        "localizador": "",
+        "tipo_documento": "CUMPRIMENTO"
+      },
+      {
+        "tipo": "vistas_mp",
+        "codigo_mov": "483",
+        "observacao": "Vistas ao Ministério Público",
+        "cod_nucleo_mp": "31",
+        "tipo_documento": "VISTA AO MINISTÉRIO PÚBLICO"
+        "tipo": "vistas_mp",
+        "tipo_parecer_mp": "6", # ciência
+        "prazo_mp": "5", - 30 dias
+        "promotor_mp": "SOSTENYS MARINHO BARRETO"
+      },
+      {
+        "tipo": "certidao_criminal",
+        "codigo_mov": "581",
+        "tipo_documento": "Certidão",
+        "observacao": "Certidão Criminal NEGATIVA - Autor do Fato"
+      },
+      {
+        "tipo": "buscar_processo",
+        "cod_natureza": "2",
+        "cod_vara": "-1",
+        "nomes": []
       }
-    ]
-    Exemplo 2 — Intimação + certidão
-    
-    json
-    [
-      {"tipo": "movimentacao", "observacao": "Certifique-se a tempestividade do recurso."},
-      {"tipo": "movimentacao", "observacao": "Intime-se a parte embargada para contrarrazoar.",
-       "codigo_mov": "581", "descricao_mov": "Intimação"},
-      {"tipo": "oficio", "template_id": 7}
-    ]
-    
-    
-    Exemplo 3 — Só ofício (mesmo de antes)
-    
-    json
-    [{"tipo": "oficio", "template_id": 7}]
-    
-    
-    Campos opcionais para movimentação:
-    
-    | Campo         | Padrão                   | O que faz no Projudi            |
-    |---------------|--------------------------|---------------------------------|
-    | codigo_mov    | "581"                    | Código seqCategoriaMovimentacao |
-    | descricao_mov | "Cumprimento de Decisão" | Texto descCategoriaMovimentacao |
-
-     [
-        {
-            "tipo": "intimacao_eletronica", "codigo_mov": "581", 
-            "observacao": "Intimem-se as partes para ciência da Sentença (Julgada PROCEDENTE a Ação) ", 
-            "descricao_mov": "Intimação"
-        }
-     ]
-     
-     [
-        {
-            "tipo": "intimacao_eletronica",
-            "codigo_mov": "581",
-            "descricao_mov": "Intimação",
-            "observacao": "Intimação eletrônica - ciência"
-        },
-        {
-            "tipo": "solicitar_expedicao",
-            "codigo_mov": "581",
-            "descricao_mov": "Solicitada a Expedição de Mandado",
-            "observacao": "Solicitada Expedicao de Mandado"
-        }
-    ]
-    
-    Se não preencher, usa 581 / "Cumprimento de Decisão". Se quiser que apareça "Intimação" no Projudi em vez do genérico, é só preencher "descricao_mov": "Intimação".
-   [
-  
-    ]
-     [
-        {
-            "tipo": "intimacao_eletronica",
-            "codigo_mov": "581",
-            "descricao_mov": "Intimação",
-            "observacao": "Texto que aparece como observação da movimentação"
-        }
-    ]
-    
-    
-    Para solicitar expedição de mandado (só Mov 581, sem confeccionar)
-    
-    json
-    [
-        {
-            "tipo": "solicitar_expedicao",
-            "codigo_mov": "581",
-            "descricao_mov": "Solicitada a Expedição de Mandado",
-            "observacao": "Solicitada Expedicao de Mandado"
-        }
-    ]
-    
-    
-    Para fazer o mandado completo (Mov 581 + confecção)
-    
-    json
-    [
-        {
-            "tipo": "mandado",
-            "template_id": 6,
-            "subtipo": "3",
-            "observacao": "Solicitada Expedicao de Mandado - Intimação"
-        }
-    ]
-    
-    
-    Para fazer intimação eletrônica + se não tiver DJEN, solicitar mandado
-    
-    json
-    [
-        {
-            "tipo": "intimacao_eletronica",
-            "codigo_mov": "581",
-            "descricao_mov": "Intimação",
-            "observacao": "Intimação eletrônica via DJEN"
-        }
-    ]
-
-# INTIMAÇÃO ELETRÔNICA + SISBAJUD
-    [
-        {
-            "tipo": "intimacao_eletronica",
-            "codigo_mov": "581",
-            "descricao_mov": "Intimação",
-            "observacao": "Intimem-se as partes para ciência da Decisão (NÃO CONCEDIDA A MEDIDA LIMINAR)",
-            "tipo_localizador": "22614"
-        }
-    ]
+    ]  documentes esses aprendizados todos inclusive os ars, mudanças no MP e essa do analisar

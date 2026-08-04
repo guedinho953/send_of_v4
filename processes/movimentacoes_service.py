@@ -314,9 +314,11 @@ def buscar_cumprimentos_similares(texto_movimentacao: str, top_k: int = 3) -> Li
     """
     Busca exemplos RAG similares ao texto da movimentacao.
     Compara palavras em comum com o texto do despacho + cumprimentos.
+    NÃO limita a 200 RAGs — considera TODAS as ativas (o limite antigo
+    [:200] fazia RAGs recém-criadas ficarem de fora).
     """
     from .models import RAGExample
-    exemplos = RAGExample.objects.filter(active=True)[:200]
+    exemplos = RAGExample.objects.filter(active=True)
     resultados = []
 
     palavras_atual = set(normalizar_texto(texto_movimentacao).split())

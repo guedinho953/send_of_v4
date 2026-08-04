@@ -9,7 +9,7 @@ from projudi.parte_classifier import ParteClassifier
 from projudi.fluxo_decisor import FluxoDecisor
 
 
-def testar_cenario(nome, partes_raw, ato_data=None):
+def testar_cenario(nome, partes_raw, ato_data=None, **kwargs):
     print(f'\n{"="*70}')
     print(f'  💠 {nome}')
     print(f'{"="*70}')
@@ -25,7 +25,9 @@ def testar_cenario(nome, partes_raw, ato_data=None):
         print(f'  📋 {p["nome"]} | Prior: {p["canal_prioritario"]} | Disp: {canais}')
 
     # 2. Decidir fluxo
-    decisor = FluxoDecisor(partes_raw, partes_classif, ato_data)
+    historico = kwargs.pop('historico', None)
+    decisor = FluxoDecisor(partes_raw, partes_classif, ato_data,
+                           historico_comunicacao=historico)
     resultado = decisor.decidir()
 
     # Mostrar decisões
@@ -306,6 +308,49 @@ if __name__ == '__main__':
     total += 1
     print('  ✅')
 
+    # ─── 14: BA + AR que NÃO deu certo no histórico → mandado (não AR) ───
+    historico_ar_falho_ba = [
+        {'ato_normalizado': 'intimação por aviso de recebimento negativo',
+         'meio_comunicacao': 'ar', 'situacao_comunicacao': 'ar_falho',
+         'destinatario': 'EMPRESA XYZ LTDA'},
+        {'ato_normalizado': 'intimação expedida',
+         'meio_comunicacao': 'ar', 'situacao_comunicacao': 'expedida',
+         'destinatario': 'EMPRESA XYZ LTDA'},
+    ]
+    r = testar_cenario(
+        '14 — BA (Salvador) + AR falhou antes → mandado',
+        cenario_ba_outra, {'tipo_ato': 'intimacao', 'act_verb': 'intime-se'},
+        historico=historico_ar_falho_ba)
+    assert r['partes'][0]['fluxo'] == 'mandado', \
+        f'BA + AR falho → mandado, veio {r["partes"][0]["fluxo"]}'
+    total += 1
+    print('  ✅')
+
+    # ─── 15: Outro estado + AR que NÃO deu certo → precatória (não AR) ───
+    historico_ar_falho_sp = [
+        {'ato_normalizado': 'devolução de aviso de recebimento sem leitura',
+         'meio_comunicacao': 'ar', 'situacao_comunicacao': 'devolvida_sem_leitura',
+         'destinatario': 'INDUSTRIA NACIONAL'},
+    ]
+    r = testar_cenario(
+        '15 — SP + AR falhou antes → precatória',
+        cenario_outro_estado, {'tipo_ato': 'intimacao', 'act_verb': 'intime-se'},
+        historico=historico_ar_falho_sp)
+    assert r['partes'][0]['fluxo'] == 'mandado_precatorio', \
+        f'SP + AR falho → mandado_precatorio, veio {r["partes"][0]["fluxo"]}'
+    total += 1
+    print('  ✅')
+
+    # ─── 16: JSON força 'mandado' explícito → mandado mesmo com DJEN ───
+    r = testar_cenario(
+        '16 — DJEN + JSON forçando mandado → mandado',
+        cenario_djen, {'tipo_ato': 'intimacao', 'act_verb': 'intime-se',
+                       'forcar_mandado': True})
+    assert r['partes'][0]['fluxo'] == 'mandado', \
+        f'JSON força mandado → mandado, veio {r["partes"][0]["fluxo"]}'
+    total += 1
+    print('  ✅')
+
     print(f'\n{"="*70}')
-    print(f'  ✅ 15 CENÁRIOS TESTADOS — TODOS PASSARAM')
+    print(f'  ✅ {total} CENÁRIOS TESTADOS — TODOS PASSARAM')
     print(f'{"="*70}')

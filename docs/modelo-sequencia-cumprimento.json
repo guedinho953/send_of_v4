@@ -1,0 +1,93 @@
+{
+  "NOTE_DOIS_ARQUIVOS": "Este é o MODELO (array pronto p/ colar no Admin). O dicionário com todos os campos/explicações está em referencia-rapida-sequencia.json. Os comentários vão fora do array (o Projudi não aceita comentário dentro do JSON).",
+  "sequencia_processo": [
+    {
+      "tipo": "movimentacao",
+      "codigo_mov": "581",
+      "descricao_mov": "Cumprimento de Decisão",
+      "observacao": "Certifique-se a tempestividade do recurso."
+    },
+    {
+      "tipo": "intimacao_eletronica",
+      "fluxo": "analisar",
+      "fluxo_fallback": true,
+      "codigo_mov": "581",
+      "descricao_mov": "Intimação",
+      "observacao": "Intimem-se as partes para ciência da Decisão",
+      "motivo_intimacao": "3",
+      "prazo_intimacao": "3",
+      "fallback": "mandado",
+      "fallback_template_id": 8,
+      "fallback_subtipo": "11",
+      "fallback_prazo": "15",
+      "fallback_polo": "reu_especifico",
+      "mandado_explicito": false
+    },
+    {
+      "tipo": "intimacao_correio",
+      "fluxo": "movimentar",
+      "codigo_mov": "581",
+      "descricao_mov": "Intimação",
+      "observacao": "Intimem-se as partes pelos Correios (AR digital)",
+      "motivo_intimacao": "3",
+      "prazo_intimacao": "3",
+      "tipo_intimacao": "geral",
+      "natureza": "criminal",
+      "codigo_tipo_ar": null,
+      "assinar_ar": true
+    },
+    {
+      "tipo": "solicitar_expedicao",
+      "codigo_mov": "581",
+      "descricao_mov": "Solicitada a Expedição de Mandado",
+      "observacao": "Solicitada Expedicao de Mandado",
+      "polo": "autor_especifico",
+      "parte_na_observacao": false
+    },
+    {
+      "tipo": "mandado",
+      "template_id": 8,
+      "subtipo": "11",
+      "polo": "reu_especifico",
+      "prazo": "15",
+      "parte_na_observacao": false,
+      "observacao": "Solicitada Expedicao de Mandado"
+    },
+    {
+      "tipo": "oficio",
+      "template_id": 7,
+      "polo": "reu_especifico",
+      "parte_na_observacao": false,
+      "observacao": "Solicitada Expedicao de Oficio"
+    },
+    {
+      "tipo": "localizar",
+      "codigo_mov": "11383",
+      "descricao_mov": "TD - Tipo Documental",
+      "tipo_localizador": "22614",
+      "localizador": "",
+      "tipo_documento": "CUMPRIMENTO"
+    },
+    {
+      "tipo": "vistas_mp",
+      "codigo_mov": "493",
+      "observacao": "Vistas ao Ministério Público",
+      "cod_nucleo_mp": "31",
+      "tipo_parecer_mp": "6",
+      "prazo_mp": "5",
+      "promotor_mp": "SOSTENYS MARINHO BARRETO"
+    },
+    {
+      "tipo": "certidao_criminal",
+      "codigo_mov": "581",
+      "tipo_documento": "Certidão",
+      "observacao": "Certidão Criminal NEGATIVA - Autor do Fato"
+    },
+    {
+      "tipo": "buscar_processo",
+      "cod_natureza": "2",
+      "cod_vara": "-1",
+      "nomes": []
+    }
+  ]
+}

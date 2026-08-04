@@ -109,7 +109,7 @@ def rastrear_e_expedir(tipo=None):
             if len(texto) < 50:
                 continue
 
-            similares = buscar_cumprimentos_similares(texto, top_k=5)
+            similares = buscar_cumprimentos_similares(texto, top_k=30)
             if not similares:
                 continue
 
@@ -164,7 +164,7 @@ def rastrear_e_expedir(tipo=None):
                         seq_tipos = {p.get('tipo') for p in rag_cand.sequencia_cumprimento}
                         # Quando tipo='movimentacao', considera também intimações eletrônicas, localizar e vistas_mp
                         if tipo and tipo not in seq_tipos:
-                            if not (tipo == 'movimentacao' and ('intimacao_eletronica' in seq_tipos or 'localizar' in seq_tipos or 'vistas_mp' in seq_tipos or 'buscar_processo' in seq_tipos or 'certidao_criminal' in seq_tipos)):
+                            if not (tipo == 'movimentacao' and ('intimacao_eletronica' in seq_tipos or 'intimacao_correio' in seq_tipos or 'localizar' in seq_tipos or 'vistas_mp' in seq_tipos or 'buscar_processo' in seq_tipos or 'certidao_criminal' in seq_tipos)):
                                 continue
                         # Valida que template_id existe e é do tipo certo (quando aplicável)
                         if tipo in ('mandado', 'oficio'):
@@ -399,7 +399,7 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
             elif tipo == 'solicitar_expedicao':
                 """Mov581 para solicitar expedição de mandado (sem confecção)."""
                 service = MovimentacaoService(user)
-                desc_padrao = passo.get('descricao_mov', 'Solicitada a Expedição de Mandado')
+                desc_padrao = passo.get('descricao_mov', 'Solicitada a Expedicao de Mandado')
 
                 # Identifica a(s) parte(s) correta(s). 'polo' no JSON (igual ao
                 # mandado): reu_especifico (padrão) | autor_especifico | autores |
@@ -465,9 +465,9 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                 except Exception as e:
                     print(f'   ⚠️ Identificação da parte: {e}')
 
-                obs_solic = obs or f'Solicitada Expedicao - {desc_padrao}'
-                if parte_nome:
-                    obs_solic = f'{obs_solic} - {parte_nome[:60]}'
+                obs_solic = _montar_obs_expedicao(
+                    obs, desc_padrao,
+                    parte_nome, passo.get('parte_na_observacao'))
                 record = service.importar(
                     processo_numero=proc_num,
                     act_verb='solicitar_expedicao',
@@ -515,14 +515,44 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                     print(f'   ⚠️ Falha ao alterar localizador')
 
             elif tipo == 'vistas_mp':
-                """Vistas ao Ministério Público (Mov581 + enviaMP)."""
+                """Vistas ao Ministério Público (Mov 493 + enviaMP).
+                NÃO usa tipo documental (só observação)."""
                 service = MovimentacaoService(user)
-                cod_mov = str(passo.get('codigo_mov', '581'))
-                tipo_doc = passo.get('tipo_documento', 'VISTA AO MINISTÉRIO PÚBLICO')
+                cod_mov = str(passo.get('codigo_mov', '493'))
+                tipo_doc = passo.get('tipo_documento', '')
                 desc_padrao = passo.get('descricao_mov', 'TD - Tipo Documental')
                 desc_mov = passo.get('descricao_mov', desc_padrao)
                 obs_padrao = passo.get('observacao') or 'Vistas ao Ministério Público'
                 nucleo_mp = str(passo.get('cod_nucleo_mp', '31'))
+                tipo_parecer = passo.get('tipo_parecer_mp', '6')   # 6 = Ciência
+                prazo_mp = passo.get('prazo_mp', '5')               # 5 = 30 dias
+
+                # ── FLUXO da página: 'analisar' (MovimentarAnalise via
+                # codAnalise, tira da fila) vs 'movimentar' (link genérico). ──
+                # Default 'analisar'. Só existe fallback analisar → movimentar.
+                fluxo = str(passo.get('fluxo', 'analisar')).lower()
+                fluxo_fallback = bool(passo.get('fluxo_fallback', False))
+                cod_analise = None
+                if fluxo == 'movimentar':
+                    print('   🔷 Fluxo: movimentar (link genérico MovimentarProcesso)')
+                    cod_analise = None
+                else:
+                    # 'analisar': pega o codAnalise do link 'movimentar' da
+                    # própria movimentação (com os dados que a acompanham).
+                    if mov:
+                        mov_link = mov.get('movimentar', '')
+                        if mov_link and 'codAnalise=' in mov_link:
+                            cod_analise = mov_link.split('codAnalise=')[1].split('&')[0]
+                            print(f'   🔷 Fluxo: analisar (codAnalise={cod_analise})')
+                    if not cod_analise:
+                        if fluxo_fallback:
+                            print('   🔄 Fallback de fluxo: sem codAnalise — '
+                                  'caindo p/ movimentar (link genérico)')
+                        else:
+                            print('   ⚠️ Fluxo \'analisar\' sem codAnalise no link da '
+                                  'movimentação e sem \'fluxo_fallback\' — pulando '
+                                  'vistas ao MP (não há análise pendente).')
+                            continue
                 record = service.importar(
                     processo_numero=proc_num,
                     act_verb='vistas_mp',
@@ -541,6 +571,10 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                     tipo_documento=tipo_doc,
                     envia_mp=True,
                     cod_nucleo_mp=nucleo_mp,
+                    tipo_parecer_mp=str(tipo_parecer),
+                    prazo_mp=str(prazo_mp),
+                    promotor_mp=passo.get('promotor_mp'),
+                    cod_analise=cod_analise,
                 )
                 if ok:
                     print(f'   ✅ Vistas ao MP registrada')
@@ -619,19 +653,34 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                 from datetime import date
                 data = date.today().strftime('%d/%m/%Y')
                 servidor = getattr(user, 'full_name', 'Servidor')
-                texto = _gerar_html_certidao(proc_num, autores, vitima, servidor, data)
-                print(f'\n   ✅ Certidão gerada. Inserindo no Projudi...')
+
+                # Certidão NEGATIVA via DocumentTemplate (1 autor ou vários).
+                # O passo buscar_processo já garantiu que CADA autor retornou
+                # exatamente 1 processo — se algum tivesse >1, abortou antes.
+                texto, tpl_neg = _gerar_certidao_negativa(
+                    proc_num, autores, vitima, servidor, data)
+                if not texto:
+                    print('   ⚠️ Sem template de certidão negativa — usando geração antiga')
+                    texto = _gerar_html_certidao(proc_num, autores, vitima, servidor, data)
+                print(f'\n   ✅ Certidão gerada ({len(autores)} autor(es)). Inserindo no Projudi...')
 
                 # Cria record e executa Mov581 com inserção da certidão
                 service = MovimentacaoService(user)
                 cod_mov = str(passo.get('codigo_mov', '581'))
                 tipo_doc = passo.get('tipo_documento', 'CUMPRIMENTO')
-                obs_texto = passo.get('observacao') or f'Certidão Criminal - {proc_num}'
+                # Observação enumerando CADA autor (certidão negativa)
+                if len(autores) <= 1:
+                    obs_texto = (f'Certidão Criminal NEGATIVA - Autor do Fato: '
+                                 f'{autores[0]}')
+                else:
+                    enum = '; '.join(f'Autor do Fato {i}: {a}'
+                                     for i, a in enumerate(autores, 1))
+                    obs_texto = f'Certidão Criminal NEGATIVA - {enum}'
                 record = service.importar(
                     processo_numero=proc_num,
                     act_verb='certidao_criminal',
                     observacao=obs_texto,
-                    categoria='outro',
+                    categoria='certidao',
                     processo_cnj=proc_num,
                     url_processo=mov.get('link_processo', ''),
                     codigo_movimentacao=cod_mov,
@@ -646,6 +695,28 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                 )
                 if ok:
                     print(f'   ✅ Certidão criminal concluída')
+                    # Persiste o HTML gerado (espelha mandados/ofícios)
+                    if tpl_neg:
+                        try:
+                            from processes.models import GeneratedDocument, Process
+                            proc_db = Process.objects.filter(
+                                number__icontains=proc_num).first()
+                            if proc_db:
+                                ano = date.today().year
+                                seq = GeneratedDocument.proximo_numero(tpl_neg, year=ano)
+                                GeneratedDocument.objects.create(
+                                    tenant=user.tenant,
+                                    process=proc_db,
+                                    template=tpl_neg,
+                                    sequential_number=seq,
+                                    year=ano,
+                                    recipient_name=autores[0] if autores else '',
+                                    html_content=texto,
+                                    exported_to_projudi=True,
+                                )
+                                print(f'   💾 HTML salvo em GeneratedDocument #{seq}/{ano}')
+                        except Exception as e:
+                            print(f'   ⚠️ GeneratedDocument: {e}')
                 else:
                     print(f'   ⚠️ Falha na certidão criminal')
 
@@ -654,14 +725,37 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                 service = MovimentacaoService(user)
                 print('  ▶️ Executando intimação eletrônica...')
                 
-                # Tenta extrair cod_analise da movimentação (se veio da lista de análises)
-                # Default: usa MovimentarAnalise. Com "fluxo_processo": true no JSON,
-                # usa o link genérico (MovimentarProcesso) em vez do de analisar.
+                # ── FLUXO da página: 'analisar' (MovimentarAnalise/codAnalise)
+                # vs 'movimentar' (MovimentarProcesso, link genérico). ──
+                # Default 'analisar'. Só existe fallback de fluxo
+                # analisar → movimentar (quando não há codAnalise e
+                # 'fluxo_fallback' está true no JSON). NUNCA o contrário.
+                fluxo = str(passo.get('fluxo', 'analisar')).lower()
+                fluxo_fallback = bool(passo.get('fluxo_fallback', False))
+                fluxo_forced = bool(passo.get('fluxo_processo', False))  # compat
+
                 cod_analise = None
-                if not passo.get('fluxo_processo') and mov:
-                    mov_link = mov.get('movimentar', '')
-                    if mov_link and 'codAnalise=' in mov_link:
-                        cod_analise = mov_link.split('codAnalise=')[1].split('&')[0]
+                if fluxo == 'movimentar' or fluxo_forced:
+                    # Fluxo B (link genérico) — nunca procura analisar.
+                    print('   🔷 Fluxo: movimentar (link genérico MovimentarProcesso)')
+                    cod_analise = None
+                else:
+                    # 'analisar': tenta o codAnalise da lista de análises
+                    if mov:
+                        mov_link = mov.get('movimentar', '')
+                        if mov_link and 'codAnalise=' in mov_link:
+                            cod_analise = mov_link.split('codAnalise=')[1].split('&')[0]
+                    if not cod_analise:
+                        if fluxo_fallback:
+                            # Fallback de fluxo permitido: analisar → movimentar
+                            print('   🔄 Fallback de fluxo: sem codAnalise — '
+                                  'caindo p/ movimentar (link genérico)')
+                            cod_analise = None  # Fluxo B
+                        else:
+                            print('   ⚠️ Fluxo \'analisar\' sem codAnalise e sem '
+                                  '\'fluxo_fallback\' no JSON — pulando a intimação '
+                                  '(não há análise pendente p/ este processo).')
+                            continue
 
                 # Número Projudi INTERNO do processo (link_processo) — as páginas
                 # DadosProcesso/MovimentarProcesso exigem o interno, não o CNJ.
@@ -690,11 +784,47 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                     ),
                     prazo_intimacao=passo.get('prazo_intimacao', '3'),
                     fallback_polo=passo.get('fallback_polo'),
+                    motivo_intimacao=passo.get('motivo_intimacao', '3'),
+                    fallback_template_id=passo.get('fallback_template_id'),
+                    fallback_subtipo=passo.get('fallback_subtipo'),
+                    fallback_prazo=passo.get('fallback_prazo'),
                 )
                 if ok:
                     print('   ✅ Intimação eletrônica concluída')
                 else:
                     print('   ⚠️ Intimação eletrônica pode ter falhado')
+
+            elif tipo == 'intimacao_correio':
+                """Intimação PELOS CORREIOS (AR digital) — quando o FluxoDecisor
+                decide que o melhor meio é 'ar'. Mov581 + painel + Concluir e, em
+                seguida, expede o AR (2º clique: MovimentarProcessoAvancado →
+                select tipo COJE → 'expedir com ar digital' → assina)."""
+                service = MovimentacaoService(user)
+                print('  ▶️ Executando intimação pelos correios (AR digital)...')
+
+                proc_projudi = None
+                m_proc = re.search(r'numeroProcesso=(\d+)',
+                                   (mov or {}).get('link_processo', ''))
+                if m_proc:
+                    proc_projudi = m_proc.group(1)
+
+                ok = service.executar_com_intimacao_ar(
+                    processo_numero=proc_num,
+                    observacao=obs or texto[:500],
+                    codigo_mov=str(passo.get('codigo_mov', '581')),
+                    descricao_mov=passo.get('descricao_mov', 'Intimação'),
+                    proc_projudi=proc_projudi,
+                    prazo_intimacao=passo.get('prazo_intimacao', '3'),
+                    motivo_intimacao=passo.get('motivo_intimacao', '3'),
+                    tipo_intimacao=passo.get('tipo_intimacao', 'geral'),
+                    codigo_tipo_ar=passo.get('codigo_tipo_ar'),
+                    natureza_override=passo.get('natureza'),
+                    assinar_ar=passo.get('assinar_ar', True),
+                )
+                if ok:
+                    print('   ✅ Intimação pelos correios (AR digital) concluída')
+                else:
+                    print('   ⚠️ Intimação pelos correios pode ter falhado')
 
             elif tipo in ('mandado', 'oficio'):
                 if not template_id:
@@ -838,27 +968,58 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                               or (m_prazo.group(1) if m_prazo else None)
                               or '')
 
-                for part in partes:
+                eh_mandado = tipo == 'mandado' or tmpl.template_type == 'mandado'
+                subtipo_val = str(subtipo or '11')
+
+                # Polo GERAL (autores/res/todos) → 1 mandado ÚNICO com TODOS
+                # os destinatários no mesmo cumprimento (nome + Add Cumprimento
+                # pra cada). Polo específico (reu_especifico/autor_especifico)
+                # → 1 mandado por parte, cada um com seu destinatário.
+                polos_raw = passo.get('polo', 'reu_especifico')
+                polo_geral = _eh_polo_geral(polos_raw)
+
+                if eh_mandado and polo_geral and len(partes) > 1:
+                    # ── 1 mandado cobrindo TODOS os destinatários ──
+                    nomes_dest = [p.name for p in partes if p.name]
+                    part_geral = SimpleNamespace(
+                        name=' / '.join(nomes_dest), address='', phone='', email='',
+                        cpf_cnpj='', rg='', nome_pai='', nome_mae='',
+                        _subtipo_mandado=subtipo_val)
                     rag_ctx = rag or SimpleNamespace(
                         despacho_ato='', despacho_observacao='',
                         despacho_data='', despacho_autor='MARTINHO FERRAZ DA NOBREGA JUNIOR')
-                    html_doc = _gerar_html(proc, part, rag_ctx, tmpl, dados_ata=dados_ata,
-                                           prazo_dias=prazo_dias)
-                    if not html_doc:
-                        continue
-
-                    if tipo == 'mandado' or tmpl.template_type == 'mandado':
-                        subtipo_val = subtipo or '11'
-                        part._subtipo_mandado = str(subtipo_val)
+                    html_doc = _gerar_html(proc, part_geral, rag_ctx, tmpl,
+                                           dados_ata=dados_ata, prazo_dias=prazo_dias)
+                    if html_doc:
                         sucesso = _expedir_mandado(
-                            proc, session, cookies_dict, html_doc, part, subtipo=subtipo_val)
-                    else:
-                        sucesso = _expedir_oficio(proc, session, cookies_dict, html_doc, part, tmpl)
+                            proc, session, cookies_dict, html_doc, part_geral,
+                            subtipo=subtipo_val,
+                            obs_parte=passo.get('parte_na_observacao'),
+                            destinatarios=nomes_dest)
+                        print(f'{tmpl.name} — {len(nomes_dest)} destinatário(s): {" / ".join(nomes_dest)}'
+                              if sucesso else f'{tmpl.name} falhou (multi-destinatário)')
+                else:
+                    for part in partes:
+                        rag_ctx = rag or SimpleNamespace(
+                            despacho_ato='', despacho_observacao='',
+                            despacho_data='', despacho_autor='MARTINHO FERRAZ DA NOBREGA JUNIOR')
+                        html_doc = _gerar_html(proc, part, rag_ctx, tmpl, dados_ata=dados_ata,
+                                               prazo_dias=prazo_dias)
+                        if not html_doc:
+                            continue
 
-                    if sucesso:
-                        print(f'{tmpl.name} — {part.name}')
-                    else:
-                        print(f'{tmpl.name} falhou — {part.name}')
+                        if eh_mandado:
+                            part._subtipo_mandado = subtipo_val
+                            sucesso = _expedir_mandado(
+                                proc, session, cookies_dict, html_doc, part, subtipo=subtipo_val,
+                                obs_parte=passo.get('parte_na_observacao'))
+                        else:
+                            sucesso = _expedir_oficio(proc, session, cookies_dict, html_doc, part, tmpl)
+
+                        if sucesso:
+                            print(f'{tmpl.name} — {part.name}')
+                        else:
+                            print(f'{tmpl.name} falhou — {part.name}')
 
             else:
                 print(f'tipo desconhecido: {tipo}')
@@ -1055,6 +1216,102 @@ def _gerar_html_certidao(proc_num, autores, vitima, servidor, data):
     {proc_num}
   </div>
 </div>'''
+
+
+def _eh_polo_geral(polos):
+    """True se o polo da sequência for GERAL (todos os destinatários no
+    mesmo cumprimento): autores/res/todos/etc. False p/ específico
+    (reu_especifico/autor_especifico → 1 mandado por parte)."""
+    GERAL = {'todos', 'ambos', 'todas', 'todas_as_partes',
+             'autores_e_res', 'autoreseres',
+             'autores', 'autoras', 'promoventes', 'exequentes',
+             'res', 'rés', 'reus', 'réus', 'executados', 'promovidos'}
+    if isinstance(polos, str):
+        polos = [polos]
+    return any(str(p).lower().strip() in GERAL for p in (polos or []))
+
+
+def _montar_obs_expedicao(obs, desc_padrao, parte_nome, parte_obs):
+    """Monta a observação do passo solicitar_expedicao.
+
+    parte_obs controla o nome da parte na observação:
+      false/'nenhum' (padrão) → sem nome
+      true/'primeiro'/'parte' → só a 1ª parte resolvida
+      'todas'/'all'           → todas as partes resolvidas
+    Obs.: o nome nunca leva acento aqui (Projudi latin-1).
+    """
+    obs_solic = obs or f'Solicitada Expedicao - {desc_padrao}'
+    if parte_nome and parte_obs:
+        nomes_part = [n.strip() for n in parte_nome.split(' / ') if n.strip()]
+        modo = str(parte_obs).lower().strip()
+        if modo in ('todas', 'todos', 'all'):
+            sufixo_obs = ' / '.join(nomes_part)
+        else:  # true, parte, primeiro, 1, ...
+            sufixo_obs = nomes_part[0] if nomes_part else ''
+        if sufixo_obs:
+            obs_solic = f'{obs_solic} - {sufixo_obs[:120]}'
+    return obs_solic
+
+
+def _montar_obs_mandado(obs_parte, nome_parte):
+    """Observação da confecção do mandado: sem acentos; nome da parte só
+    se obs_parte for truthy (JSON parte_na_observacao)."""
+    obs = 'Solicitada Expedicao de Mandado'
+    if obs_parte and nome_parte:
+        obs = f'{obs} - {nome_parte[:60]}'
+    return obs
+
+
+def _gerar_certidao_negativa(proc_num, autores, vitima, servidor, data):
+    """Gera a Certidão Criminal NEGATIVA a partir dos DocumentTemplate
+    'Certidão Criminal Negativa (1 Autor)' ou '(Vários Autores)'.
+
+    - 1 autor → template singular ({{ autor }})
+    - N autores → template plural com autores_lista (HTML enumerado:
+      '1. NOME<br>2. NOME2') e autores_texto (texto corrido: 'A e B').
+
+    Retorna (html, template) ou (None, None) se o template não existir
+    (aí o chamador usa _gerar_html_certidao como fallback).
+    """
+    from processes.models import DocumentTemplate
+    um = len(autores) <= 1
+    nome_tpl = ('Certidão Criminal Negativa (1 Autor)' if um
+                else 'Certidão Criminal Negativa (Vários Autores)')
+    tpl = DocumentTemplate.objects.filter(name=nome_tpl, active=True).first()
+    if not tpl:
+        print(f'   ⚠️ Template "{nome_tpl}" não encontrado — fallback hardcoded')
+        return None, None
+    autores_limpos = [a.strip() for a in autores if a.strip()]
+    if um:
+        ctx = {
+            'processo': proc_num,
+            'autor': autores_limpos[0] if autores_limpos else '',
+            'vitima': vitima,
+            'servidor': servidor,
+            'data': data,
+        }
+    else:
+        lista_html = '<br>'.join(
+            f'{i}. {a}' for i, a in enumerate(autores_limpos, 1))
+        if len(autores_limpos) == 2:
+            texto_autores = f'{autores_limpos[0]} e {autores_limpos[1]}'
+        else:
+            texto_autores = ', '.join(autores_limpos[:-1]) + \
+                f' e {autores_limpos[-1]}'
+        ctx = {
+            'processo': proc_num,
+            'autores_lista': lista_html,
+            'lista_autores': texto_autores,
+            'vitima': vitima,
+            'servidor': servidor,
+            'data': data,
+        }
+    try:
+        html = Template(tpl.html_template).render(Context(ctx))
+        return html, tpl
+    except Exception as e:
+        print(f'   ❌ Erro renderizando certidão negativa: {e}')
+        return None, None
 
 
 def _extrair_dados_ata(session, proc, mov=None):
@@ -1472,7 +1729,7 @@ def _gerar_html(proc, part, rag, template, dados_ata=None, prazo_dias=None):
         return None
 
 
-def _expedir_mandado(proc, session, cookies_dict, html_mandado, part, subtipo='11'):
+def _expedir_mandado(proc, session, cookies_dict, html_mandado, part, subtipo='11', obs_parte=None, destinatarios=None):
     """Expede mandado via Playwright."""
     from playwright.sync_api import sync_playwright
 
@@ -1571,14 +1828,17 @@ def _expedir_mandado(proc, session, cookies_dict, html_mandado, part, subtipo='1
                 var camp = document.getElementById('seqCategoriaMovimentacao');
                 if (camp) camp.value = '581';
                 var desc = document.getElementById('descCategoriaMovimentacao');
-                if (desc) desc.value = 'Solicitada a Expedição de Mandado';
+                if (desc) desc.value = 'Solicitada a Expedicao de Mandado';
                 var tr = document.getElementById('trTipoDocumento');
                 if (tr) tr.style.display = 'table-row';
             }''')
             time.sleep(1)
             page.select_option('select[name="codTipoDocumento"]', '51')
             time.sleep(1)
-            page.fill('#observacao', f'Solicitada Expedicao de Mandado - {nome_parte[:30]}')
+            # Observação: sem acentos (Projudi latin-1). Nome da parte na obs
+            # só se JSON parte_na_observacao for true (default: sem nome).
+            obs_mandado = _montar_obs_mandado(obs_parte, part.name if part else '')
+            page.fill('#observacao', obs_mandado)
             time.sleep(0.5)
             page.locator("a:text('Cumprimento')").first.click()
             time.sleep(1)
@@ -1596,8 +1856,14 @@ def _expedir_mandado(proc, session, cookies_dict, html_mandado, part, subtipo='1
             except Exception:
                 print(f'   ⚠️ Subtipo não selecionado')
 
-            nome_dest = part.name if part else ''
-            if nome_dest:
+            # Destinatários: 1+ (polo GERAL seleciona TODOS no mesmo
+            # cumprimento; polo específico seleciona só o afunilado).
+            # Projudi permite adicionar vários: clica no nome + Add Cumprimento.
+            nomes_dest = destinatarios or ([part.name] if part and part.name else [])
+            adicionados = 0
+            for nome_dest in nomes_dest:
+                if not nome_dest or not nome_dest.strip():
+                    continue
                 try:
                     opt = page.locator(f'#codigoDestinatario option:text("{nome_dest}")').first
                     if opt.count():
@@ -1605,16 +1871,19 @@ def _expedir_mandado(proc, session, cookies_dict, html_mandado, part, subtipo='1
                         page.select_option('#codigoDestinatario', val)
                         print(f'   ✅ Destinatário: {nome_dest} ({val})')
                     else:
-                        first_opt = page.locator('#codigoDestinatario option').first
-                        if first_opt.count():
-                            val = first_opt.get_attribute('value')
-                            page.select_option('#codigoDestinatario', val)
-                            print(f'   ✅ Destinatário: primeiro ({val})')
+                        # NÃO cai no "primeiro" (evita destinatário errado)
+                        print(f'   ⚠️ Destinatário não achado no dropdown: {nome_dest}')
+                        continue
+                    page.click('#btnAddCumprimento')
+                    time.sleep(1.5)
+                    adicionados += 1
+                    print(f'   ✅ Cumprimento adicionado ({adicionados})')
                 except Exception as e:
-                    print(f'   ⚠️ Destinatário fallback: {e}')
-                page.click('#btnAddCumprimento')
-                time.sleep(1.5)
-                print(f'   ✅ Cumprimento adicionado')
+                    print(f'   ⚠️ Destinatário: {e}')
+            if not adicionados:
+                print('   ❌ Nenhum destinatário adicionado — abortando mandado')
+                browser.close()
+                return False
             page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
             time.sleep(0.5)
             page.click('#Concluir')
@@ -2113,6 +2382,70 @@ def expedir_processo_especifico(proc_num: str):
     
     # Busca RAGExamples do processo
     rags = RAGExample.objects.filter(process=proc, active=True)
+    mov_alvo = None  # mov da varredura (com link 'movimentar'/codAnalise)
+    if not rags:
+        # ── Fallback: matching por similaridade (SÓ por texto, ignora FK) —
+        # igual ao rastreamento em lote. Varre as movimentações pendentes,
+        # acha a do processo, baixa o link_documento (texto real) e casa
+        # com despacho_ato/observacao >=70%. ──
+        print(f'⚠️ Sem RAG por FK — tentando matching por similaridade...')
+        try:
+            from processes.movimentacoes_service import buscar_cumprimentos_similares
+            from processes.movimentacoes_service import normalizar_texto
+            from projudi_client import ProjudiClient
+            # 1. Varre as movimentações pendentes (como o lote)
+            client = ProjudiClient()
+            client.session = session
+            client.cookies = cookies_dict
+            pages = client.obter_paginas_finais_movimentacoes(quantidade=3)
+            mov_alvo = None
+            for p in pages:
+                data = {'pagina': str(p), 'loginJuiz': ''}
+                rp = session.post(client.URL_MOVIMENTACOES, data=data, timeout=15)
+                if len(rp.text) <= 1000:
+                    continue
+                sp = BeautifulSoup(rp.text, 'html.parser')
+                for m in client.extrair_links_movimentacoes(sp):
+                    if proc_num in m.get('processo', ''):
+                        mov_alvo = m
+                        break
+                if mov_alvo:
+                    break
+            # 2. Baixa o texto real do documento da movimentação
+            texto = ''
+            if mov_alvo:
+                doc_url = mov_alvo.get('link_documento', '')
+                if doc_url:
+                    if not doc_url.startswith('http'):
+                        doc_url = urljoin('https://projudi.tjba.jus.br/projudi/', doc_url)
+                    r_doc = session.get(doc_url, timeout=30)
+                    if r_doc.status_code == 200:
+                        texto = BeautifulSoup(r_doc.text, 'html.parser').get_text(' ', strip=True)
+            if len(texto) < 50:
+                texto = getattr(proc, 'number', '')
+                print(f'   ⚠️ Sem documento com texto — usando número do processo')
+            print(f'   📄 Movimentação: {texto[:120]}')
+            # 3. Matching por similaridade (igual ao lote)
+            similares = buscar_cumprimentos_similares(texto, top_k=30) or []
+            melhor = None
+            palavras_texto = set(normalizar_texto(texto).split())
+            for s in similares:
+                rag_cand = RAGExample.objects.get(id=s['id'])
+                if not rag_cand.active:
+                    continue
+                texto_rag = normalizar_texto(
+                    rag_cand.despacho_ato + ' ' + (rag_cand.despacho_observacao or ''))
+                palavras_rag = set(texto_rag.split())
+                base = min(len(palavras_texto), len(palavras_rag))
+                if base > 0 and len(palavras_texto & palavras_rag) / base >= 0.70:
+                    melhor = rag_cand
+                    break
+            if melhor:
+                print(f'   ✅ Match por similaridade: RAG #{melhor.id} '
+                      f'({melhor.despacho_ato[:60]})')
+                rags = [melhor]
+        except Exception as e:
+            print(f'   ⚠️ Matching por similaridade: {e}')
     if not rags:
         print(f'⚠️ Nenhum RAGExample ativo para {proc.number}.')
         print('   Tente rastrear primeiro (sem --processo).')
@@ -2122,9 +2455,16 @@ def expedir_processo_especifico(proc_num: str):
         print(f'\n📋 RAGExample #{rag.id}: {rag.despacho_ato[:80]}')
         if rag.sequencia_cumprimento:
             print(f'   Sequência: {len(rag.sequencia_cumprimento)} passo(s)')
+            # Usa o mov REAL da varredura (com o link 'movimentar' que tem o
+            # codAnalise → fluxo analisar tira da fila). Só cai no mínimo
+            # se a varredura não tiver achado o processo.
+            mov_uso = mov_alvo or {
+                'processo': proc_num,
+                'link_processo': getattr(proc, 'projudi_url', ''),
+            }
             _executar_sequencia_rapido(
                 rag.sequencia_cumprimento, 
-                {'processo': proc_num, 'link_processo': getattr(proc, 'projudi_url', '')},
+                mov_uso,
                 proc_num, rag.despacho_observacao or rag.despacho_ato,
                 session, cookies_dict, user, rag
             )

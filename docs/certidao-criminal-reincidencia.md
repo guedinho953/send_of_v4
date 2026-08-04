@@ -53,24 +53,65 @@ Ordem dos passos (PASSO 3 → certidão, depois movimentação):
 2. **Assinar** (após o Submeter):
    - Clique automático no Assinar (`img[src*="bot-assinar"]`) — funciona
      quando a assinatura está SALVA no Projudi (só precisa clicar).
-   - Se aparecer campo `input[name="senha"]` → modo manual: scroll
-     automático até o campo (`scrollIntoView` + `scrollTo`), screenshot em
-     `/tmp/certidao_assinatura.png`, espera até 3 min.
-   - ⚠️ O scroll MANUAL do usuário no Firefox do Playwright não é
-     confiável — o script sempre rola via JS.
-3. **Detectar retorno ao formulário por CONTEÚDO** (`!!document.getElementById(
-   'seqCategoriaMovimentacao')`), **nunca por URL** — o Submeter do
-   DigitarTexto re-renderiza a MESMA página como formulário de movimentação
-   (URL continua `DigitarTexto`). Re-navegar para MovimentarProcesso baseado
-   na URL PERDE o estado (581, obs, certidão anexada).
-4. **Movimentar**: injetar `seqCategoriaMovimentacao=581` → `btnBuscaMovimentacao`
-   → selecionar no grid → **Tipo Documento = Certidão (37)** → observação →
-   ativar Cumprimento → (localizador se houver) → **Concluir** (clique com
-   coordenadas + fallback submit JS com `Concluir.x/y`).
+   - Se aparecer campo `input[name="senha"]` → preenche automaticamente
+     com `user.projudi_password` e clica em Assinar de novo (2 cliques).
+   - Se `projudi_password` vazio → modo manual: scroll automático,
+     screenshot em `/tmp/certidao_assinatura.png`, espera até 3 min.
+
+### Diálogo de assinatura fica num IFRAME (`popupFrame`)
+
+O `#senha` e o botão Assinar (`<img src=".../botoes/bot-assinar.gif">`) NÃO
+estão no frame principal — estão no iframe **`popupFrame`**, cuja URL é
+`/projudi/acoes/UploadDocumento?docOnline=true&codDescricao=37&descricao=`.
+
+Mapa observado no momento exato da assinatura (2026-08):
+
+```
+🖼️ [0] name=''           url=/projudi/acoes/DigitarTexto?...  ← ASSINAR (1º clique, frame principal)
+🖼️ [1] name='popupFrame' url=/projudi/acoes/UploadDocumento?...codDescricao=37  ← SENHA + ASSINAR (diálogo)
+```
+
+Consequências para a automação (`movimentacao_service.py`):
+
+1. O `#senha` **só aparece DEPOIS** do 1º clique em Assinar — nada de
+   checar `count()` uma única vez (dava 0 e pulava o preenchimento).
+   Usar `_procurar_campo_senha()` que espera até 10s e procura em
+   **todos os frames** (usando `frame.locator(e)` via `page.frames`).
+2. O botão de confirmação está **no mesmo frame da senha**. Sempre
+   procurá-lo `popupFrame`/frame que tem `#senha` (alvo exato = menos
+   varredura genérica), com fallback para varrer todos os frames.
+   Helper: `_clicar_botao_assinar()`.
+3. `_logar_frames(page)` descreve todos os frames no momento da assinatura
+   (usado para diagnóstico e para manter esta documentação).
 
 ⚠️ **NUNCA inserir a certidão duas vezes** — o bloco duplicado de inserção
 foi desativado (`if certidao_html and False`). A certidão entra UMA vez
 (PASSO 3), senão o usuário é obrigado a assinar 2x e o estado se perde.
+
+## Certidão Criminal NEGATIVA (2026-08) — templates no admin
+
+O fluxo agora gera a certidão a partir de **DocumentTemplate** (tipo `certidao`),
+criados por `criar_templates_certidao.py`:
+
+| Template | id | Quando |
+|---|---|---|
+| `Certidão Criminal Negativa (1 Autor)` | 9 | ata com 1 autor |
+| `Certidão Criminal Negativa (Vários Autores)` | 10 | ata com N autores — **todos** retornaram exatamente 1 processo na busca |
+
+- Layout igual ao Ofício CIAP, com **brasão embutido** (`brasaoPetroBranco.jpg`),
+  corpo parametrizado: `{{ processo }}`, `{{ autor }}` / `{{ autores_lista }}` +
+  `{{ autores_texto }}`, `{{ vitima }}`, `{{ servidor }}`, `{{ data }}`.
+- **Regra multi-autor:** o passo `buscar_processo` busca **cada** autor
+  individualmente; se QUALQUER um retornar ≠1 processo, a sequência é
+  abortada (nada é feito — análise humana). Só gera a certidão se TODOS
+  retornarem exatamente 1 (todos negativos).
+- **Enumeração:** a certidão lista cada autor ("1. NOME, 2. NOME2") e a
+  **observação da Mov581** também: `Certidão Criminal NEGATIVA - Autor do
+  Fato 1: X; Autor do Fato 2: Y; ...`.
+- **Persistência:** o HTML final é salvo em `GeneratedDocument` (como
+  mandados/ofícios) quando a execução conclui.
+- Fallback: se o template não existir, usa a geração antiga
+  (`_gerar_html_certidao`).
 
 ## HTML da certidão (`_gerar_html_certidao()` em `expedir_rapido.py`)
 

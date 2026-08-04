@@ -1,0 +1,212 @@
+{
+  "COMO_USAR": "Este arquivo é a REFERÊNCIA COMPLETA de todos os campos possíveis no JSON da sequencia_cumprimento (campo 'Sequência de Cumprimento' de um RAGExample no Admin). Cada bloco abaixo mostra UM passo com o MÁXIMO de campos que o tipo aceita. Copie o que precisar; campos omitidos usam o default documentado. Ordem do array = ordem de execução. Sequência vazia [] = abstenção (não expede nada).",
+
+  "CAMPOS_COMUNS_A_TODOS": {
+    "tipo": "obrigatório — um dos: movimentacao | intimacao_eletronica | intimacao_correio | solicitar_expedicao | mandado | oficio | localizar | vistas_mp | certidao_criminal | buscar_processo",
+    "observacao": "texto que vai no campo #observacao do Projudi (de preferência SEM acentos — latin-1)",
+    "codigo_mov": "581 (grid + seleção de tipo) ou 11383 (direto, sem grid). Default 581",
+    "descricao_mov": "descrição que aparece no Projudi (varia por tipo)",
+    "localizador": "código específico do localizador (codLocalizador). Default ''",
+    "tipo_localizador": "código do TIPO de localizador (codTipoLocalizador). Ex 22614. Default ''"
+  },
+
+  "TIPOS_DE_LOCALIZADOR": {
+    "explicacao": "Valores para campo tipo_localizador (quando usar passo localizar ou em mov/intimações)",
+    "22614": "SISBAJUD",
+    "11916": "RENAJUD",
+    "24012": "SERASAJUD",
+    "22644": "SNIPER",
+    "9376": "PESQUISA DE ENDEREÇO",
+    "9205": "AGUARDAR CUMPRIR TRANSAÇÃO",
+    "30586": "AGUARDAR DISTRIBUIÇÃO",
+    "14396": "AGUARDAR RETORNO DE AR",
+    "15286": "AGUARDAR DECURSO DO PRAZO",
+    "10248": "CERTIFICAÇÃO TRANSITO EM JULGADO",
+    "5624": "SEM LOCALIZADOR"
+  },
+
+  "PASSOS_EXEMPLO": {
+
+    "movimentacao": {
+      "_uso": "Mov581 genérico (sem destinatário). Para certidões, arquivamento, certificações.",
+      "tipo": "movimentacao",
+      "codigo_mov": "581",
+      "descricao_mov": "Cumprimento de Decisão",
+      "observacao": "Certifique-se a tempestividade do recurso.",
+      "localizador": "",
+      "tipo_localizador": "10248"
+    },
+
+    "intimacao_eletronica": {
+      "_uso": "Intimação eletrônica via DJEN (painel Autoras/Rés). TEM 3 camadas de fallback: fluxo, canal (mandado), e expedição.",
+      "tipo": "intimacao_eletronica",
+      "fluxo": "analisar",
+      "fluxo_fallback": true,
+      "fluxo_processo": false,
+      "codigo_mov": "581",
+      "descricao_mov": "Intimação",
+      "observacao": "Intimem-se as partes para ciência da Decisão",
+      "motivo_intimacao": "3",
+      "prazo_intimacao": "3",
+      "principal": "1",
+      "fallback": "mandado",
+      "fallback_mandado": true,
+      "fallback_template_id": 8,
+      "fallback_subtipo": "11",
+      "fallback_prazo": "15",
+      "fallback_uf": "BA",
+      "fallback_polo": "reu_especifico",
+      "fallback_mov": "Solicitada a Expedição de Mandado",
+      "mandado_explicito": false
+    },
+
+    "intimacao_correio": {
+      "_uso": "Intimação PELOS CORREIOS com AR digital (2º clique: expedir com ar digital). Usar quando o FluxoDecisor decide canal 'ar'.",
+      "tipo": "intimacao_correio",
+      "fluxo": "movimentar",
+      "codigo_mov": "581",
+      "descricao_mov": "Intimação",
+      "observacao": "Intimem-se as partes pelos Correios (AR digital)",
+      "motivo_intimacao": "3",
+      "prazo_intimacao": "3",
+      "tipo_intimacao": "geral",
+      "natureza": "criminal",
+      "codigo_tipo_ar": null,
+      "assinar_ar": true
+    },
+
+    "solicitar_expedicao": {
+      "_uso": "Só Mov581: solicita a expedição do mandado, SEM confeccionar. Não seleciona tipoCumprimento/FCKeditor.",
+      "tipo": "solicitar_expedicao",
+      "codigo_mov": "581",
+      "descricao_mov": "Solicitada a Expedição de Mandado",
+      "observacao": "Solicitada Expedicao de Mandado",
+      "polo": "reu_especifico",
+      "parte_na_observacao": true,
+      "localizador": "",
+      "tipo_localizador": ""
+    },
+
+    "mandado": {
+      "_uso": "Expede o mandado COMPLETO: tipoCumprimento=4 + subtipo + destinatário + CumprimentoCartorio → 'Redigir sem AR' → FCKeditor → Submeter → Registrar.",
+      "tipo": "mandado",
+      "template_id": 8,
+      "subtipo": "11",
+      "polo": "reu_especifico",
+      "prazo": "15",
+      "observacao": "Solicitada Expedicao de Mandado",
+      "parte_na_observacao": false,
+      "codigo_mov": "581",
+      "descricao_mov": "Solicitada a Expedição de Mandado"
+    },
+
+    "oficio": {
+      "_uso": "Expede ofício completo (CumprimentoCartorio + FCKeditor). template_type do template decide RPV/CIAP/comum.",
+      "tipo": "oficio",
+      "template_id": 7,
+      "polo": "reu_especifico",
+      "observacao": "Solicitada Expedicao de Oficio",
+      "parte_na_observacao": false,
+      "codigo_mov": "581"
+    },
+
+    "localizar": {
+      "_uso": "Só altera o localizador do processo (movimentação simples, via requests).",
+      "tipo": "localizar",
+      "codigo_mov": "11383",
+      "descricao_mov": "TD - Tipo Documental",
+      "tipo_localizador": "22614",
+      "localizador": "",
+      "tipo_documento": "CUMPRIMENTO"
+    },
+
+    "vistas_mp": {
+      "_uso": "Vistas ao Ministério Público (Mov581 + enviaMP).",
+      "tipo": "vistas_mp",
+      "codigo_mov": "11383",
+      "descricao_mov": "TD - Tipo Documental",
+      "observacao": "Vistas ao Ministério Público",
+      "cod_nucleo_mp": "31",
+      "tipo_documento": "VISTA AO MINISTÉRIO PÚBLICO",
+      "tipo_localizador": "",
+      "localizador": ""
+    },
+
+    "certidao_criminal": {
+      "_uso": "Certidão criminal art. 76 (DigitarTexto). Autores/vítima extraídos da ata — NÃO hardcoded.",
+      "tipo": "certidao_criminal",
+      "codigo_mov": "581",
+      "descricao_mov": "Certidão",
+      "tipo_documento": "Certidão",
+      "observacao": "Certidão Criminal NEGATIVA - Autor do Fato",
+      "localizador": "",
+      "tipo_localizador": ""
+    },
+
+    "buscar_processo": {
+      "_uso": "Só busca processo por nome da parte (sem movimentar). codVara=-1 busca em TODAS as varas.",
+      "tipo": "buscar_processo",
+      "cod_natureza": "2",
+      "cod_vara": "-1",
+      "nomes": []
+    }
+  },
+
+  "TEMPLATE_IDS": {
+    "mandados": { "8": "Mandado de Citação, Intimação, Penhora e Avaliação", "6": "Mandado de Intimação (Transação Penal)", "2": "Mandado (genérico)" },
+    "oficios": { "5": "Ofício CIAP (Transação Penal)", "7": "Ofício RPV" },
+    "certidões": { "9": "Certidão negativa (1 autor)", "10": "Certidão negativa (vários autores)" }
+  },
+
+  "SUBTIPOS_CUMPRIMENTO_MANDADO": {
+    "explicacao": "Valores para 'subtipo' (subtipoCumprimento, no passo mandado ou fallback_subtipo). Só existe DEPOIS de tipoCumprimento=4",
+    "1": "Citação e Intimação para Audiência",
+    "2": "Intimação para Audiência",
+    "3": "Intimação",
+    "4": "Citação",
+    "5": "Intimação Despacho",
+    "6": "Intimação de Sentença",
+    "7": "Busca e Apreensão",
+    "8": "Citação e/ou Intimação com Liminar",
+    "9": "Mandado genérico",
+    "10": "Alvará de soltura",
+    "11": "Citação/Penhora/Avaliação/Intimação/Depósito (DEFAULT)",
+    "12": "Ofício",
+    "24": "Notificação",
+    "26": "Penhora e/ou avaliação",
+    "27": "Reintegração de Posse"
+  },
+
+  "CÓDIGOS_PRAZO_PAINEL": {
+    "explicacao": "Valores para 'prazo_intimacao' / 'motivo_intimacao' no painel Autoras/Rés",
+    "prazo": { "2": "05 dias", "3": "10 dias (DEFAULT)", "4": "15 dias", "7": "30 dias", "29": "6 meses" },
+    "motivo": { "3": "conhecimento/ciência (DEFAULT)" }
+  },
+
+  "MODELOS_COJE_AR": {
+    "explicacao": "Valores para 'tipo_intimacao' x 'natureza' no passo intimacao_correio (códigos do select name='tipo')",
+    "civel_geral": { "codigo": "12066", "modelo": "INTIMAÇÃO GERAL - CÍVEL - MODELO COJE" },
+    "criminal_geral": { "codigo": "14032", "modelo": "INTIMAÇÃO GERAL - CRIMINAL - MODELO COJE" },
+    "civel_audiencia": { "codigo": "56061", "modelo": "INTIMAÇÃO PARA AUDIÊNCIA CÍVEL TELEPRESENCIAL" },
+    "criminal_audiencia": { "codigo": "55794", "modelo": "INTIMAÇÃO PARA AUDIÊNCIA CRIMINAL TELEPRESENCIAL" },
+    "override": "campo 'codigo_tipo_ar' força um código direto, ignorando a tabela acima"
+  },
+
+  "POLOS_DESTINATARIO": {
+    "explicacao": "Valores para 'polo' (mandado/solicitar_expedicao) e 'fallback_polo'. Definem QUEM é o destinatário NO #codigoDestinatario. NUNCA use nome de parte solto no JSON",
+    "reu_especifico": "DEFAULT — busca réu específico pelo histórico (ou todos os réus)",
+    "autor_especifico": "busca autor(es) específico(s) pelo histórico",
+    "autores": "TODOS os autores/promoventes",
+    "res": "TODOS os réus",
+    "todos": "TODAS as partes",
+    "lista": "ex: [\"autor_especifico\", \"reu_especifico\"] — os DOIS polos. Vários nomes → TODOS como destinatário"
+  },
+
+  "EXEMPLO_COMPLETO_MULTIPASSOS": [
+    { "tipo": "buscar_processo", "cod_natureza": "2", "cod_vara": "-1", "nomes": [] },
+    { "tipo": "certidao_criminal", "codigo_mov": "581", "tipo_documento": "Certidão", "observacao": "Certidão Criminal NEGATIVA - Autor do Fato" },
+    { "tipo": "intimacao_eletronica", "fluxo": "analisar", "fluxo_fallback": true, "descricao_mov": "Intimação", "observacao": "Intimem-se as partes para ciência", "fallback": "mandado", "fallback_template_id": 8, "fallback_subtipo": "11" },
+    { "tipo": "intimacao_correio", "tipo_intimacao": "geral", "natureza": "criminal", "assinar_ar": true, "observacao": "Intimação pelos Correios (AR digital)" },
+    { "tipo": "mandado", "template_id": 8, "subtipo": "3", "polo": "reu_especifico", "prazo": "15", "observacao": "Solicitada Expedicao de Mandado - Intimação" }
+  ]
+}

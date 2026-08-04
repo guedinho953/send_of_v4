@@ -301,9 +301,20 @@ class ProcessoParser:
         if "trânsito em julgado" in texto:
             dados["transito_julgado"] = True
 
+        # ── AR que NÃO deu certo → fluxo de queda (mandado / precatória) ──
+        if dados["meio_comunicacao"] == "ar" and any(
+            x in texto for x in [
+                "negativo", "devolvid", "não localizado", "nao localizado",
+                "não procurado", "nao procurado", "mudou-se", "mudou se",
+                "recusad", "endereço insuficiente", "endereco insuficiente",
+                "insuficiente", "não recebido", "nao recebido", "ausente",
+            ]
+        ):
+            dados["situacao_comunicacao"] = "ar_falho"
+
         return dados
     
-    
+
     def extrair_parte_movimentacao(self, texto, partes=None):
         match = re.search(
             r'(p/|para)\s+(advgs\.\s+de\s+)?(.*?)(\*|$|\))',
@@ -773,11 +784,23 @@ class ProcessoParser:
                     "img",src=lambda x: x and "favicon-domicilio-judicial-eletronico.png" in x)
                     )
                 
-                # texto_adv = tds[4].get_text(" ", strip=True)
-
-                # tem_advogado = bool(texto_adv)
-                
-                tem_advogado = "Nenhum advogado" not in tds[4].get_text()
+                # Advogados: coluna tds[4] — nomes (cada um em linha própria no
+                # HTML). 'Nenhum advogado' → lista vazia. Usa stripped_strings
+                # pra captar cada nome mesmo separado por <br>.
+                advogados = []
+                tem_advogado = False
+                if len(tds) > 4:
+                    for bloco_cru in tds[4].stripped_strings:
+                        for sub in re.split(r'[,;]+', bloco_cru):
+                            sub = sub.strip()
+                            if not sub or sub.lower().startswith('nenhum'):
+                                continue
+                            # Remove o nº OAB do final (e hífen solto), mantém o nome
+                            nome_adv = re.sub(r'\s*OAB[^,;]*$', '', sub, flags=re.I)
+                            nome_adv = nome_adv.rstrip('-').strip()
+                            if nome_adv and nome_adv not in advogados:
+                                advogados.append(nome_adv)
+                    tem_advogado = bool(advogados)
 
                 email = None
                 telefone = None
@@ -826,6 +849,8 @@ class ProcessoParser:
                     "recebe_intimacao_email": recebe_email,
                     "domicilio_cnj": domicilio_cnj,
                     "tem_advogado": tem_advogado,
+                    "advogado": advogados[0] if advogados else '',
+                    "advogados": advogados,
                     "email": email,
                     "tel": telefone,
                     **endereco_dict
@@ -928,11 +953,18 @@ class ProcessoParser:
         elif "aviso de recebimento" in texto:
             dados["meio_comunicacao"] = "ar"
 
-        # if "trânsito em julgado" in texto:
-        #     dados["transito_julgado"] = True
+        # ── AR que NÃO deu certo → fluxo de queda (mandado / precatória) ──
+        if dados["meio_comunicacao"] == "ar" and any(
+            x in texto for x in [
+                "negativo", "devolvid", "não localizado", "nao localizado",
+                "não procurado", "nao procurado", "mudou-se", "mudou se",
+                "recusad", "endereço insuficiente", "endereco insuficiente",
+                "insuficiente", "não recebido", "nao recebido", "ausente",
+            ]
+        ):
+            dados["situacao_comunicacao"] = "ar_falho"
 
         return dados
-    
     
     def extrair_parte_movimentacao(self, texto, partes=None):
         match = re.search(

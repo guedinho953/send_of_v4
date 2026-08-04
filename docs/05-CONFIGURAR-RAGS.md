@@ -36,6 +36,7 @@ Regra de ouro:
 | `"vistas_mp"` | Vistas ao MP (Mov581 + enviaMP) | `tipo_localizador`, `cod_nucleo_mp` (default 31=PA), `tipo_documento` |
 | `"certidao_criminal"` | Certidão criminal art. 76 — **ADIADA** (flag `CERTIDAO_CRIMINAL_ADIADA=True` no expedir_rapido.py) | — |
 | `"intimacao_eletronica"` | Mov581 + intimação via DJEN (painel Autoras/Rés) | `fallback`, `prazo_intimacao`, `tipo_localizador`, `cod_analise` |
+| `"intimacao_correio"` | Mov581 + intimação **PELOS CORREIOS (AR digital)**: após o Concluir, expede o AR (2º clique: `MovimentarProcessoAvancado` → select `tipo` COJE → "expedir com ar digital" → assina). Usado quando o FluxoDecisor decide canal `ar` | `tipo_intimacao` (geral\|audiencia), `codigo_tipo_ar`, `natureza` (civel\|criminal), `prazo_intimacao`, `motivo_intimacao` |
 | `"mandado"` | Mov581 + **confecção completa** do mandado via Playwright | `template_id` (obrigatório), `subtipo`, `polo`, `prazo` |
 | `"oficio"` | Mov581 + confecção do ofício | `template_id` (obrigatório) |
 | `"buscar_processo"` | Só busca processo por nome da parte (sem movimentar) | `nomes` |
@@ -49,6 +50,10 @@ Regra de ouro:
   "descricao_mov": "Intimação",
   "observacao": "Intimem-se as partes para ciência",
   "fallback": "mandado",
+  "fallback_template_id": 8,
+  "fallback_subtipo": "11",
+  "fallback_prazo": "15",
+  "fallback_polo": "reu_especifico",
   "prazo_intimacao": "2",
   "tipo_localizador": "22614"
 }
@@ -62,10 +67,29 @@ Antes de abrir o navegador, o sistema olha a **última intimação** do processo
 | Última intimação | Ação |
 |---|---|
 | `domicilio_cnj` (DJEN/advgs.) | segue com intimação eletrônica |
-| `ar` | PULA (fazer manual) |
-| `mandado` / `precatoria` + `"fallback": "mandado"` | registra solicitação de expedição (sem expedir) |
+| `ar` | PULA a eletrônica — usa o passo `intimacao_correio` se estiver na sequência, senão manual |
+| `mandado` / `precatoria` + `"fallback": "mandado"` + `fallback_template_id` | **EXPEDE o mandado COMPLETO** (tipoCumprimento=4 + subtipo + destinatário + CumprimentoCartorio + FCKeditor) |
+| `mandado` / `precatoria` + `"fallback": "mandado"` SEM `fallback_template_id` | registra só o Mov581 de solicitação (sem confecção) |
 | `mandado` / `precatoria` sem fallback | PULA (fazer manual) |
 | `mandado` / `precatoria` + passo explícito de mandado/solicitação na sequência | PULA a intimação (sem solicitação duplicada — `mandado_explicito`) |
+
+### Fallback de mandado — expedir o mandado COMPLETO
+
+O `fallback: "mandado"` agora pode **EXPEDIR o mandado de verdade** (não só
+registrar o Mov581), quando o JSON fornecer o template do mandado:
+
+| Campo | O que faz |
+|---|---|
+| `fallback_template_id` | ID do DocumentTemplate do mandado (8 = Citação/Intimação/Penhora/Avaliação; 6 = Intimação TP; 2 = genérico). **Sem ele, cai no comportamento antigo** (só Mov581 de solicitação) |
+| `fallback_subtipo` | subtipoCumprimento (default `11` = Citação/Penhora/Avaliação) |
+| `fallback_prazo` | prazo em dias no corpo do mandado (ex `"15"`) |
+| `fallback_polo` | destinatário (mesmo vocabulário do mandado: `reu_especifico` padrão, `autor_especifico`, `autores`, `res`, `todos`, lista) |
+
+O fluxo delega para o mesmo `_expedir_mandado` do passo `mandado`: Mov581
+(`codTipoDocumento=51`) → expande Cumprimento → `tipoCumprimento=4` →
+`subtipoCumprimento` → destinatário no `#codigoDestinatario` →
+`btnAddCumprimento` → Concluir → CumprimentoCartorio → "Redigir sem AR" →
+FCKeditor → Submeter → Registrar.
 
 ### Códigos de prazo do painel (`prazo_intimacao`)
 
@@ -79,9 +103,26 @@ Antes de abrir o navegador, o sistema olha a **última intimação** do processo
 
 > O default `'3'` (10 dias) vale para sentenças. Despachos com outro prazo: informar o value no JSON (ex: retorno dos autos = `"2"`).
 
-### Fluxo da página (`fluxo_processo`)
+### Fluxo da página (`fluxo` e `fluxo_fallback`)
 
-Por padrão o passo usa o link de **MovimentarAnalise** (`codAnalise`, Fluxo A — com painel de intimação Autoras/Rés). Para forçar o link genérico **MovimentarProcesso** (Fluxo B — sem painel, usa o link "Intimar" do DadosProcesso), adicionar `"fluxo_processo": true` no passo.
+O passo de intimação escolhe a **página/fluxo de disparo**:
+
+| `fluxo` | Página | Quando usar |
+|---|---|---|
+| `analisar` (padrão) | `MovimentarAnalise?codAnalise=X` (Fluxo A, painel Autoras/Rés) | A movimentação está na lista de análises pendentes |
+| `movimentar` | `MovimentarProcesso/MovimentarProcessoAvancado` (link genérico "movimentar genericamente") | Sempre funciona — fallback genérico |
+
+**Fallback de fluxo (regra de Ivan):** só existe fallback de **analisar → movimentar**, nunca o contrário. Quando `fluxo: "analisar"` mas não há `codAnalise` disponível (a mov não está na lista de análises), se `"fluxo_fallback": true` no JSON o passo **cai para o link genérico** (Fluxo B). Sem `fluxo_fallback`, ele **pula a intimação** (não há análise pendente).
+
+```json
+{
+  "tipo": "intimacao_eletronica",
+  "fluxo": "analisar",
+  "fluxo_fallback": true
+}
+```
+
+> `fluxo_processo: true` (campo antigo) continua valendo como atalho para `fluxo: "movimentar"`.
 
 ### Polo do fallback (`fallback_polo`)
 
@@ -96,6 +137,45 @@ O fallback de mandado (canal mandado → solicitação) identifica a parte com o
 ```
 
 Valores: `reu_especifico` (padrão) | `autor_especifico` | `autores` | `res` | `todos` | lista. Vários nomes → todos selecionados como destinatário.
+
+## 4b. Passo `intimacao_correio` — detalhes (AR digital / Correios)
+
+```json
+{
+  "tipo": "intimacao_correio",
+  "codigo_mov": "581",
+  "descricao_mov": "Intimação",
+  "observacao": "Intimem-se as partes pelos Correios",
+  "tipo_intimacao": "geral",
+  "natureza": "criminal"
+}
+```
+
+Usado quando o **FluxoDecisor** decide que o melhor meio de comunicação é
+`ar` (Aviso de Recebimento). Fluxo completo:
+
+1. Mov581 + observação + seleciona "Intimação" + painel Autoras/Rés
+   (motivo+prazo) + Concluir — igual à `intimacao_eletronica`;
+2. **2º clique**: navega para o link genérico `MovimentarProcessoAvancado`,
+   seleciona o **modelo COJE** no `select[name="tipo"]` e clica em
+   **"expedir com ar digital"**;
+3. Cai na página `ExpedirIntimacao?codIntimacao=...&arDigital=true` e assina
+   (senha automática via `User.projudi_password` ou manual).
+
+### Modelos COJE (`tipo_intimacao` × `natureza`)
+
+| `natureza` | `tipo_intimacao` | Código | Modelo |
+|---|---|---|---|
+| cível (`civel`) | `geral` (padrão) | `12066` | INTIMAÇÃO GERAL - CÍVEL - MODELO COJE |
+| criminal | `geral` (padrão) | `14032` | INTIMAÇÃO GERAL - CRIMINAL - MODELO COJE |
+| cível | `audiencia` | `56061` | INTIMAÇÃO PARA AUDIÊNCIA CÍVEL TELEPRESENCIAL |
+| criminal | `audiencia` | `55794` | INTIMAÇÃO PARA AUDIÊNCIA CRIMINAL TELEPRESENCIAL |
+
+- `natureza`: opcional — se omitido, detecta via `extrair_classe()` do
+  `DadosProcesso` (cível/criminal). Pode forçar com `"natureza": "criminal"`.
+- `codigo_tipo_ar`: override direto do código COJE (ignora a tabela).
+- O método `executar_com_intimacao_ar()` no `movimentacao_service.py` é o
+  executor deste passo (chama `executar_com_intimacao(..., expedir_ar=True)`).
 
 ## 5. Passo `mandado` — detalhes
 

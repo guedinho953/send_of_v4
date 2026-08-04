@@ -102,6 +102,7 @@ class FluxoDecisor:
         partes_classificadas: List[Dict],
         ato_data: Optional[Dict] = None,
         processo_natureza: Optional[Dict] = None,
+        historico_comunicacao: Optional[List[Dict]] = None,
     ):
         """
         Args:
@@ -111,15 +112,24 @@ class FluxoDecisor:
             ato_data: opcional, dict com info do ato:
                       { 'tipo_ato': 'intimacao'|'citacao'|'certificar'|...,
                         'act_verb': 'intime-se'|'cite-se'|...,
-                        'destinatario_texto': 'parte autora'|'executado'|... }
+                        'destinatario_texto': 'parte autora'|'executado'|...,
+                        'forcar_mandado': bool — JSON do passo manda 'mandado'
+                        EXPLÍCITO (não fallback) → força mandado }
             processo_natureza: opcional, dict do ProcessoParser.extrair_classe():
                       { 'classe': 'Ação Penal', 'natureza': 'criminal'|'civel',
                         'e_criminal': bool }
+            historico_comunicacao: opcional, lista de dicts de movimentações
+                      (ProcessoParser.extrair_movimentacoes() ou
+                      Movement.values()) — usado para detectar AR que NÃO
+                      deu certo (situacao_comunicacao == 'ar_falho' com
+                      meio 'ar') → queda para mandado (BA) / precatória
+                      (outro estado).
         """
         self._partes_raw = partes_raw
         self._partes_classif = partes_classificadas
         self._ato_data = ato_data or {}
         self._processo_natureza = processo_natureza or {}
+        self._historico = historico_comunicacao or []
         self._resultado: Optional[Dict] = None
 
     # =================================================================
@@ -156,6 +166,15 @@ class FluxoDecisor:
         nome = p['nome']
         justificativas = []
         endereco_info = {}
+
+        # ── NÍVEL 0: JSON força 'mandado' EXPLÍCITO (não fallback) ──
+        if self._ato_data.get('forcar_mandado'):
+            return self._decisao(
+                nome, 'mandado',
+                'Documento/step da sequência explicitamente mandado no JSON '
+                '(não via fallback) — expedir mandado.',
+                endereco_info
+            )
 
         # ── NÍVEL 1: DJEN? ──
         if p.get('domicilio_cnj'):
@@ -209,13 +228,20 @@ class FluxoDecisor:
         rural = endereco_info.get('zona_rural', False)
         exige_pessoal = tipo_ato in self.ATOS_COM_CITACAO_PESSOAL
 
+        # ── AR que NÃO deu certo no histórico → queda p/ mandado/precatória ──
+        # (regra Ivan: não sendo intimação digital e vendo que teve intimação
+        # por AR e não deu certo → fallback mandado (BA) / precatória (outro
+        # estado), em vez de tentar AR de novo).
+        ar_falho_hist = self._historico_ar_falho(
+            nome, p, endereco_info, exige_pessoal)
+
         # ── NÍVEL 5: Localização ──
         # Regras gerais:
         #   Citação/intimação pessoal → sempre mandado (precatória se outro estado)
         #   Demais atos:
         #     Paulo Afonso → mandado
-        #     BA (fora PA) → AR (mandado se rural)
-        #     Outro estado → AR (precatória se rural)
+        #     BA (fora PA) → AR (mandado se rural ou se AR já falhou antes)
+        #     Outro estado → AR (precatória se rural ou se AR falhou)
 
         if cidade == COMARCA_PAULO_AFONSO:
             return self._decisao(
@@ -237,10 +263,12 @@ class FluxoDecisor:
 
         # Atos sem pessoalidade (intimação, notificação, certificar, etc.)
         if uf == 'BA':
-            if rural:
+            if rural or ar_falho_hist:
+                motivo = (f'zona rural: {bairro}' if rural
+                          else 'intimação por AR anterior NÃO deu certo')
                 return self._decisao(
                     nome, 'mandado',
-                    f'Endereço em {cidade}/{uf} (zona rural: {bairro}) — '
+                    f'Endereço em {cidade}/{uf} ({motivo}) — '
                     f'AR pode não alcançar; mandado por oficial de justiça.',
                     endereco_info
                 )
@@ -252,11 +280,13 @@ class FluxoDecisor:
             )
 
         # Outro estado
-        if rural:
+        if rural or ar_falho_hist:
+            motivo = ('zona rural' if rural
+                      else 'intimação por AR anterior NÃO deu certo')
             return self._decisao(
                 nome, 'mandado_precatorio',
-                f'Endereço em {cidade}/{uf} (zona rural) — '
-                f'fora da Bahia e em área rural; mandado via carta precatória.',
+                f'Endereço em {cidade}/{uf} ({motivo}) — '
+                f'fora da Bahia; mandado via carta precatória.',
                 endereco_info
             )
 
@@ -267,6 +297,40 @@ class FluxoDecisor:
             f'Caso não localizado, converter para precatória.',
             endereco_info
         )
+
+
+
+    # =================================================================
+    # HISTÓRICO DE COMUNICAÇÕES (AR que NÃO deu certo)
+    # =================================================================
+    def _historico_ar_falho(self, nome, p, endereco_info, exige_pessoal) -> bool:
+        """True se o histórico mostra intimação por AR que NÃO deu certo.
+
+        Varre `historico_comunicacao` (movimentações) procurando um evento
+        com meio 'ar' e situação que indique fracasso (ar_falho /
+        devolvida_sem_leitura / negativo). Faz match pela parte quando possível.
+        """
+        if not self._historico:
+            return False
+        sinais_falha = ('ar_falho', 'devolvida_sem_leitura', 'negativo')
+        nome_n = (nome or '').lower().strip()
+        for mov in self._historico:
+            ato = str(mov.get('ato_normalizado') or mov.get('ato')
+                      or mov.get('act_description') or '').lower()
+            meio = (mov.get('meio_comunicacao')
+                    or mov.get('communication_means') or '').lower()
+            sit = (mov.get('situacao_comunicacao')
+                   or mov.get('communication_status') or '').lower()
+            if meio not in ('ar', 'aviso de recebimento'):
+                continue
+            if not any(s in sit or s in ato for s in sinais_falha):
+                continue
+            dest = str(mov.get('destinatario') or '').lower().strip()
+            if dest and nome_n:
+                if dest not in nome_n and nome_n not in dest:
+                    continue
+            return True
+        return False
 
     # =================================================================
     # ANÁLISE DE ENDEREÇO

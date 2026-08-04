@@ -63,6 +63,11 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
     vara = models.CharField('Vara', max_length=200, blank=True)
     comarca = models.CharField('Comarca', max_length=200, blank=True)
 
+    # Senha usada na assinatura eletrônica do Projudi (fallback automático
+    # quando a assinatura não está salva no Projudi). Preenchida pelo
+    # MovimentacaoService nos fluxos de certidão/ofício.
+    projudi_password = models.CharField('Senha Projudi', max_length=128, blank=True)
+
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
 

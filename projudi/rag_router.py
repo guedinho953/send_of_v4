@@ -370,7 +370,9 @@ def _rotear_cumprimento(mov, proc_num, texto, session, cookies_dict, user, rag, 
     partes_classif = classifier.classificar()['partes']
     tipo_ato = service._mapear_template_para_tipo_ato(template)
     ato_data = {'tipo_ato': tipo_ato, 'act_verb': ''}
-    decisor = FluxoDecisor(partes_raw, partes_classif, ato_data)
+    historico = service._extrair_historico_comunicacao(proc)
+    decisor = FluxoDecisor(partes_raw, partes_classif, ato_data,
+                           historico_comunicacao=historico)
     decisao = decisor.decidir()
 
     dec_data = {

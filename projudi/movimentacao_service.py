@@ -28,6 +28,94 @@ _FIREFOX_ENV = {**os.environ, 'MOZ_DISABLE_GPU_SANDBOX': '1',
                 'LIBGL_ALWAYS_SOFTWARE': '1'}
 _FIREFOX_PREFS = {'gfx.webrender.software': True}
 
+
+def _procurar_campo_senha(page, timeout=10):
+    """Localiza o campo de senha da assinatura (#senha) em QUALQUER frame.
+
+    O campo só aparece DEPOIS do 1º clique em Assinar, e às vezes é
+    renderizado em iframe — por isso a busca é repetida em todos os frames
+    até o timeout, em vez de uma checagem única (bug antigo: count()==0
+    logo após o clique pulava o preenchimento e a assinatura ficava órfã).
+    """
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        for fr in [page.main_frame] + [f for f in page.frames if f != page.main_frame]:
+            try:
+                loc = fr.locator('#senha, input[name="senha"]')
+                if loc.count():
+                    try:
+                        print(f'   🖼️ Campo senha no frame: name={fr.name!r}')
+                        print(f'      url={fr.url[:120]}')
+                    except Exception:
+                        pass
+                    return loc.first
+            except Exception:
+                continue
+        time.sleep(0.5)
+    return None
+
+
+def _logar_frames(page):
+    """Log de debug: descreve TODOS os frames da página no momento da
+    assinatura — para documentar qual iframe hospeda o diálogo (senha +
+    botão Assinar)."""
+    try:
+        print('   🖼️ Mapa de frames (momento da assinatura):')
+        for i, fr in enumerate(page.frames):
+            try:
+                tem_senha = fr.locator('#senha, input[name="senha"]').count() > 0
+                tem_assinar = fr.locator(
+                    'img[src*="bot-assinar"], input[value="Assinar"], '
+                    'input[value="assinar"]').count() > 0
+                marc = []
+                if tem_senha:
+                    marc.append('SENHA')
+                if tem_assinar:
+                    marc.append('ASSINAR')
+                sufixo = f'  ← {" + ".join(marc)}' if marc else ''
+                print(f'      [{i}] name={fr.name!r} url={fr.url[:100]}{sufixo}')
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+
+def _clicar_botao_assinar(page, timeout=5):
+    """Clica no botão Assinar.
+
+    Prioriza o MESMO frame do campo de senha (o diálogo de assinatura —
+    alvo exato, menos varredura genérica), com fallback para todos os
+    frames. O botão é o <img src=".../botoes/bot-assinar.gif"> que fica
+    ao lado do #senha, dentro do iframe do diálogo.
+    """
+    selectors = ['img[src*="bot-assinar"]', 'img[src*="assinar"]',
+                 'input[value="Assinar"]', 'input[value="assinar"]',
+                 'button:has-text("Assinar")', 'input[type="submit"][value*="assin"]']
+    # Frame-alvo: o que contém o campo de senha (diálogo de assinatura)
+    frame_alvo = None
+    for fr in page.frames:
+        try:
+            if fr.locator('#senha, input[name="senha"]').count():
+                frame_alvo = fr
+                break
+        except Exception:
+            continue
+    frames = ([frame_alvo] + [f for f in page.frames if f is not frame_alvo]
+              if frame_alvo else page.frames)
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        for fr in frames:
+            for sel in selectors:
+                try:
+                    btn = fr.locator(sel).first
+                    if btn.count():
+                        btn.click(timeout=3000)
+                        return True
+                except Exception:
+                    continue
+        time.sleep(0.5)
+    return False
+
 LOCALIZADORES_POR_CODIGO = {
     '9376': 'PESQUISA DE ENDEREÇO',
     '22614': 'SISBAJUD',
@@ -282,9 +370,10 @@ class MovimentacaoService:
                             print(f'   ⚠️ Tipo Documento: {e}')
 
                 # PASSO 3: Preencher observação
+                # NÃO incluir o parte_nome automaticamente aqui (o nome na obs
+                # é decidido pelo chamador — parte_na_observacao etc.). Evita
+                # nome duplicado e o mojibake do separador em-dash no Projudi.
                 obs_texto = record.observacao or f"Cumprimento de {record.act_verb}"
-                if record.parte_nome:
-                    obs_texto += f" — {record.parte_nome}"
                 page.fill('#observacao', obs_texto[:500])
                 time.sleep(0.5)
 
@@ -526,6 +615,10 @@ class MovimentacaoService:
                            tipo_documento: str = 'CUMPRIMENTO',
                            envia_mp: bool = False,
                            cod_nucleo_mp: str = '31',
+                           tipo_parecer_mp: str = '6',
+                           prazo_mp: str = '5',
+                           promotor_mp: str = None,
+                           cod_analise: str = None,
                            certidao_html: str = None) -> bool:
         """Executa movimentação via Playwright headless + submit via JavaScript.
 
@@ -533,8 +626,29 @@ class MovimentacaoService:
             record: MovimentacaoRecord com os dados da movimentação.
             tipo_documento: Rótulo do Tipo de Documento no select codTipoDocumento
                            (default 'CUMPRIMENTO' — genérico; ex: '9376' = PESQUISA DE ENDEREÇO).
+                           NO VISTAS_MP NÃO se usa (não há tipo documental) — só observação.
             envia_mp: Se True, ativa Vistas ao MP.
             cod_nucleo_mp: Código do Núcleo (default '31' = Paulo Afonso).
+            tipo_parecer_mp: Código do tipo de parecer no select codTipoEnvioMP
+                          (default '6' = Ciência — o mais usado). Valores:
+                          0=Parecer genérico, 4=Denúncia, 5=Desistência, 6=Ciência,
+                          7=Alegações Finais, 8=Parte não Localizada, 9=Prescrição,
+                          10=Decadência, 11=Recurso/Contrarrazões, 12=Acordo Cível,
+                          13=Medida Cautelar, 14=Proposta de TP, 15=TP Cumprida,
+                          16=TP Aceita.
+            prazo_mp: Código do prazo no select codPrazoEnviaMP (default '5' =
+                          30 dias — padrão; 15 dias = '4'). Valores: 10=1dia,
+                          1=2dias, 11=3dias, 47=4dias, 2=5dias, 48=6dias,
+                          49=7dias, 3=10dias, 4=15dias, 5=30dias.
+            promotor_mp: Nome (parcial) do promotor p/ selecionar DEPOIS do
+                          núcleo no select loginPromotorNucleoMP (ex:
+                          'SOSTENYS MARINHO BARRETO').
+            cod_analise: Se informado (vem do link 'movimentar' da movimentação,
+                          ex: 'MovimentarAnalise?codAnalise=X'), abre
+                          cadastros/MovimentarAnalise?codAnalise=X (FLUXO A)
+                          em vez do MovimentarProcesso genérico. Esse é o fluxo
+                          que REMOVE a movimentação da fila de análises após
+                          concluir.
             certidao_html: Se informado, insere documento certidão no FCKeditor
                           antes de Concluir (SelectArquivo + redigirTexto).
 
@@ -614,13 +728,42 @@ class MovimentacaoService:
                 ])
                 page = ctx_b.new_page()
 
-                # Abre MovimentarProcesso
-                url_mov = (
-                    'https://projudi.tjba.jus.br/projudi/movimentacao/'
-                    f'MovimentarProcesso?numeroProcesso={proc_projudi}'
-                )
+                # Abre MovimentarProcesso (genérico) OU MovimentarAnalise
+                # (fluxo A — quando há cod_analise, tira da fila de análises).
+                if cod_analise:
+                    url_mov = (
+                        'https://projudi.tjba.jus.br/projudi/cadastros/'
+                        f'MovimentarAnalise?codAnalise={cod_analise}'
+                    )
+                else:
+                    url_mov = (
+                        'https://projudi.tjba.jus.br/projudi/movimentacao/'
+                        f'MovimentarProcesso?numeroProcesso={proc_projudi}'
+                    )
                 page.goto(url_mov, wait_until='networkidle')
                 time.sleep(2)
+
+                # No fluxo analisar (MovimentarAnalise) a página abre com
+                # um link "Movimentar"/"movimentar genericamente" que PRECISA
+                # ser clicado para chegar ao formulário de movimentação — é
+                # esse clique que remove a análise da fila ao concluir.
+                if cod_analise:
+                    try:
+                        for sel in ['a:has-text("Movimentar Genericamente")',
+                                    'a:has-text("Movimentar genericamente")',
+                                    'a:has-text("Movimentar Processo Genericamente")',
+                                    'a:has-text("Movimentar Processo")',
+                                    'a:has-text("Movimentar")']:
+                            el = page.query_selector(sel)
+                            if el and el.is_visible():
+                                with page.expect_navigation(wait_until='domcontentloaded',
+                                                            timeout=15000):
+                                    el.click()
+                                time.sleep(2)
+                                print(f'   ✅ Clicado no link de análise: {sel}')
+                                break
+                    except Exception as e:
+                        print(f'   ⚠️ Clicando no link de análise: {e}')
 
                 # Verifica se o formulário carregou
                 tem_form = page.evaluate(
@@ -648,13 +791,23 @@ class MovimentacaoService:
                     'Cumprimento de Oficio' if cod_mov == '11383' else 'TD - Tipo Documental')
 
                 # ─── PASSO 2: Cumprimento + btnAddCumprimento (obrigatório) ──
-                # Ativa o grid MP para que os campos de documento fiquem disponíveis
+                # No MovimentarAnalise (fluxo A) o #btnAddCumprimento já vem
+                # visível — clicar direto. No MovimentarProcesso (fluxo B) pode
+                # precisar expandir via link "Cumprimento" antes.
                 try:
-                    page.locator("a:text('Cumprimento')").first.click()
-                    time.sleep(0.5)
-                    page.click('#btnAddCumprimento')
+                    if cod_analise:
+                        # fluxo A: botão já visível
+                        page.click('#btnAddCumprimento', timeout=5000)
+                    else:
+                        # fluxo B: expande painel, depois clica
+                        try:
+                            page.locator("a:has-text('Cumprimento')").first.click()
+                        except Exception:
+                            pass
+                        time.sleep(0.5)
+                        page.click('#btnAddCumprimento', timeout=5000)
                     time.sleep(1)
-                    print('   ✅ Cumprimento ativado')
+                    print('   ✅ Cumprimento ativado (btnAddCumprimento)')
                 except Exception as e:
                     print(f'   ⚠️ Cumprimento: {e}')
 
@@ -765,22 +918,24 @@ class MovimentacaoService:
                             print('   ✅ Assinar 1ª')
                         except Exception:
                             pass
-                        # Senha
-                        try:
-                            camp_senha = page.locator('input[name="senha"]')
-                            if camp_senha.count() and senha:
+                        _logar_frames(page)
+                        # Senha — espera o campo aparecer (pode demorar / iframe)
+                        camp_senha = _procurar_campo_senha(page, timeout=10)
+                        if camp_senha:
+                            try:
                                 camp_senha.fill(senha)
                                 time.sleep(0.5)
-                                print('   ✅ Senha')
-                        except Exception:
-                            pass
+                                print('   ✅ Senha preenchida')
+                            except Exception as e:
+                                print(f'   ⚠️ Falha ao preencher senha: {e}')
+                        else:
+                            print('   ⚠️ Campo senha não apareceu em 10s')
                         # Assinar 2ª
-                        try:
-                            page.locator('img[src*="bot-assinar"]').first.click()
+                        if _clicar_botao_assinar(page):
                             time.sleep(2)
                             print('   ✅ Assinar 2ª')
-                        except Exception:
-                            pass
+                        else:
+                            print('   ⚠️ Botão Assinar 2ª não encontrado')
                     else:
                         # Assinatura salva no Projudi (só precisa CLICAR):
                         # tenta clique direto no Assinar. Se aparecer campo de
@@ -862,7 +1017,10 @@ class MovimentacaoService:
                 }}''')
                 time.sleep(0.5)
 
-                if cod_mov == '11383':
+                if cod_mov in ('11383', '493'):
+                    # Estes códigos não usam grid nem tipo documental — apenas
+                    # a descrição. (493 = Vistas ao MP; 11383 = Cumprimento de
+                    # Ofício / direto.)
                     page.evaluate(f'''() => {{
                         var desc = document.getElementById('descCategoriaMovimentacao');
                         if (desc) {{ desc.value = '{desc_mov}'; desc.dispatchEvent(new Event('change', {{bubbles:true}})); }}
@@ -937,9 +1095,65 @@ class MovimentacaoService:
                         if sel_nucleo.count():
                             sel_nucleo.select_option(cod_nucleo_mp)
                             print(f'   ✅ Núcleo MP: {cod_nucleo_mp}')
-                            time.sleep(0.3)
+                            time.sleep(0.8)  # aguarda DWR popular promotor
                     except Exception:
                         pass
+                    # Tipo de parecer / motivo — codTipoEnvioMP (ex: 6 = Ciência)
+                    if tipo_parecer_mp is not None:
+                        try:
+                            sel_tp = page.locator('select[name="codTipoEnvioMP"]')
+                            if sel_tp.count():
+                                sel_tp.select_option(str(tipo_parecer_mp))
+                                print(f'   ✅ Tipo parecer MP: {tipo_parecer_mp}')
+                                time.sleep(0.3)
+                        except Exception as e:
+                            print(f'   ⚠️ Tipo parecer MP: {e}')
+                    # Prazo — codPrazoEnviaMP (ex: 5 = 30 dias, 4 = 15 dias)
+                    if prazo_mp is not None:
+                        try:
+                            sel_pr = page.locator('select[name="codPrazoEnviaMP"]')
+                            if sel_pr.count():
+                                sel_pr.select_option(str(prazo_mp))
+                                print(f'   ✅ Prazo MP: {prazo_mp}')
+                                time.sleep(0.3)
+                        except Exception as e:
+                            print(f'   ⚠️ Prazo MP: {e}')
+                    # Promotor — loginPromotorNucleoMP (aparece após o núcleo via DWR)
+                    if promotor_mp:
+                        try:
+                            nome_proc = str(promotor_mp).strip()
+                            sel_promotor = page.locator('select[name="loginPromotorNucleoMP"]')
+                            achou = False
+                            if sel_promotor.count():
+                                for j in range(sel_promotor.locator('option').count()):
+                                    txt = sel_promotor.locator('option').nth(j).inner_text().strip()
+                                    if nome_proc.lower() in txt.lower():
+                                        val = sel_promotor.locator('option').nth(j).get_attribute('value')
+                                        sel_promotor.select_option(val)
+                                        print(f'   ✅ Promotor MP: {txt.strip()}')
+                                        achou = True
+                                        break
+                            if not achou:
+                                # Fallback: varre qualquer select com o nome
+                                for i in range(page.locator('select').count()):
+                                    sel = page.locator('select').nth(i)
+                                    try:
+                                        for j in range(sel.locator('option').count()):
+                                            txt = sel.locator('option').nth(j).inner_text().strip()
+                                            if nome_proc.lower() in txt.lower():
+                                                sel.select_option(sel.locator('option').nth(j).get_attribute('value'))
+                                                print(f'   ✅ Promotor MP (fallback): {txt.strip()}')
+                                                achou = True
+                                                break
+                                    except Exception:
+                                        continue
+                                    if achou:
+                                        break
+                            if not achou:
+                                print(f'   ⚠️ Promotor "{nome_proc}" não achado (núcleo {cod_nucleo_mp})')
+                        except Exception as e:
+                            print(f'   ⚠️ Selecionando promotor MP: {e}')
+                    time.sleep(0.3)
 
                 # ─── PASSO 6: Observação ──
                 obs_texto = record.observacao or f"Cumprimento de {record.act_verb}"
@@ -948,15 +1162,9 @@ class MovimentacaoService:
                 page.fill('#observacao', obs_texto[:500])
                 time.sleep(0.5)
 
-                # Ativa Cumprimento + btnAddCumprimento
-                try:
-                    page.locator("a:text('Cumprimento')").first.click()
-                    time.sleep(0.5)
-                    page.click('#btnAddCumprimento')
-                    time.sleep(1)
-                    print('   ✅ Cumprimento ativado')
-                except Exception as e:
-                    print(f'   ⚠️ Cumprimento: {e}')
+                # (Cumprimento já ativado no PASSO 2 — não repetir o clique
+                # no #btnAddCumprimento aqui: ele trava 30s quando o botão já
+                # não está visível após a adição.)
 
                 # ─── Inserir Documento (certidão) ──────────────────────
                 # ⚠️ DESATIVADO 2026-07-31: certidão já inserida no PASSO 3.
@@ -1063,30 +1271,29 @@ class MovimentacaoService:
                             print('   ✅ Assinar 1ª vez')
                     except Exception:
                         pass
+                    _logar_frames(page)
 
-                    # Preenche senha
-                    try:
-                        camp_senha = page.locator('input[name="senha"]')
-                        if camp_senha.count():
-                            senha = getattr(self.user, 'projudi_password', '')
-                            if not senha:
-                                print('   ⚠️ Senha do Projudi não encontrada no usuário')
-                            else:
-                                camp_senha.fill(senha)
-                                time.sleep(0.5)
-                                print('   ✅ Senha preenchida')
-                    except Exception as e:
-                        print(f'   ⚠️ Senha: {e}')
+                    # Preenche senha (espera o campo aparecer em qualquer frame)
+                    senha = getattr(self.user, 'projudi_password', '')
+                    camp_senha = _procurar_campo_senha(page, timeout=10) if senha else None
+                    if camp_senha:
+                        try:
+                            camp_senha.fill(senha)
+                            time.sleep(0.5)
+                            print('   ✅ Senha preenchida')
+                        except Exception as e:
+                            print(f'   ⚠️ Senha: {e}')
+                    elif senha:
+                        print('   ⚠️ Campo senha não apareceu em 10s')
+                    else:
+                        print('   ⚠️ Senha do Projudi não encontrada no usuário')
 
                     # Assinar 2ª vez
-                    try:
-                        btn_ass2 = page.locator('img[src*="bot-assinar"]')
-                        if btn_ass2.count():
-                            btn_ass2.first.click()
-                            time.sleep(2)
-                            print('   ✅ Assinar 2ª vez')
-                    except Exception:
-                        pass
+                    if _clicar_botao_assinar(page):
+                        time.sleep(2)
+                        print('   ✅ Assinar 2ª vez')
+                    else:
+                        print('   ⚠️ Botão Assinar 2ª vez não encontrado')
 
                     # Aguarda processamento
                     try:
@@ -1492,6 +1699,15 @@ class MovimentacaoService:
         mandado_explicito: bool = False,
         prazo_intimacao: str = '3',
         fallback_polo=None,
+        motivo_intimacao: str = '3',
+        expedir_ar: bool = False,
+        tipo_intimacao: str = 'geral',
+        codigo_tipo_ar: str = None,
+        natureza_override: str = None,
+        assinar_ar: bool = True,
+        fallback_template_id: int = None,
+        fallback_subtipo: str = None,
+        fallback_prazo: str = None,
     ) -> bool:
         """Executa Mov581 + intimação no Projudi em um único Playwright.
 
@@ -1528,6 +1744,34 @@ class MovimentacaoService:
                           (mesmo vocabulário do mandado: reu_especifico,
                           autor_especifico, autores, res, todos ou lista).
                           Default: reu_especifico (só réus).
+            expedir_ar: Se True, APÓS o Concluir da intimação expede pelos
+                          CORREIOS com AR digital: navega para
+                          MovimentarProcessoAvancado (link genérico),
+                          seleciona o modelo COJE no select name="tipo" e
+                          clica em "expedir com ar digital" → página
+                          ExpedirIntimacao?codIntimacao=...&arDigital=true
+                          → assina (senha automática ou manual).
+            assinar_ar: Se False, expede o AR mas NÃO assina — deixa a
+                          página ExpedirIntimacao aberta para assinatura
+                          manual (útil para testar o fluxo sem assinar).
+            fallback_template_id: Quando fallback='mandado', ID do
+                          DocumentTemplate do mandado para EXPEDIR o mandado
+                          COMPLETO (tipoCumprimento=4 + subtipo +
+                          destinatário + CumprimentoCartorio + FCKeditor) —
+                          igual ao passo `mandado`. Se ausente, registra só
+                          o Mov581 de solicitação (comportamento antigo).
+            fallback_subtipo: subtipoCumprimento do mandado no fallback
+                          (default '11' = Citação/Penhora/Avaliação).
+            fallback_prazo: prazo em dias p/ o corpo do mandado (ex '15').
+            tipo_intimacao: 'geral' (default) ou 'audiencia' — escolhe o
+                          modelo COJE. Combinado com a natureza do processo
+                          (cível/criminal) define o código do tipo:
+                          cível+geral=12066, criminal+geral=14032,
+                          cível+audiência=56061, criminal+audiência=55794.
+            codigo_tipo_ar: Código do tipo COJE direto (override). Ex:
+                          '12066'. Se definido, ignora tipo_intimacao.
+            natureza_override: 'civel' ou 'criminal'. Se definido, ignora a
+                          detecção automática via extrair_classe().
         """
         from playwright.sync_api import sync_playwright
 
@@ -1538,6 +1782,10 @@ class MovimentacaoService:
 
         session, saved_cookies = result
         cookies = cookies_dict or saved_cookies
+
+        # Natureza do processo (cível/criminal) — decide o modelo COJE do AR.
+        # Default cível; override explícito no JSON tem prioridade.
+        natureza_processo = natureza_override or 'civel'
 
         if not proc_projudi and not cod_analise:
             m = re.search(r'(\d{13,20})', processo_numero.replace('-', '').replace('.', ''))
@@ -1557,9 +1805,13 @@ class MovimentacaoService:
         # ── PRE-CHECK: como a parte recebe as comunicações (match do histórico) ──
         # Usa analisar_movimentacao/meio_comunicacao das movimentações do processo:
         #   'domicilio_cnj' (DJEN/advgs.) → intimação eletrônica (segue)
-        #   'ar'                          → pula (por ora — fazer manual)
+        #   'ar'                          → PULA a eletrônica (fazer manual OU,
+        #                                    se expedir_ar=True, seguir p/ correios)
         #   'mandado'/'precatoria'        → só registra solicitação de expedição
         #                                   de mandado (sem expedir o mandado)
+        # Quando expedir_ar=True (passo intimacao_correio), o canal AR foi
+        # decidido pelo FluxoDecisor — NÃO pular; seguir para a expedição
+        # pelos correios.
         try:
             from projudiProcessNavigator import ProcessoParser
             url_dados = (
@@ -1569,10 +1821,28 @@ class MovimentacaoService:
             r_dados = session.get(url_dados, timeout=15)
             if r_dados.status_code == 200 and 'expirou' not in r_dados.text.lower():
                 parser = ProcessoParser(r_dados.text)
-                movs, _ = parser.extrair_movimentacoes()
-                ints = [m for m in movs
-                        if m.get('categoria') == 'intimacao'
-                        and m.get('meio_comunicacao')]
+                # Detecta natureza (cível/criminal) para o modelo COJE do AR —
+                # apenas se não veio override explícito no JSON.
+                if not natureza_override:
+                    try:
+                        cls = parser.extrair_classe(parser.soup)
+                        natureza_processo = cls.get('natureza') or 'civel'
+                        print(f'   🏷️ Natureza detectada: {natureza_processo} '
+                              f'({cls.get("classe") or "?"})')
+                    except Exception:
+                        pass
+                if expedir_ar:
+                    # Canal decidido pelo FluxoDecisor como AR/correios —
+                    # o pre-check de canal da ELETRÔNICA não se aplica.
+                    movs, _ = parser.extrair_movimentacoes()
+                    print('   🚚 Fluxo AR (correios) — pre-check de canal da '
+                          'eletrônica ignorado; prosseguindo p/ expedição.')
+                    ints = []
+                else:
+                    movs, _ = parser.extrair_movimentacoes()
+                    ints = [m for m in movs
+                            if m.get('categoria') == 'intimacao'
+                            and m.get('meio_comunicacao')]
                 if ints:
                     # Última intimação (pela data) indica o canal atual da parte
                     ints.sort(key=lambda m: m.get('data_obj') or date.min)
@@ -1582,7 +1852,22 @@ class MovimentacaoService:
                         print(f'   ⏸️ Última intimação por AR ({ultimo.get("ato", "")[:60]})')
                         print('   ⏸️ Pulando intimação eletrônica (fazer manualmente)')
                         return True
-                    if ultimo_meio in ('mandado', 'precatoria'):
+                    # ── Domicílio eletrônico tem precedência sobre o canal do
+                    # histórico: parte com envelope (intimação eletrônica) ou
+                    # Domicílio CNJ (favicon) intima eletronicamente — NUNCA
+                    # cai no fallback de mandado. ──
+                    tem_eletronico = False
+                    try:
+                        tem_eletronico = any(
+                            (p.get('domicilio_cnj') or p.get('recebe_intimacao_email'))
+                            for p in parser.extrair_partes(parser.soup)
+                        )
+                    except Exception:
+                        tem_eletronico = False
+                    if tem_eletronico:
+                        print('   ✅ Parte(s) com Domicílio CNJ/eletrônico — intimando eletronicamente (sem fallback de mandado)')
+                    elif ultimo_meio in ('mandado', 'precatoria'):
+                        print(f'   ⏸️ Última intimação por mandado ({ultimo.get("ato", "")[:60]})')
                         if mandado_explicito:
                             print('   ⏸️ Última intimação por mandado — sequência já tem passo explícito de mandado/solicitação; pulando intimação (sem solicitação duplicada)')
                             return True
@@ -1655,6 +1940,19 @@ class MovimentacaoService:
                                 codigo_movimentacao='581',
                                 descricao_movimentacao='Solicitada a Expedição de Mandado',
                             )
+                            if fallback_template_id:
+                                # ── EXPEDIR o mandado COMPLETO (não só Mov581):
+                                # tipoCumprimento=4 + subtipo + destinatário +
+                                # CumprimentoCartorio + FCKeditor — igual ao
+                                # passo `mandado`. ──
+                                return self._expedir_mandado_fallback(
+                                    processo_numero, parte_nome,
+                                    fallback_template_id,
+                                    fallback_subtipo or '11',
+                                    fallback_prazo or '',
+                                    session, saved_cookies)
+                            # Sem template → comportamento antigo (só Mov581
+                            # de solicitação, sem confecção).
                             return bool(self.executar(record))
                         except Exception as e:
                             print(f'   ⚠️ Solicitação de expedição falhou: {e}')
@@ -1670,6 +1968,7 @@ class MovimentacaoService:
 
         sucesso = False
         import time
+        self._ar_assinado = True  # default: sem AR, nada a assinar
 
         try:
             with sync_playwright() as pw:
@@ -1699,6 +1998,26 @@ class MovimentacaoService:
                 page.goto(url, wait_until='networkidle')
                 time.sleep(2)
 
+                # FLUXO B (sem codAnalise): o link genérico "Movimentar Processo"
+                # abre uma página onde se clica em "Movimentar Genericamente" —
+                # a partir daí o fluxo é o MESMO do MovimentarAnalise (painel de
+                # intimação Autoras/Rés + motivo/prazo + Concluir).
+                if not cod_analise:
+                    try:
+                        for sel in ['a:has-text("Movimentar Genericamente")',
+                                    'a:has-text("Movimentar genericamente")',
+                                    'a:has-text("Movimentar Processo Genericamente")',
+                                    'a:has-text("Movimentar Processo")',
+                                    'a:has-text("Movimentar")']:
+                            el = page.query_selector(sel)
+                            if el:
+                                el.click()
+                                time.sleep(2)
+                                print(f'   ✅ Clicado: {sel} (Movimentar genericamente)')
+                                break
+                    except Exception as e:
+                        print(f'   ⚠️ Movimentar genericamente: {e}')
+
                 # Verifica se carregou
                 tem_form = page.evaluate(
                     '!!document.getElementById("seqCategoriaMovimentacao")')
@@ -1717,12 +2036,40 @@ class MovimentacaoService:
                 }}''')
                 time.sleep(1)
 
-                # ─── PASSO 2: Clicar btnBuscaMovimentacao ───
-                try:
-                    page.click('#btnBuscaMovimentacao', timeout=5000)
-                    time.sleep(2)
-                except Exception:
-                    print('   ⚠️ btnBuscaMovimentacao não encontrado')
+                # ─── PASSO 2: Clicar btnBuscaMovimentacao (abre a grade p/ escolher tipo) ───
+                clicou_busca = False
+                for sel in ['#btnBuscaMovimentacao', '#btnBuscaMovimentacao ',
+                            'input[value*="Buscar Movimentação"]',
+                            'button:has-text("Buscar Movimentação")']:
+                    try:
+                        el = page.query_selector(sel)
+                        if el:
+                            el.click()
+                            clicou_busca = True
+                            print(f'   ✅ Busca movimentação clicado ({sel})')
+                            break
+                    except Exception:
+                        continue
+                if not clicou_busca:
+                    # Fallback JS: dispara a busca via clique JS
+                    try:
+                        page.evaluate('''() => {
+                            const b = document.getElementById('btnBuscaMovimentacao');
+                            if (b) { b.click(); return true; }
+                            const inps = document.querySelectorAll('input,button,a');
+                            for (const el of inps) {
+                                if ((el.value||el.textContent||'').toLowerCase().includes('buscar') &&
+                                    (el.value||el.textContent||'').toLowerCase().includes('movimenta')) {
+                                    el.click(); return true;
+                                }
+                            }
+                            return false;
+                        }''')
+                        clicou_busca = True
+                        print('   ✅ Busca movimentação (fallback JS)')
+                    except Exception as e:
+                        print(f'   ⚠️ Busca movimentação não encontrada: {e}')
+                time.sleep(2)
 
                 # Tratar alerta
                 try:
@@ -1733,24 +2080,69 @@ class MovimentacaoService:
                 except Exception:
                     pass
 
-                # ─── PASSO 3: Selecionar "Intimação" no grid ───
+                # ─── PASSO 3: Selecionar Tipo de Documento = Intimação ───
+                # select[name="codTipoDocumento"] → option value=5 "Intimação"
+                # (a certidão usava outro select: codDescricao1=37 — aqui é
+                # codTipoDocumento=5, igual ao mandado que usa 51).
+                selecionou_grid = False
                 try:
-                    link_int = page.query_selector('a:has-text("Intimação")')
-                    if not link_int:
-                        link_int = page.query_selector('td:has-text("Intimação")')
-                    if link_int:
-                        link_int.click()
-                        print('   ✅ Intimação selecionada no grid')
-                        time.sleep(1)
-                    else:
-                        # Fallback: injeta direto na descrição
+                    sel_tp = page.locator('select[name="codTipoDocumento"]')
+                    if sel_tp.count():
+                        try:
+                            sel_tp.select_option('5')  # Intimação
+                            print('   ✅ Tipo doc: Intimação (codTipoDocumento=5)')
+                            selecionou_grid = True
+                        except Exception:
+                            # Fallback: procura opção com texto "Intimação"
+                            # (exclui Videoconferência/Telefônica)
+                            opts = sel_tp.locator('option')
+                            for i in range(opts.count()):
+                                txt = opts.nth(i).inner_text().strip()
+                                if ('intima' in txt.lower()
+                                        and 'videoconf' not in txt.lower()
+                                        and 'telef' not in txt.lower()):
+                                    sel_tp.select_option(index=i)
+                                    print(f'   ✅ Tipo doc: {txt} (codTipoDocumento)')
+                                    selecionou_grid = True
+                                    break
+                except Exception as e:
+                    print(f'   ⚠️ codTipoDocumento: {e}')
+                time.sleep(0.5)
+                # Alerta opcional após selecionar tipo doc
+                try:
+                    alert = page.wait_for_event('dialog', timeout=3000)
+                    print(f'   ⚠️ Alerta: {alert.message}')
+                    alert.accept()
+                    time.sleep(1)
+                except Exception:
+                    pass
+                # Abordagem 2: clique na linha do grid (se ainda não achou)
+                if not selecionou_grid:
+                    for trecho in ['Intimação', 'intimação', 'Intimacao']:
+                        for tag in ['a', 'td', 'tr', 'span']:
+                            try:
+                                sel_g = page.query_selector(f'{tag}:has-text("{trecho}")')
+                                if sel_g:
+                                    sel_g.click()
+                                    print(f'   ✅ Tipo doc "{trecho}" (grid {tag})')
+                                    selecionou_grid = True
+                                    break
+                            except Exception:
+                                continue
+                        if selecionou_grid:
+                            break
+                time.sleep(0.5)
+                if not selecionou_grid:
+                    # Fallback: injeta direto na descrição
+                    print('   ⚠️ Não achou "Intimação" — injetando desc')
+                    try:
                         page.evaluate(f'''() => {{
                             var desc = document.getElementById('descCategoriaMovimentacao');
                             if (desc) {{ desc.value = '{descricao_mov}'; }}
                         }}''')
                         time.sleep(0.5)
-                except Exception:
-                    pass
+                    except Exception:
+                        pass
 
                 # ─── PASSO 4: Preencher observação ───
                 try:
@@ -1787,12 +2179,12 @@ class MovimentacaoService:
                         time.sleep(0.5)
                         page.evaluate(f'''() => {{
                             var sel = document.getElementById('codMotivoAutor');
-                            if (sel) {{ sel.value = '3'; sel.dispatchEvent(new Event('change', {{bubbles:true}})); }}
+                            if (sel) {{ sel.value = '{motivo_intimacao}'; sel.dispatchEvent(new Event('change', {{bubbles:true}})); }}
                             var sel2 = document.getElementById('codPrazoAutor');
                             if (sel2) {{ sel2.value = '{prazo_intimacao}'; sel2.dispatchEvent(new Event('change', {{bubbles:true}})); }}
                         }}''')
                         time.sleep(0.5)
-                        print(f'   ✅ Autoras configuradas (motivo=3, prazo={prazo_intimacao})')
+                        print(f'   ✅ Autoras configuradas (motivo={motivo_intimacao}, prazo={prazo_intimacao})')
                     except Exception as e:
                         print(f'   ⚠️ Autoras: {e}')
 
@@ -1805,12 +2197,12 @@ class MovimentacaoService:
                         time.sleep(0.5)
                         page.evaluate(f'''() => {{
                             var sel = document.getElementById('codMotivoReu');
-                            if (sel) {{ sel.value = '3'; sel.dispatchEvent(new Event('change', {{bubbles:true}})); }}
+                            if (sel) {{ sel.value = '{motivo_intimacao}'; sel.dispatchEvent(new Event('change', {{bubbles:true}})); }}
                             var sel2 = document.getElementById('codPrazoReu');
                             if (sel2) {{ sel2.value = '{prazo_intimacao}'; sel2.dispatchEvent(new Event('change', {{bubbles:true}})); }}
                         }}''')
                         time.sleep(0.5)
-                        print(f'   ✅ Rés configurados (motivo=3, prazo={prazo_intimacao})')
+                        print(f'   ✅ Rés configurados (motivo={motivo_intimacao}, prazo={prazo_intimacao})')
                     except Exception as e:
                         print(f'   ⚠️ Rés: {e}')
 
@@ -1838,6 +2230,35 @@ class MovimentacaoService:
                 # FLUXO B: MovimentarProcesso → Concluir → DadosProcesso → link Intimar
                 # ═══════════════════════════════════════════════════
                 else:
+                    # ── Abrir painel de intimação e definir MOTIVO + PRAZO
+                    # ANTES do Concluir (senão a movimentação não registra). ──
+                    try:
+                        pb = page.query_selector('#imgBotao_painelIntimacao')
+                        if pb:
+                            pb.click()
+                            time.sleep(0.8)
+                            print('   ✅ Painel de intimação aberto (FLUXO B)')
+                        page.evaluate('''() => { const a = document.getElementById('Autoras'); if (a) a.click(); }''')
+                        time.sleep(0.4)
+                        page.evaluate(f'''() => {{
+                            const m = document.getElementById('codMotivoAutor');
+                            if (m) {{ m.value = '{motivo_intimacao}'; m.dispatchEvent(new Event('change', {{bubbles:true}})); }}
+                            const p = document.getElementById('codPrazoAutor');
+                            if (p) p.value = '{prazo_intimacao}';
+                        }}''')
+                        page.evaluate('''() => { const r = document.getElementById('Res'); if (r) r.click(); }''')
+                        time.sleep(0.4)
+                        page.evaluate(f'''() => {{
+                            const m = document.getElementById('codMotivoReu');
+                            if (m) {{ m.value = '{motivo_intimacao}'; m.dispatchEvent(new Event('change', {{bubbles:true}})); }}
+                            const p = document.getElementById('codPrazoReu');
+                            if (p) p.value = '{prazo_intimacao}';
+                        }}''')
+                        time.sleep(0.3)
+                        print(f'   ✅ Motivo={motivo_intimacao}, prazo={prazo_intimacao} definidos ANTES do Concluir (FLUXO B)')
+                    except Exception as e:
+                        print(f'   ⚠️ Painel/motivo (FLUXO B): {e}')
+
                     # Concluir movimentação
                     page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
                     time.sleep(0.5)
@@ -1854,116 +2275,21 @@ class MovimentacaoService:
                     except Exception as e:
                         print(f'   ⚠️ Concluir: {e}')
 
-                    # Navegar para DadosProcesso
-                    url_dados = (
-                        'https://projudi.tjba.jus.br/projudi/listagens/'
-                        f'DadosProcesso?numeroProcesso={proc_projudi}'
-                    )
-                    page.goto(url_dados, wait_until='networkidle')
-                    time.sleep(2)
+                    # FLUXO B encerra no painel (igual MovimentarAnalise):
+                    # 581 → busca → grade → obs → Autoras/Rés (motivo+prazo) → Concluir.
+                    sucesso = True
 
-                    print('   🔍 Buscando link de intimação...')
-
-                    # Procurar link Intimar
-                    intimou = False
-                    selectores = [
-                        'a[href*="Intimar"]', 'a[href*="intimar"]',
-                        'a:has-text("Intimar")', 'a:has-text("Intimação")',
-                        'button:has-text("Intimar")', 'input[value="Intimar"]',
-                    ]
-                    for sel in selectores:
-                        try:
-                            el = page.query_selector(sel)
-                            if el:
-                                print(f'   🔘 Clicando: {sel}')
-                                el.click()
-                                time.sleep(3)
-                                intimou = True
-                                break
-                        except Exception:
-                            continue
-
-                    if intimou:
-                        # Confirmar modal
-                        try:
-                            time.sleep(2)
-                            for csel in ['input[value="Confirmar"]', 'input[value="OK"]',
-                                          'button:has-text("Confirmar")', '#confirmar']:
-                                try:
-                                    btn = page.query_selector(csel)
-                                    if btn:
-                                        btn.click()
-                                        time.sleep(3)
-                                        break
-                                except Exception:
-                                    continue
-                        except Exception:
-                            pass
-                        try:
-                            alert = page.wait_for_event('dialog', timeout=5000)
-                            print(f'   ℹ️ Alerta: {alert.message}')
-                            alert.accept()
-                            time.sleep(2)
-                        except Exception:
-                            pass
-                        print('   ✅ Intimação eletrônica gerada (DadosProcesso)')
-                        sucesso = True
-                    else:
-                        print('   ⚠️ Link de intimação não encontrado em DadosProcesso')
-                        # ─── FALLBACK OPCIONAL ──────────────────────────
-                        if fallback_mov:
-                            uf_ok = True
-                            if fallback_uf:
-                                # Tenta extrair UF da parte na página
-                                try:
-                                    texto_pagina = page.content()
-                                    # re já é importado no topo do módulo —
-                                    # import local aqui tornava 're' local da
-                                    # função e quebrava re.search antes dele
-                                    uf_match = re.search(r'[A-ZÀ-Ú][A-ZÀ-Ú\s]+?\s*-\s*([A-Z]{2})', texto_pagina)
-                                    uf_encontrada = uf_match.group(1).upper() if uf_match else ''
-                                    uf_ok = (uf_encontrada == fallback_uf.upper())
-                                    print(f'      UF encontrada: {uf_encontrada or "não detectada"} | fallback_uf={fallback_uf} | uf_ok={uf_ok}')
-                                except Exception as e:
-                                    print(f'      ⚠️ Erro ao detectar UF: {e}')
-                            if uf_ok:
-                                print(f'      ▶️ Fallback: registrando Mov581 "{fallback_mov}"...')
-                                page.goto(
-                                    f'https://projudi.tjba.jus.br/projudi/movimentacao/MovimentarProcesso?numeroProcesso={proc_projudi}',
-                                    wait_until='load'
-                                )
-                                time.sleep(3)
-                                if page.evaluate('!!document.getElementById("seqCategoriaMovimentacao")'):
-                                    page.evaluate(f'''() => {{
-                                        var c = document.getElementById('seqCategoriaMovimentacao');
-                                        if (c) c.value = '{codigo_mov}';
-                                        var d = document.getElementById('descCategoriaMovimentacao');
-                                        if (d) d.value = '{fallback_mov}';
-                                    }}''')
-                                    time.sleep(1)
-                                    page.fill('#observacao', f'{fallback_mov} - {observacao[:100]}')
-                                    time.sleep(0.5)
-                                    page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
-                                    time.sleep(0.5)
-                                    try:
-                                        page.click('#Concluir', timeout=10000)
-                                        time.sleep(3)
-                                        try:
-                                            alert = page.wait_for_event('dialog', timeout=5000)
-                                            alert.accept()
-                                            time.sleep(2)
-                                        except Exception:
-                                            pass
-                                        print(f'      ✅ Fallback registrado: {fallback_mov}')
-                                    except Exception as e:
-                                        print(f'      ❌ Fallback erro ao concluir: {e}')
-                                else:
-                                    print('      ⚠️ Fallback: formulário não carregou')
-                            else:
-                                print(f'      ⏭️ Fallback ignorado (UF não corresponde)')
-                        else:
-                            print(f'      URL: {url_dados}')
-                        sucesso = True  # parcial
+                # ═══════════════════════════════════════════════════
+                # EXPEDIÇÃO PELOS CORREIOS (AR DIGITAL) — 2º clique
+                # Após a intimação concluída, navega para o link genérico
+                # (MovimentarProcessoAvancado), seleciona o modelo COJE no
+                # select name="tipo" e clica em "expedir com ar digital".
+                # ═══════════════════════════════════════════════════
+                if expedir_ar and sucesso:
+                    sucesso = self._expedir_intimacao_ar(
+                        page, proc_projudi, natureza_processo,
+                        tipo_intimacao, codigo_tipo_ar,
+                        assinar_ar=assinar_ar)
 
                 browser.close()
 
@@ -1976,12 +2302,23 @@ class MovimentacaoService:
         # ── Registra no banco (CumprimentoRecord) para aparecer nos Cumprimentos ──
         try:
             from projudi.models import CumprimentoRecord
-            status = 'cumprido' if sucesso else 'falha'
+            # AR expedido mas NÃO assinado (assinar_ar=False ou falha na
+            # assinatura) → fica 'pendente' (não conta como expedido de verdade)
+            if getattr(self, '_ar_assinado', True):
+                status = 'cumprido' if sucesso else 'falha'
+                fluxo_just = ('Intimação eletrônica via DJEN (painel Autoras/Rés, '
+                              'motivo+prazo, Concluir)')
+            else:
+                # Expediu o AR digital mas a assinatura não foi concluída
+                status = 'pendente'
+                fluxo_just = ('Intimação pelos Correios (AR digital): AR expedido '
+                              'mas AGUARDANDO assinatura (assinar_ar=False ou '
+                              'falha na assinatura)')
             record = CumprimentoRecord.objects.create(
                 processo=proc_projudi or processo_numero[:20],
                 numero_processo_cnj=processo_numero,
-                fluxo='eletronico',
-                fluxo_justificativa='Intimação eletrônica via DJEN (Mov581 + click Intimar)',
+                fluxo='ar' if not getattr(self, '_ar_assinado', True) else 'eletronico',
+                fluxo_justificativa=fluxo_just,
                 act_verb='intimacao',
                 snippet=observacao[:300],
                 status=status,
@@ -1992,6 +2329,393 @@ class MovimentacaoService:
             print(f'   ⚠️ Erro ao registrar cumprimento: {e}')
 
         return sucesso
+
+    # =================================================================
+    # FALLBACK DE MANDADO — EXPEDIR o mandado COMPLETO (tipoCumprimento=4
+    # + subtipo + destinatário + CumprimentoCartorio + FCKeditor).
+    # Usado quando fallback='mandado' vem com fallback_template_id no JSON.
+    # =================================================================
+    def _expedir_mandado_fallback(
+        self,
+        processo_numero: str,
+        parte_nome: str,
+        template_id: int,
+        subtipo: str = '11',
+        prazo: str = '',
+        session=None,
+        cookies_dict=None,
+    ) -> bool:
+        """Expende o mandado COMPLETO (igual ao passo `mandado`), delegando
+        ao `_expedir_mandado`/`_gerar_html` do expedir_rapido."""
+        from processes.models import Process, Party, DocumentTemplate, RAGExample
+        from types import SimpleNamespace
+
+        proc = Process.objects.filter(number=processo_numero).first()
+        if not proc:
+            print('   ⚠️ Fallback mandado: processo não encontrado no banco.')
+            return False
+        try:
+            tmpl = DocumentTemplate.objects.get(id=template_id, active=True)
+        except DocumentTemplate.DoesNotExist:
+            print(f'   ⚠️ Fallback mandado: template #{template_id} não encontrado.')
+            return False
+
+        # Parte destinatária (réu/executado) — joga no banco se existir
+        part = None
+        qs = Party.objects.filter(process=proc,
+                                  role__in=['reu', 'executado', 'PROMOVIDO', 'EXECUTADO'])
+        if parte_nome:
+            for p in qs:
+                nome_p = (p.name or '').strip().upper()
+                if parte_nome.upper() in nome_p or nome_p in parte_nome.upper():
+                    part = p
+                    break
+        if not part:
+            part = qs.first() or Party.objects.filter(process=proc).first()
+        if not part:
+            print('   ⚠️ Fallback mandado: nenhuma parte destinatária.')
+            return False
+
+        # RAG dummy (o fallback não tem despacho — usa template direto)
+        rag = SimpleNamespace(despacho_ato='', despacho_observacao='',
+                              despacho_data='', despacho_autor='MARTINHO FERRAZ DA NOBREGA JUNIOR')
+
+        # Gera o HTML e expede (import lazy evita ciclo: expedir_rapido não
+        # importa MovimentacaoService no topo).
+        try:
+            from expedir_rapido import _gerar_html, _expedir_mandado
+            html_doc = _gerar_html(proc, part, rag, tmpl,
+                                   prazo_dias=prazo or None)
+            if not html_doc:
+                print('   ⚠️ Fallback mandado: HTML não gerado.')
+                return False
+            print(f'   🚚 Fallback mandado: expedindo mandado COMPLETO '
+                  f'tipoCumprimento=4, subtipo={subtipo}, dest={parte_nome[:50]}...')
+            return _expedir_mandado(proc, session, cookies_dict, html_doc,
+                                    part, subtipo=subtipo)
+        except Exception as e:
+            print(f'   ⚠️ Fallback mandado: {e}')
+            import traceback; traceback.print_exc()
+            return False
+
+    # =================================================================
+    # INTIMAÇÃO PELOS CORREIOS (AR DIGITAL)
+    # =================================================================
+    # Mapeamento natureza × finalidade → modelo COJE (select name="tipo"
+    # da página MovimentarProcessoAvancado). "As mais usadas" (Ivan):
+    #   geral → INTIMAÇÃO GERAL CÍVEL/CRIMINAL (12066/14032)
+    #   audiencia → INTIMAÇÃO PARA AUDIÊNCIA CÍVEL/CRIMINAL (56061/55794)
+    TABELA_TIPOS_AR = {
+        ('civel', 'geral'):      ('12066', 'INTIMAÇÃO GERAL - CÍVEL'),
+        ('criminal', 'geral'):   ('14032', 'INTIMAÇÃO GERAL - CRIMINAL'),
+        ('civel', 'audiencia'):  ('56061', 'INTIMAÇÃO PARA AUDIÊNCIA CÍVEL'),
+        ('criminal', 'audiencia'): ('55794', 'INTIMAÇÃO PARA AUDIÊNCIA CRIMINAL'),
+    }
+
+    def executar_com_intimacao_ar(
+        self,
+        processo_numero: str,
+        observacao: str,
+        codigo_mov: str = '581',
+        descricao_mov: str = 'Intimação',
+        cookies_dict: dict = None,
+        proc_projudi: str = None,
+        prazo_intimacao: str = '3',
+        motivo_intimacao: str = '3',
+        tipo_intimacao: str = 'geral',
+        codigo_tipo_ar: str = None,
+        natureza_override: str = None,
+        assinar_ar: bool = True,
+    ) -> bool:
+        """Executa a intimação PELOS CORREIOS (AR digital) no Projudi.
+
+        Fluxo completo (feito pelo FluxoDecisor quando o melhor meio é 'ar'):
+          1. Mov581 + observação + seleciona "Intimação" + painel Autoras/Rés
+             (motivo+prazo) + Concluir  — igual à intimação eletrônica;
+          2. SEGUNDO clique: navega para o link genérico
+             MovimentarProcessoAvancado, seleciona o modelo COJE no select
+             name="tipo" (conforme natureza cível/criminal e finalidade
+             geral/audiência) e clica em "expedir com ar digital";
+          3. Na página ExpedirIntimacao?codIntimacao=...&arDigital=true,
+             assina (senha automática via User.projudi_password ou manual) —
+             a menos que assinar_ar=False (só expede, sem assinar).
+
+        Args:
+            tipo_intimacao: 'geral' (default) ou 'audiencia'.
+            codigo_tipo_ar: Código COJE direto (override) — ex '12066'.
+            natureza_override: 'civel' ou 'criminal' (senão detecta via
+                          extrair_classe no pre-check).
+            assinar_ar: False → expede o AR mas NÃO assina (deixa a página
+                          aberta para assinatura manual).
+        """
+        return self.executar_com_intimacao(
+            processo_numero=processo_numero,
+            observacao=observacao,
+            codigo_mov=codigo_mov,
+            descricao_mov=descricao_mov,
+            cookies_dict=cookies_dict,
+            proc_projudi=proc_projudi,
+            prazo_intimacao=prazo_intimacao,
+            motivo_intimacao=motivo_intimacao,
+            expedir_ar=True,
+            tipo_intimacao=tipo_intimacao or 'geral',
+            codigo_tipo_ar=codigo_tipo_ar,
+            natureza_override=natureza_override,
+            assinar_ar=assinar_ar,
+        )
+
+    def _expedir_intimacao_ar(self, page, proc_projudi, natureza,
+                              tipo_intimacao, codigo_tipo_ar=None,
+                              assinar_ar: bool = True) -> bool:
+        """2º clique: expede a intimação criada pelos CORREIOS com AR digital.
+
+        Navega para o link genérico do processo (MovimentarProcessoAvancado),
+        acha a intimação recém-criada, seleciona o modelo COJE no select
+        name="tipo" e clica no link "expedir com ar digital". Em seguida
+        cai na página ExpedirIntimacao e assina (senha ou manual).
+        """
+        import time as _t
+        if not proc_projudi:
+            print('   ⚠️ Sem proc_projudi p/ expedir por AR.')
+            return False
+
+        # ── 1. Resolve o código do tipo COJE ──
+        cod_tipo = codigo_tipo_ar or ''
+        texto_tipo = ''
+        if not cod_tipo:
+            chave = (str(natureza or 'civel'), str(tipo_intimacao or 'geral'))
+            pair = self.TABELA_TIPOS_AR.get(chave)
+            if pair:
+                cod_tipo, texto_tipo = pair
+            else:
+                # Fallback: geral cível
+                cod_tipo, texto_tipo = self.TABELA_TIPOS_AR[('civel', 'geral')]
+        print(f'   🏷️ Modelo COJE: {cod_tipo}{" — " + texto_tipo if texto_tipo else ""}')
+
+        # ── 2. Navega para a página de movimentação genérica ──
+        try:
+            url_avancado = (
+                'https://projudi.tjba.jus.br/projudi/movimentacao/'
+                f'MovimentarProcessoAvancado?numeroProcesso={proc_projudi}')
+            page.goto(url_avancado, wait_until='load')
+            _t.sleep(3)
+        except Exception as e:
+            print(f'   ⚠️ Ao abrir MovimentarProcessoAvancado: {e}')
+            return False
+
+        # ── 3. Localiza o select name="tipo" + link "expedir com ar digital" ──
+        # Pode haver vários (uma linha por cumprimento pendente). A
+        # intimação recém-criada é a última do DOM. Cada select vive no
+        # mesmo container (tr) que o link de expedição.
+        alvos = []
+        try:
+            for i in range(page.locator('select[name="tipo"]').count()):
+                sel = page.locator('select[name="tipo"]').nth(i)
+                container = sel.locator('xpath=ancestor::tr[1]')
+                link_ar = container.locator(
+                    'a:has-text("expedir"), a:has-text("Expedir"), '
+                    'a:has-text("AR"), a:has-text("ar")')
+                if link_ar.count():
+                    alvos.append((sel, link_ar))
+        except Exception as e:
+            print(f'   ⚠️ Localizando selects tipo: {e}')
+
+        if not alvos:
+            # Fallback: varre frames e acha qualquer link "expedir ... ar"
+            print('   ⚠️ Nenhuma linha com select tipo+expedir achada —' \
+                  ' tentando fallback genérico...')
+            try:
+                for fr in page.frames:
+                    cand = fr.locator(
+                        'a:has-text("expedir"), a:has-text("Expedir")').last
+                    if cand.count():
+                        alvos.append((cand, cand))
+                        break
+            except Exception:
+                pass
+
+        if not alvos:
+            print('   ❌ Não achei o select name="tipo" com link de expedição AR.')
+            return False
+
+        # Usa a ÚLTIMA linha (recém-criada)
+        sel, link_ar = alvos[-1]
+        _t.sleep(0.5)
+
+        # ── 4. Seleciona o modelo COJE no select ──
+        try:
+            selado = False
+            # Seletor por value (código exato) primeiro
+            try:
+                op = sel.locator(f'option[value="{cod_tipo}"]')
+                if op.count():
+                    sel.select_option(cod_tipo)
+                    selado = True
+            except Exception:
+                pass
+            if not selado and texto_tipo:
+                # Fallback: procura opção por texto
+                for j in range(sel.locator('option').count()):
+                    txt = sel.locator('option').nth(j).inner_text().strip()
+                    if texto_tipo.lower() in txt.lower():
+                        sel.select_option(index=j)
+                        selado = True
+                        break
+            if not selado:
+                # Última opção como fallback
+                n_opts = sel.locator('option').count()
+                if n_opts:
+                    sel.select_option(index=n_opts - 1)
+                    selado = True
+            print(f'   ✅ Tipo selecionado no select name="tipo"'
+                  f' {"(" + cod_tipo + ")" if selado else ""}')
+            _t.sleep(1)
+        except Exception as e:
+            print(f'   ⚠️ Selecionando modelo COJE: {e}')
+
+        # ── 5. Clica em "expedir com ar digital" ──
+        clicado = False
+        # Prioriza o link dentro do mesmo container do select; senão varre
+        # a página. "expedir com ar digital" é o alvo mais específico.
+        seletores = ['a:has-text("expedir com ar digital")',
+                     'a:has-text("expedir com AR digital")',
+                     'a:has-text("Expedir com AR")',
+                     'a:has-text("expedir")',
+                     'a:has-text("Expedir")']
+        for base in [link_ar, page]:
+            for sel_link in seletores:
+                try:
+                    el = base.locator(sel_link).last if hasattr(base, 'locator') else base
+                    if el.count():
+                        try:
+                            el.scroll_into_view_if_needed()
+                            _t.sleep(0.5)
+                        except Exception:
+                            pass
+                        el.click(timeout=8000)
+                        clicado = True
+                        break
+                except Exception:
+                    continue
+            if clicado:
+                break
+        time.sleep(2)
+
+        if not clicado:
+            print('   ⚠️ Link "expedir com ar digital" não encontrado.')
+            return False
+
+        # ── 6. Verifica que caiu na ExpedirIntimacao e assina ──
+        chegou = 'ExpedirIntimacao' in page.url or 'codIntimacao' in page.url
+        if not chegou:
+            try:
+                page.wait_for_url(lambda u: 'ExpedirIntimacao' in u
+                                  or 'codIntimacao' in u, timeout=15000)
+                chegou = True
+            except Exception:
+                pass
+        if not chegou:
+            print(f'   ⚠️ Não caiu na ExpedirIntimacao (URL: {page.url[:100]})')
+            return False
+
+        print(f'   🚚 ExpedirIntimacao aberta — assinando o AR...')
+        if not assinar_ar:
+            print('   ⏸️ assinar_ar=False — NÃO vou assinar.')
+            print('   ⏳ A página ExpedirIntimacao ficou aberta — assine')
+            print('   ⏳ manualmente (senha + Assinar) se quiser concluir.')
+            try:
+                page.screenshot(path='/tmp/intimacao_ar_pendente.png')
+                print('   📸 Screenshot: /tmp/intimacao_ar_pendente.png')
+            except Exception:
+                pass
+            if sys.stdout.isatty():
+                try:
+                    input('   🔄 Pressione Enter após assinar manualmente (ou '
+                          'feche o navegador)...')
+                except Exception:
+                    pass
+            time.sleep(3)
+            self._ar_assinado = False
+            return True
+        ok_ass = self._assinar_expedicao_ar(page)
+        self._ar_assinado = bool(ok_ass)
+        time.sleep(2)
+        if ok_ass:
+            print('   ✅ AR digital assinado e expedido pelos correios.')
+        else:
+            print('   ⚠️ AR expedido, mas assinatura pode ter ficado pendente.')
+            self._ar_assinado = False
+        return True  # expedição ocorreu; assinatura reportada no log
+
+    def _assinar_expedicao_ar(self, page) -> bool:
+        """Assina o documento na página ExpedirIntimacao.
+
+        Reusa o padrão das certidões: senha automática via
+        User.projudi_password; senão cai no modo manual (espera o usuário).
+        """
+        import time as _t
+        senha = getattr(self.user, 'projudi_password', None)
+
+        # Rola para o final (o botão Assinar fica no fim da página; o
+        # usuário não consegue scroll manual confiável no Firefox do PW).
+        try:
+            page.evaluate('''() => {
+                var alvo = document.querySelector('img[src*="bot-assinar"]') ||
+                           document.querySelector('input[value="Assinar"]') ||
+                           document.querySelector('button:has-text("Assinar")');
+                window.scrollTo(0, document.body.scrollHeight);
+                if (alvo) { alvo.scrollIntoView({block:'center'}); }
+            }''')
+            _t.sleep(0.8)
+        except Exception:
+            pass
+
+        if not senha:
+            print('   ⏳ Sem User.projudi_password — ASSINE MANUALMENTE o AR.')
+            print('   ⏳ Digite a senha e clique em Assinar (até 3 min).')
+            try:
+                page.locator('img[src*="bot-assinar"]').first.click(timeout=3000)
+            except Exception:
+                pass
+            try:
+                page.screenshot(path='/tmp/intimacao_ar_assinatura.png')
+                print('   📸 Screenshot: /tmp/intimacao_ar_assinatura.png')
+            except Exception:
+                pass
+            if sys.stdout.isatty():
+                try:
+                    input('   🔄 Pressione Enter APÓS assinar o AR (ou aguarde)...')
+                except Exception:
+                    pass
+            # Espera o usuário assinar (assina novamente ou muda de página)
+            _t.sleep(5)
+            return True
+
+        # Senha automática
+        try:
+            page.locator('img[src*="bot-assinar"]').first.click(timeout=4000)
+            _t.sleep(1)
+            print('   ✅ Assinar 1ª (automático)')
+        except Exception:
+            pass
+        _logar_frames(page)
+        camp = _procurar_campo_senha(page, timeout=10)
+        if camp:
+            try:
+                camp.fill(senha)
+                _t.sleep(0.5)
+                print('   ✅ Senha preenchida')
+            except Exception as e:
+                print(f'   ⚠️ Preenchendo senha: {e}')
+        else:
+            print('   ⚠️ Campo senha não apareceu em 10s')
+        ok = _clicar_botao_assinar(page)
+        if ok:
+            _t.sleep(2)
+            print('   ✅ Assinar 2ª (automático)')
+        else:
+            print('   ⚠️ Botão Assinar 2ª (automático) não achado')
+        return ok
 
     # =================================================================
     # FECHAR

@@ -21,6 +21,7 @@ class UserAdmin(BaseUserAdmin):
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
         ('Informações Pessoais', {'fields': ('first_name', 'last_name', 'role')}),
+        ('Projudi', {'fields': ('projudi_password',), 'description': 'Senha da assinatura eletrônica do Projudi — usada automaticamente pelo fluxo de certidões quando a assinatura não está salva no Projudi.'}),
         ('Organização', {'fields': ('tenant', 'vara', 'comarca')}),
         ('Permissões', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
         ('Datas importantes', {'fields': ('last_login',)}),
@@ -29,7 +30,7 @@ class UserAdmin(BaseUserAdmin):
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
-            'fields': ('email', 'first_name', 'password1', 'password2', 'role', 'tenant'),
+            'fields': ('email', 'first_name', 'password1', 'password2', 'role', 'tenant', 'projudi_password'),
         }),
     )
 

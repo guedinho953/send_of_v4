@@ -28,6 +28,9 @@ staticfiles/
 # Logs
 *.log
 
+# Backups do banco (contêm dados — não versionar no GitHub)
+backups/
+
 # Fila / temporários
 /tmp/
 *.tmp
