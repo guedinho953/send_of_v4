@@ -775,16 +775,23 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                     fallback_mov=passo.get('fallback_mov'),
                     fallback_uf=passo.get('fallback_uf'),
                     fallback_mandado=(
-                        passo.get('fallback') == 'mandado'
+                        passo.get('fallback') in ('mandado', 'solicitar_mandado',
+                                                  'solicitar_expedicao')
                         or bool(passo.get('fallback_mandado'))
                     ),
                     mandado_explicito=any(
                         p.get('tipo') in ('solicitar_expedicao', 'mandado')
                         for p in sequencia
                     ),
-                    prazo_intimacao=passo.get('prazo_intimacao', '3'),
+                    prazo_intimacao=passo.get('prazo_intimacao', ''),
                     fallback_polo=passo.get('fallback_polo'),
                     motivo_intimacao=passo.get('motivo_intimacao', '3'),
+                    expedir_ar=bool(passo.get('expedir_ar', False)),
+                    tipo_intimacao=passo.get('tipo_intimacao', 'geral'),
+                    codigo_tipo_ar=passo.get('codigo_tipo_ar'),
+                    natureza_override=passo.get('natureza'),
+                    assinar_ar=passo.get('assinar_ar', False),
+                    polo_intimacao=passo.get('polo', 'todos'),
                     fallback_template_id=passo.get('fallback_template_id'),
                     fallback_subtipo=passo.get('fallback_subtipo'),
                     fallback_prazo=passo.get('fallback_prazo'),
@@ -793,6 +800,96 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                     print('   ✅ Intimação eletrônica concluída')
                 else:
                     print('   ⚠️ Intimação eletrônica pode ter falhado')
+
+            elif tipo == 'intimacao_completa':
+                """UMA movimentação: intimação eletrônica (+AR assinado) +
+                Vistas ao MP + solicitação de ofício — num único Concluir.
+
+                Campos do JSON (além dos do intimacao_eletronica):
+                  envia_mp: true | cod_nucleo_mp: '31' | tipo_parecer_mp: '6'
+                  prazo_mp: '5' | promotor_mp: 'SOSTENYS MARINHO BARRETO'
+                  solicitar_oficio: true | oficio_template_id: 5
+                O AR (quem não tem domicílio eletrônico) é expedido e assinado
+                no 2º clique (expedir_ar + assinar_ar), após o Concluir.
+                """
+                service = MovimentacaoService(user)
+                print('  ▶️ Executando intimação completa (intimação + MP + ofício)...')
+
+                # FLUXO analisar/movimentar (igual ao intimacao_eletronica)
+                fluxo = str(passo.get('fluxo', 'analisar')).lower()
+                fluxo_fallback = bool(passo.get('fluxo_fallback', False))
+                fluxo_forced = bool(passo.get('fluxo_processo', False))
+
+                cod_analise = None
+                if fluxo == 'movimentar' or fluxo_forced:
+                    print('   🔷 Fluxo: movimentar (link genérico MovimentarProcesso)')
+                    cod_analise = None
+                else:
+                    if mov:
+                        mov_link = mov.get('movimentar', '')
+                        if mov_link and 'codAnalise=' in mov_link:
+                            cod_analise = mov_link.split('codAnalise=')[1].split('&')[0]
+                    if not cod_analise:
+                        if fluxo_fallback:
+                            print('   🔄 Fallback de fluxo: sem codAnalise — '
+                                  'caindo p/ movimentar (link genérico)')
+                            cod_analise = None
+                        else:
+                            print('   ⚠️ Fluxo \'analisar\' sem codAnalise e sem '
+                                  '\'fluxo_fallback\' no JSON — pulando a intimação '
+                                  '(não há análise pendente p/ este processo).')
+                            continue
+
+                proc_projudi = None
+                link_proc = (mov or {}).get('link_processo', '')
+                m_proc = re.search(r'numeroProcesso=(\d+)', link_proc)
+                if m_proc:
+                    proc_projudi = m_proc.group(1)
+
+                ok = service.executar_com_intimacao(
+                    processo_numero=proc_num,
+                    observacao=obs or texto[:500],
+                    codigo_mov=str(passo.get('codigo_mov', '581')),
+                    descricao_mov=passo.get('descricao_mov', 'Intimação'),
+                    proc_projudi=proc_projudi,
+                    cod_analise=cod_analise,
+                    fallback_mov=passo.get('fallback_mov'),
+                    fallback_uf=passo.get('fallback_uf'),
+                    fallback_mandado=(
+                        passo.get('fallback') in ('mandado', 'solicitar_mandado',
+                                                  'solicitar_expedicao')
+                        or bool(passo.get('fallback_mandado'))
+                    ),
+                    mandado_explicito=any(
+                        p.get('tipo') in ('solicitar_expedicao', 'mandado')
+                        for p in sequencia
+                    ),
+                    prazo_intimacao=passo.get('prazo_intimacao', ''),
+                    fallback_polo=passo.get('fallback_polo'),
+                    motivo_intimacao=passo.get('motivo_intimacao', '3'),
+                    expedir_ar=bool(passo.get('expedir_ar', True)),
+                    tipo_intimacao=passo.get('tipo_intimacao', 'geral'),
+                    codigo_tipo_ar=passo.get('codigo_tipo_ar'),
+                    natureza_override=passo.get('natureza'),
+                    assinar_ar=passo.get('assinar_ar', False),
+                    polo_intimacao=passo.get('polo', 'todos'),
+                    fallback_template_id=passo.get('fallback_template_id'),
+                    fallback_subtipo=passo.get('fallback_subtipo'),
+                    fallback_prazo=passo.get('fallback_prazo'),
+                    # ── MP + ofício na mesma movimentação ──
+                    envia_mp=bool(passo.get('envia_mp', False)),
+                    cod_nucleo_mp=str(passo.get('cod_nucleo_mp', '31')),
+                    tipo_parecer_mp=str(passo.get('tipo_parecer_mp', '6')),
+                    prazo_mp=str(passo.get('prazo_mp', '5')),
+                    promotor_mp=passo.get('promotor_mp'),
+                    solicitar_oficio=bool(passo.get('solicitar_oficio', False)),
+                    oficio_template_id=passo.get('oficio_template_id'),
+                    nao_concluir=bool(passo.get('nao_concluir', False)),
+                )
+                if ok:
+                    print('   ✅ Intimação completa concluída (intimação + MP + ofício)')
+                else:
+                    print('   ⚠️ Intimação completa pode ter falhado')
 
             elif tipo == 'intimacao_correio':
                 """Intimação PELOS CORREIOS (AR digital) — quando o FluxoDecisor
@@ -808,6 +905,34 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                 if m_proc:
                     proc_projudi = m_proc.group(1)
 
+                # ── PRE-CHECK anti-duplicação: o painel Autoras/Rés marca
+                # TODAS as partes — não dá pra filtrar por parte individual.
+                # Consulta o CADASTRO das partes (banco): se TODAS têm
+                # domicílio eletrônico (email ou domicílio CNJ), PULA o AR
+                # (já foram intimadas eletronicamente no passo anterior).
+                # Só expede AR quando há parte sem meio eletrônico. ──
+                try:
+                    proc_db_ar = Process.objects.filter(number=proc_num).first()
+                    if proc_db_ar:
+                        partes_ar = list(Party.objects.filter(process=proc_db_ar))
+                        if partes_ar:
+                            com_eletronico = [
+                                p for p in partes_ar
+                                if p.receives_email_intimation
+                                or p.has_domicilio_cnj
+                                or p.email
+                            ]
+                            if len(com_eletronico) == len(partes_ar):
+                                print('   ⏸️ Todas as partes têm domicílio '
+                                      'eletrônico no cadastro — pulando AR '
+                                      '(evita duplicar a intimação eletrônica).')
+                                continue
+                            print(f'   🚚 {len(partes_ar) - len(com_eletronico)} '
+                                  f'parte(s) sem meio eletrônico no cadastro — '
+                                  f'expedindo AR.')
+                except Exception as e:
+                    print(f'   ⚠️ Pre-check AR (cadastro de partes): {e}')
+
                 ok = service.executar_com_intimacao_ar(
                     processo_numero=proc_num,
                     observacao=obs or texto[:500],
@@ -819,7 +944,7 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                     tipo_intimacao=passo.get('tipo_intimacao', 'geral'),
                     codigo_tipo_ar=passo.get('codigo_tipo_ar'),
                     natureza_override=passo.get('natureza'),
-                    assinar_ar=passo.get('assinar_ar', True),
+                    assinar_ar=passo.get('assinar_ar', False),
                 )
                 if ok:
                     print('   ✅ Intimação pelos correios (AR digital) concluída')
@@ -2434,10 +2559,10 @@ def expedir_processo_especifico(proc_num: str):
                 if not rag_cand.active:
                     continue
                 texto_rag = normalizar_texto(
-                    rag_cand.despacho_ato + ' ' + (rag_cand.despacho_observacao or ''))
+                    rag_cand.despacho_observacao or rag_cand.despacho_ato)
                 palavras_rag = set(texto_rag.split())
-                base = min(len(palavras_texto), len(palavras_rag))
-                if base > 0 and len(palavras_texto & palavras_rag) / base >= 0.70:
+                total_s = max(len(palavras_rag), 1)
+                if len(palavras_texto & palavras_rag) / total_s >= 0.70:
                     melhor = rag_cand
                     break
             if melhor:

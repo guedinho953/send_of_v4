@@ -4,6 +4,7 @@
   "TIPOS_DE_PASSO": {
     "movimentacao": "Mov581 genérico (certidões, certificações)",
     "intimacao_eletronica": "Mov581 + intimação DJEN (painel Autoras/Rés)",
+    "intimacao_completa": "UMA movimentação: intimação eletrônica + AR assinado + Vistas ao MP + solicitação de ofício (1 Concluir só)",
     "intimacao_correio": "Intimação pelos CORREIOS (AR digital — 2º clique 'expedir com ar digital')",
     "solicitar_expedicao": "Só Mov581: SOLICITA o mandado (NÃO confecciona)",
     "mandado": "Expede o mandado COMPLETO (tipoCumprimento=4+subtipo+destinatário+FCKeditor)",
@@ -59,10 +60,12 @@
   "PRAZOS_DO_PAINEL_DE_INTIMACAO": {
     "campo": "prazo_intimacao",
     "2": "05 dias",
-    "3": "10 dias (DEFAULT)",
+    "3": "10 dias",
     "4": "15 dias",
     "7": "30 dias",
-    "29": "6 meses"
+    "29": "6 meses",
+    "formato": "Aceita o CÓDIGO (ex '4') OU o número literal de dias (ex '15' → converte sozinho). SEMPRE prevalece o que você escrever no RAG.",
+    "fallback_quando_vazio": "Extrai do texto da movimentação (ex 'prazo de 15 dias'). Se o texto não tiver prazo: despacho → 2 (5 dias) | sentença → 3 (10 dias)."
   },
   "MOTIVO_DO_PAINEL": {
     "campo": "motivo_intimacao",

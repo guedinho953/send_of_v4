@@ -149,10 +149,16 @@ class CumprimentoService:
     def _melhor_match(self, texto, similares, templates_validos):
         """Encontra o melhor match RAG + template."""
         from processes.models import RAGExample
-        palavras_texto = set(texto.lower().split())
+        from processes.movimentacoes_service import normalizar_texto
+        palavras_texto = set(normalizar_texto(texto).split())
 
         for s in similares:
-            palavras_rag_s = set(s['despacho_ato'].lower().split())
+            # Âncora do match = observação do despacho (texto longo da decisão
+            # real). Fallback pro título curto (despacho_ato) só se não houver
+            # observação. É a observação que espelha o texto dos documentos
+            # baixados das movimentações.
+            texto_rag = s.get('despacho_observacao') or s.get('despacho_ato') or ''
+            palavras_rag_s = set(normalizar_texto(texto_rag).split())
             total_s = max(len(palavras_rag_s), 1)
             if len(palavras_texto & palavras_rag_s) / total_s < 0.70:
                 continue

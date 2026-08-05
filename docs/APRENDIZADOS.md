@@ -258,3 +258,62 @@ false (DEFAULT, sem nome), true (1º nome), 'todas'/'all' (todos os nomes).
 - Dump: `docker exec pg_send_of pg_dump -U send_of -d sccj --no-owner --no-privileges`
   (~1.2 MB compacto; banco ~24 MB).
 - Script: `scripts/backup_db.sh` — ver abaixo.
+
+---
+
+## 9. Tipo documental da intimação + re-execução de processos não-pendentes (2026-08-05)
+
+### Selecionar o tipo documental "Intimação" de forma confiável
+O alerta "escolha um tipo de documento" no Projudi aparece quando a grade
+de tipo documental fica **sem seleção** antes do Concluir. O jeito **que
+funciona** (validado ao vivo) é o MESMO do `executar_requests` (Certidão=37,
+CUMPRIMENTO=55): pelo `<select name="codTipoDocumento">`, casando pelo
+**LABEL** e confirmando o valor.
+
+```python
+# projudi/movimentacao_service.py — executar_com_intimacao(), PASSO 3
+sel_tp = page.wait_for_selector('select[name="codTipoDocumento"]', timeout=8000)
+candidatos = []
+for opt in sel_tp.query_selector_all('option'):
+    v = (opt.get_attribute('value') or '').strip()
+    t = (opt.inner_text() or '').strip()
+    tl = t.lower()
+    if v and 'intima' in tl and 'videoconf' not in tl and 'telef' not in tl:
+        candidatos.append((len(t), v, t))      # label mais curto primeiro
+candidatos.sort()
+sel_tp.select_option(candidatos[0][1])          # Intimação -> valor 5
+```
+
+**PITFALL que custou uma rodada inteira:** clicar em `a:has-text("Intimação")`
+**NÃO seleciona nada** — casa com um link de menu/página e o log imprime
+`✅ Tipo doc` (falso positivo), mas o grid continua sem seleção e o alerta
+"escolha um tipo de documento" aparece no Concluir. **Não usar clique em
+link; usar o select por label.** Também ajuda desocultar a linha
+`#trTipoDocumento` (`tr.style.display='table-row'`) antes de esperar o select.
+
+### Re-executar processos que NÃO estão mais pendentes na fila
+`expedir_processo_especifico(cnj)` só encontrou RAG quando há pendência.
+Processos já executados não aparecem na fila → fallback de similaridade/
+varredura não acha nada. Para os re-processar com FK:
+
+1. `expedir_rapido.vincular_rag_7.py` — cria `Process` (tenant=1) e um
+   `RAGExample` (cópia do RAG-modelo `9999999-99…`, que é o `RAGExample` com
+   a sequência `intimacao_eletronica` pra "cumprimento de sentença 15d",
+   `prazo_intimacao=4`, `descricao_mov="Intimação"`, `polo=res`).
+2. Como a RAG tem FK única p/ processo (1→1), cria-se **uma cópia por CNJ**.
+3. O `proc_projudi` (número interno) só vem do `link_processo` da varredura.
+   Como eles não são pendentes, set `Process.projudi_url =
+   '...DadosProcesso?numeroProcesso=<numero_interno>'` — o dispatcher extrai
+   o interno disso e roda no Fluxo B (MovimentarProcesso).
+
+### Records de desfecho
+`executar_com_intimacao` grava agora um `CumprimentoLog`
+com o desfecho + erro (`sucesso`/`_erro_mov`). Antes os records dessa função
+nasciam SEM log nenhum, e era impossível fiscalizar o motivo da falha.
+
+### ⚠️ AR em intimação eletrônica
+`expedir_ar=true` numa seq de intimação **eletrônica** (parte com domicílio
+CNJ) quebra na etapa de expedição pelos Correios ("Não achei o select
+name=tipo" com link de AR) → lança `falha` **mesmo a intimação tendo concluído**.
+Se a intimação é eletrônica, use `expedir_ar=false` pra registrar como
+`cumprido`.

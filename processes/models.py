@@ -511,6 +511,18 @@ class RAGExample(TimeStampedModel):
         help_text='Modelos de documento sugeridos para esta decisao'
     )
 
+    def save(self, *args, **kwargs):
+        # JSONFields com blank=True viram None quando salvos vazios pelo
+        # form do admin (não []), violando NOT NULL. Normaliza antes de
+        # salvar — cobre admin, scripts e qualquer outro caminho.
+        if self.cumprimentos is None:
+            self.cumprimentos = []
+        if self.documentos is None:
+            self.documentos = []
+        if self.sequencia_cumprimento is None:
+            self.sequencia_cumprimento = []
+        super().save(*args, **kwargs)
+
     def get_template_context(self, parte_id=None):
         """Retorna dict com dados do processo + partes para preencher template.
         Se parte_id for passado, retorna apenas aquela parte em 'parte' e 'partes' com 1 item.

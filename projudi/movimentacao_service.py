@@ -1708,6 +1708,20 @@ class MovimentacaoService:
         fallback_template_id: int = None,
         fallback_subtipo: str = None,
         fallback_prazo: str = None,
+        # ── Vistas ao MP + solicitação de ofício NA MESMA movimentação ──
+        envia_mp: bool = False,
+        cod_nucleo_mp: str = '31',
+        tipo_parecer_mp: str = '6',
+        prazo_mp: str = '5',
+        promotor_mp: str = None,
+        solicitar_oficio: bool = False,
+        oficio_template_id: int = None,
+        # Modo teste: preenche tudo (intimação, MP, ofício) mas NÃO clica em
+        # Concluir nem expede/assina o AR — deixa a página aberta p/ revisão.
+        nao_concluir: bool = False,
+        # Polo no painel de intimação: 'todos' (default, Autoras+Rés) |
+        # 'autores' (só aba Autoras, não clica Réus) | 'res' (só aba Rés).
+        polo_intimacao: str = 'todos',
     ) -> bool:
         """Executa Mov581 + intimação no Projudi em um único Playwright.
 
@@ -1786,6 +1800,41 @@ class MovimentacaoService:
         # Natureza do processo (cível/criminal) — decide o modelo COJE do AR.
         # Default cível; override explícito no JSON tem prioridade.
         natureza_processo = natureza_override or 'civel'
+
+        # ── Resolver prazo_intimacao: aceita o CÓDIGO (ex '4') ou o NÚMERO DE
+        # DIAS (ex '15', '05', '30'). O RAG pode escrever prazo_intimacao como
+        # o prazo literal do despacho — converte pro código do painel.
+        # Quando vazio: extrai do texto da movimentação; sem prazo no texto,
+        # segue a regra: despacho → 5 dias ('2'), sentença → 10 dias ('3'). ──
+        prazo_dias_map = {
+            '5': '2',   # 05 dias
+            '10': '3',  # 10 dias
+            '15': '4',  # 15 dias
+            '30': '7',  # 30 dias
+            '180': '29', '6': '29',  # 6 meses
+        }
+        if not prazo_intimacao:
+            # Extração do prazo do texto (ex "prazo de 15 dias")
+            try:
+                from processes.movimentacoes_service import extrair_prazo_dias
+                dias = extrair_prazo_dias(observacao or '')
+                if dias and dias in prazo_dias_map:
+                    prazo_intimacao = prazo_dias_map[dias]
+                    print(f'   📅 Prazo extraído do texto: {dias} dias → código {prazo_intimacao}')
+                else:
+                    # Regra despacho/sentença
+                    obs_low = (observacao or '').lower()
+                    if 'senten' in obs_low or 'acórd' in obs_low or 'acord' in obs_low:
+                        prazo_intimacao = '3'  # sentença → 10 dias
+                    else:
+                        prazo_intimacao = '2'  # despacho → 5 dias
+                    print(f'   📅 Prazo por tipo (despacho=5/sentença=10): código {prazo_intimacao}')
+            except Exception as e:
+                prazo_intimacao = '2'  # padrão: despacho → 5 dias
+                print(f'   📅 Prazo default 5 dias (erro extração: {e})')
+        elif str(prazo_intimacao) in prazo_dias_map:
+            prazo_intimacao = prazo_dias_map[str(prazo_intimacao)]
+            print(f'   📅 prazo_intimacao → código {prazo_intimacao}')
 
         if not proc_projudi and not cod_analise:
             m = re.search(r'(\d{13,20})', processo_numero.replace('-', '').replace('.', ''))
@@ -2081,30 +2130,49 @@ class MovimentacaoService:
                     pass
 
                 # ─── PASSO 3: Selecionar Tipo de Documento = Intimação ───
-                # select[name="codTipoDocumento"] → option value=5 "Intimação"
-                # (a certidão usava outro select: codDescricao1=37 — aqui é
-                # codTipoDocumento=5, igual ao mandado que usa 51).
+                # Jeito dos fluxos que FUNCIONAM (executar_requests — certidão
+                # 37, CUMPRIMENTO 55, etc.): desoculta a linha #trTipoDocumento,
+                # espera o select codTipoDocumento popular e seleciona a opção
+                # pelo LABEL (não por valor fixo — '5' hardcoded era o bug).
+                # Clique em link a:has-text("Intimação") NÃO funciona: casa com
+                # link de menu e não seleciona nada (falso "✅" no log).
                 selecionou_grid = False
                 try:
-                    sel_tp = page.locator('select[name="codTipoDocumento"]')
-                    if sel_tp.count():
-                        try:
-                            sel_tp.select_option('5')  # Intimação
-                            print('   ✅ Tipo doc: Intimação (codTipoDocumento=5)')
+                    page.evaluate('''() => {
+                        var tr = document.getElementById('trTipoDocumento');
+                        if (tr) tr.style.display = 'table-row';
+                    }''')
+                except Exception:
+                    pass
+                try:
+                    sel_tp = page.wait_for_selector(
+                        'select[name="codTipoDocumento"]', timeout=8000)
+                    if sel_tp:
+                        # Match por label 'Intimação' (exclui
+                        # Videoconferência/Telefônica) — label mais curto.
+                        candidatos = []
+                        for opt in sel_tp.query_selector_all('option'):
+                            v = (opt.get_attribute('value') or '').strip()
+                            t = (opt.inner_text() or '').strip()
+                            tl = t.lower()
+                            if v and 'intima' in tl and 'videoconf' not in tl \
+                                    and 'telef' not in tl:
+                                candidatos.append((len(t), v, t))
+                        if candidatos:
+                            candidatos.sort()
+                            sel_tp.select_option(candidatos[0][1])
+                            time.sleep(0.3)
+                            confirmado = page.locator(
+                                'select[name="codTipoDocumento"]').input_value()
                             selecionou_grid = True
-                        except Exception:
-                            # Fallback: procura opção com texto "Intimação"
-                            # (exclui Videoconferência/Telefônica)
-                            opts = sel_tp.locator('option')
-                            for i in range(opts.count()):
-                                txt = opts.nth(i).inner_text().strip()
-                                if ('intima' in txt.lower()
-                                        and 'videoconf' not in txt.lower()
-                                        and 'telef' not in txt.lower()):
-                                    sel_tp.select_option(index=i)
-                                    print(f'   ✅ Tipo doc: {txt} (codTipoDocumento)')
-                                    selecionou_grid = True
-                                    break
+                            print(f'   ✅ Tipo doc: "{candidatos[0][2]}" '
+                                  f'→ valor {candidatos[0][1]} (confirmado={confirmado})')
+                        else:
+                            # Debug: mostra opções disponíveis p/ diagnosticar
+                            opts = [f'{o.get_attribute("value")}={o.inner_text().strip()}'
+                                    for o in sel_tp.query_selector_all('option')]
+                            print('   ⚠️ "Intimação" não achada no codTipoDocumento.'
+                                  f' Opções: {opts[:30]}')
                 except Exception as e:
                     print(f'   ⚠️ codTipoDocumento: {e}')
                 time.sleep(0.5)
@@ -2116,33 +2184,6 @@ class MovimentacaoService:
                     time.sleep(1)
                 except Exception:
                     pass
-                # Abordagem 2: clique na linha do grid (se ainda não achou)
-                if not selecionou_grid:
-                    for trecho in ['Intimação', 'intimação', 'Intimacao']:
-                        for tag in ['a', 'td', 'tr', 'span']:
-                            try:
-                                sel_g = page.query_selector(f'{tag}:has-text("{trecho}")')
-                                if sel_g:
-                                    sel_g.click()
-                                    print(f'   ✅ Tipo doc "{trecho}" (grid {tag})')
-                                    selecionou_grid = True
-                                    break
-                            except Exception:
-                                continue
-                        if selecionou_grid:
-                            break
-                time.sleep(0.5)
-                if not selecionou_grid:
-                    # Fallback: injeta direto na descrição
-                    print('   ⚠️ Não achou "Intimação" — injetando desc')
-                    try:
-                        page.evaluate(f'''() => {{
-                            var desc = document.getElementById('descCategoriaMovimentacao');
-                            if (desc) {{ desc.value = '{descricao_mov}'; }}
-                        }}''')
-                        time.sleep(0.5)
-                    except Exception:
-                        pass
 
                 # ─── PASSO 4: Preencher observação ───
                 try:
@@ -2155,6 +2196,11 @@ class MovimentacaoService:
                 # ═══════════════════════════════════════════════════
                 # FLUXO A: MovimentarAnalise → painel de intimação
                 # ═══════════════════════════════════════════════════
+                polo_norm = str(polo_intimacao or 'todos').lower()
+                marcar_autoras = polo_norm in ('todos', 'ambos', 'autores', 'autoras',
+                                               'autor', 'promovente', 'exequente')
+                marcar_res = polo_norm in ('todos', 'ambos', 'res', 'réus', 'reus',
+                                           'réu', 'reu', 'promovido', 'executado')
                 if cod_analise:
                     print('   🔔 Pipeline de intimação (painel)...')
 
@@ -2170,61 +2216,80 @@ class MovimentacaoService:
                     except Exception as e:
                         print(f'   ⚠️ Painel: {e}')
 
-                    # Autoras
-                    try:
-                        page.evaluate('''() => {
-                            var aba = document.getElementById('Autoras');
-                            if (aba) aba.click();
-                        }''')
-                        time.sleep(0.5)
-                        page.evaluate(f'''() => {{
-                            var sel = document.getElementById('codMotivoAutor');
-                            if (sel) {{ sel.value = '{motivo_intimacao}'; sel.dispatchEvent(new Event('change', {{bubbles:true}})); }}
-                            var sel2 = document.getElementById('codPrazoAutor');
-                            if (sel2) {{ sel2.value = '{prazo_intimacao}'; sel2.dispatchEvent(new Event('change', {{bubbles:true}})); }}
-                        }}''')
-                        time.sleep(0.5)
-                        print(f'   ✅ Autoras configuradas (motivo={motivo_intimacao}, prazo={prazo_intimacao})')
-                    except Exception as e:
-                        print(f'   ⚠️ Autoras: {e}')
+                    # Autoras (só se o polo incluir autoras)
+                    if marcar_autoras:
+                        try:
+                            page.evaluate('''() => {
+                                var aba = document.getElementById('Autoras');
+                                if (aba) aba.click();
+                            }''')
+                            time.sleep(0.5)
+                            page.evaluate(f'''() => {{
+                                var sel = document.getElementById('codMotivoAutor');
+                                if (sel) {{ sel.value = '{motivo_intimacao}'; sel.dispatchEvent(new Event('change', {{bubbles:true}})); }}
+                                var sel2 = document.getElementById('codPrazoAutor');
+                                if (sel2) {{ sel2.value = '{prazo_intimacao}'; sel2.dispatchEvent(new Event('change', {{bubbles:true}})); }}
+                            }}''')
+                            time.sleep(0.5)
+                            print(f'   ✅ Autoras configuradas (motivo={motivo_intimacao}, prazo={prazo_intimacao})')
+                        except Exception as e:
+                            print(f'   ⚠️ Autoras: {e}')
+                    else:
+                        print('   ⏭️ Polo sem autoras — aba Autoras NÃO acionada')
 
-                    # Rés
-                    try:
-                        page.evaluate('''() => {
-                            var aba = document.getElementById('Res');
-                            if (aba) aba.click();
-                        }''')
-                        time.sleep(0.5)
-                        page.evaluate(f'''() => {{
-                            var sel = document.getElementById('codMotivoReu');
-                            if (sel) {{ sel.value = '{motivo_intimacao}'; sel.dispatchEvent(new Event('change', {{bubbles:true}})); }}
-                            var sel2 = document.getElementById('codPrazoReu');
-                            if (sel2) {{ sel2.value = '{prazo_intimacao}'; sel2.dispatchEvent(new Event('change', {{bubbles:true}})); }}
-                        }}''')
-                        time.sleep(0.5)
-                        print(f'   ✅ Rés configurados (motivo={motivo_intimacao}, prazo={prazo_intimacao})')
-                    except Exception as e:
-                        print(f'   ⚠️ Rés: {e}')
+                    # Rés (só se o polo incluir réus)
+                    if marcar_res:
+                        try:
+                            page.evaluate('''() => {
+                                var aba = document.getElementById('Res');
+                                if (aba) aba.click();
+                            }''')
+                            time.sleep(0.5)
+                            page.evaluate(f'''() => {{
+                                var sel = document.getElementById('codMotivoReu');
+                                if (sel) {{ sel.value = '{motivo_intimacao}'; sel.dispatchEvent(new Event('change', {{bubbles:true}})); }}
+                                var sel2 = document.getElementById('codPrazoReu');
+                                if (sel2) {{ sel2.value = '{prazo_intimacao}'; sel2.dispatchEvent(new Event('change', {{bubbles:true}})); }}
+                            }}''')
+                            time.sleep(0.5)
+                            print(f'   ✅ Rés configurados (motivo={motivo_intimacao}, prazo={prazo_intimacao})')
+                        except Exception as e:
+                            print(f'   ⚠️ Rés: {e}')
+                    else:
+                        print('   ⏭️ Polo sem réus — aba Rés NÃO acionada')
+
+                    # ── Vistas ao MP + solicitação de ofício (mêsma movimentação)
+                    #    preenchidos ANTES do Concluir. ──
+                    if envia_mp or solicitar_oficio:
+                        self._preencher_mp_oficio(
+                            page, natureza_processo,
+                            envia_mp, cod_nucleo_mp, tipo_parecer_mp,
+                            prazo_mp, promotor_mp, solicitar_oficio,
+                            oficio_template_id)
 
                     time.sleep(2)
 
-                    # Concluir
-                    page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
-                    time.sleep(0.5)
-                    try:
-                        page.click('#Concluir', timeout=10000)
-                        time.sleep(3)
-                        try:
-                            alert = page.wait_for_event('dialog', timeout=5000)
-                            print(f'   ⚠️ Alerta: {alert.message}')
-                            alert.accept()
-                            time.sleep(2)
-                        except Exception:
-                            pass
-                        print('   ✅ Intimação concluída (MovimentarAnalise)')
+                    if nao_concluir:
+                        print('   ⏸️ MODO TESTE (nao_concluir): tudo preenchido — '
+                              'NÃO cliquei em Concluir. Revise e conclua manualmente.')
                         sucesso = True
-                    except Exception as e:
-                        print(f'   ❌ Erro ao concluir: {e}')
+                    else:
+                        page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+                        time.sleep(0.5)
+                        try:
+                            page.click('#Concluir', timeout=10000)
+                            time.sleep(3)
+                            try:
+                                alert = page.wait_for_event('dialog', timeout=5000)
+                                print(f'   ⚠️ Alerta: {alert.message}')
+                                alert.accept()
+                                time.sleep(2)
+                            except Exception:
+                                pass
+                            print('   ✅ Intimação concluída (MovimentarAnalise)')
+                            sucesso = True
+                        except Exception as e:
+                            print(f'   ❌ Erro ao concluir: {e}')
 
                 # ═══════════════════════════════════════════════════
                 # FLUXO B: MovimentarProcesso → Concluir → DadosProcesso → link Intimar
@@ -2238,42 +2303,61 @@ class MovimentacaoService:
                             pb.click()
                             time.sleep(0.8)
                             print('   ✅ Painel de intimação aberto (FLUXO B)')
-                        page.evaluate('''() => { const a = document.getElementById('Autoras'); if (a) a.click(); }''')
-                        time.sleep(0.4)
-                        page.evaluate(f'''() => {{
-                            const m = document.getElementById('codMotivoAutor');
-                            if (m) {{ m.value = '{motivo_intimacao}'; m.dispatchEvent(new Event('change', {{bubbles:true}})); }}
-                            const p = document.getElementById('codPrazoAutor');
-                            if (p) p.value = '{prazo_intimacao}';
-                        }}''')
-                        page.evaluate('''() => { const r = document.getElementById('Res'); if (r) r.click(); }''')
-                        time.sleep(0.4)
-                        page.evaluate(f'''() => {{
-                            const m = document.getElementById('codMotivoReu');
-                            if (m) {{ m.value = '{motivo_intimacao}'; m.dispatchEvent(new Event('change', {{bubbles:true}})); }}
-                            const p = document.getElementById('codPrazoReu');
-                            if (p) p.value = '{prazo_intimacao}';
-                        }}''')
+                        if marcar_autoras:
+                            page.evaluate('''() => { const a = document.getElementById('Autoras'); if (a) a.click(); }''')
+                            time.sleep(0.4)
+                            page.evaluate(f'''() => {{
+                                const m = document.getElementById('codMotivoAutor');
+                                if (m) {{ m.value = '{motivo_intimacao}'; m.dispatchEvent(new Event('change', {{bubbles:true}})); }}
+                                const p = document.getElementById('codPrazoAutor');
+                                if (p) p.value = '{prazo_intimacao}';
+                            }}''')
+                        else:
+                            print('   ⏭️ Polo sem autoras — aba Autoras NÃO acionada (FLUXO B)')
+                        if marcar_res:
+                            page.evaluate('''() => { const r = document.getElementById('Res'); if (r) r.click(); }''')
+                            time.sleep(0.4)
+                            page.evaluate(f'''() => {{
+                                const m = document.getElementById('codMotivoReu');
+                                if (m) {{ m.value = '{motivo_intimacao}'; m.dispatchEvent(new Event('change', {{bubbles:true}})); }}
+                                const p = document.getElementById('codPrazoReu');
+                                if (p) p.value = '{prazo_intimacao}';
+                            }}''')
+                        else:
+                            print('   ⏭️ Polo sem réus — aba Rés NÃO acionada (FLUXO B)')
                         time.sleep(0.3)
                         print(f'   ✅ Motivo={motivo_intimacao}, prazo={prazo_intimacao} definidos ANTES do Concluir (FLUXO B)')
                     except Exception as e:
                         print(f'   ⚠️ Painel/motivo (FLUXO B): {e}')
 
+                    # ── Vistas ao MP + solicitação de ofício (mêsma movimentação) ──
+                    if envia_mp or solicitar_oficio:
+                        self._preencher_mp_oficio(
+                            page, natureza_processo,
+                            envia_mp, cod_nucleo_mp, tipo_parecer_mp,
+                            prazo_mp, promotor_mp, solicitar_oficio,
+                            oficio_template_id)
+
                     # Concluir movimentação
-                    page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
-                    time.sleep(0.5)
-                    try:
-                        page.click('#Concluir', timeout=10000)
-                        time.sleep(4)
+                    if nao_concluir:
+                        print('   ⏸️ MODO TESTE (nao_concluir): tudo preenchido — '
+                              'NÃO cliquei em Concluir (FLUXO B). Revise manualmente.')
+                        sucesso = True
+                    else:
+                        page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+                        time.sleep(0.5)
                         try:
-                            alert = page.wait_for_event('dialog', timeout=5000)
-                            print(f'   ⚠️ Alerta: {alert.message}')
-                            alert.accept()
-                            time.sleep(3)
-                        except Exception:
-                            pass
-                    except Exception as e:
-                        print(f'   ⚠️ Concluir: {e}')
+                            page.click('#Concluir', timeout=10000)
+                            time.sleep(4)
+                            try:
+                                alert = page.wait_for_event('dialog', timeout=5000)
+                                print(f'   ⚠️ Alerta: {alert.message}')
+                                alert.accept()
+                                time.sleep(3)
+                            except Exception:
+                                pass
+                        except Exception as e:
+                            print(f'   ⚠️ Concluir: {e}')
 
                     # FLUXO B encerra no painel (igual MovimentarAnalise):
                     # 581 → busca → grade → obs → Autoras/Rés (motivo+prazo) → Concluir.
@@ -2285,7 +2369,10 @@ class MovimentacaoService:
                 # (MovimentarProcessoAvancado), seleciona o modelo COJE no
                 # select name="tipo" e clica em "expedir com ar digital".
                 # ═══════════════════════════════════════════════════
-                if expedir_ar and sucesso:
+                if nao_concluir:
+                    print('   ⏸️ MODO TESTE: AR/expedição pulados (nada concluído).')
+                    sucesso = True
+                elif expedir_ar and sucesso:
                     sucesso = self._expedir_intimacao_ar(
                         page, proc_projudi, natureza_processo,
                         tipo_intimacao, codigo_tipo_ar,
@@ -2297,6 +2384,9 @@ class MovimentacaoService:
             print(f'   ❌ Erro no Playwright: {str(e)[:200]}')
             import traceback
             traceback.print_exc()
+            # Guarda o erro p/ registrar no CumprimentoRecord (hoje os records
+            # dessa função nascem SEM log — impossível fiscalizar o motivo).
+            self._erro_mov = f'{type(e).__name__}: {str(e)[:300]}'
             sucesso = False
 
         # ── Registra no banco (CumprimentoRecord) para aparecer nos Cumprimentos ──
@@ -2325,6 +2415,25 @@ class MovimentacaoService:
                 user=self.user if hasattr(self, 'user') else None,
             )
             print(f'   📝 Cumprimento #{record.id} registrado ({status})')
+            # Log do desfecho — permite fiscalizar pelo CumprimentoLog (antes
+            # os records dessa função nasciam SEM log, e o motivo da falha
+            # ficava invisível mesmo a movimentação tendo entrado no Projudi).
+            try:
+                from projudi.models import CumprimentoLog
+                msg = (f'{fluxo_just}. '
+                       + (f'ERRO: {self._erro_mov} ' if getattr(self, '_erro_mov', None) else '')
+                       + (f'sucesso={sucesso}')).strip()
+                CumprimentoLog.objects.create(
+                    cumprimento=record,
+                    tipo='erro' if (getattr(self, '_erro_mov', None) or not sucesso) else 'info',
+                    mensagem=msg,
+                    detalhes={'sucesso': sucesso,
+                              'erro': getattr(self, '_erro_mov', None) or '',
+                              'cod_analise': cod_analise,
+                              'polo': polo_intimacao},
+                )
+            except Exception as log_e:
+                print(f'   ⚠️ Erro ao logar desfecho: {log_e}')
         except Exception as e:
             print(f'   ⚠️ Erro ao registrar cumprimento: {e}')
 
@@ -2411,6 +2520,138 @@ class MovimentacaoService:
         ('civel', 'audiencia'):  ('56061', 'INTIMAÇÃO PARA AUDIÊNCIA CÍVEL'),
         ('criminal', 'audiencia'): ('55794', 'INTIMAÇÃO PARA AUDIÊNCIA CRIMINAL'),
     }
+
+    def _preencher_mp_oficio(
+        self, page, natureza_processo,
+        envia_mp=False, cod_nucleo_mp='31', tipo_parecer_mp='6',
+        prazo_mp='5', promotor_mp=None, solicitar_oficio=False,
+        oficio_template_id=None,
+    ) -> None:
+        """Preenche Vistas ao MP e/ou solicitação de ofício na MESMA página
+        da intimação eletrônica, ANTES do Concluir (um único Concluir).
+
+        MP: expande painel envio órgão externo, marca enviaMP, seleciona
+        Núcleo → tipo de parecer → prazo → promotor (via DWR).
+
+        Ofício: solicita a expedição do ofício adicionando a linha de
+        cumprimento do ofício no grid (tipoCumprimento=12 = Ofício) e
+        seleciona o template correspondente quando oficio_template_id é dado
+        (5 = Ofício CIAP, 7 = Ofício RPV).
+        """
+        if not (envia_mp or solicitar_oficio):
+            return
+        import time as _t
+        try:
+            # ═══ VISTAS AO MP ═══
+            if envia_mp:
+                try:
+                    page.locator('#imgBotao_panelEnvioOrgaoExterno').first.click()
+                    _t.sleep(0.5)
+                    print('   ✅ Painel envio órgão externo expandido')
+                except Exception:
+                    pass
+                try:
+                    cb = page.locator('input[name="enviaMP"]')
+                    if cb.count():
+                        cb.check()
+                        print('   ✅ enviaMP marcado')
+                        _t.sleep(0.5)
+                except Exception:
+                    pass
+                try:
+                    sel_nucleo = page.locator('select[name="codNucleoMP"]')
+                    if sel_nucleo.count():
+                        sel_nucleo.select_option(cod_nucleo_mp)
+                        print(f'   ✅ Núcleo MP: {cod_nucleo_mp}')
+                        _t.sleep(0.8)  # DWR popula o promotor
+                except Exception as e:
+                    print(f'   ⚠️ Núcleo MP: {e}')
+                if tipo_parecer_mp is not None:
+                    try:
+                        sel_tp = page.locator('select[name="codTipoEnvioMP"]')
+                        if sel_tp.count():
+                            sel_tp.select_option(str(tipo_parecer_mp))
+                            print(f'   ✅ Tipo parecer MP: {tipo_parecer_mp}')
+                            _t.sleep(0.3)
+                    except Exception as e:
+                        print(f'   ⚠️ Tipo parecer MP: {e}')
+                if prazo_mp is not None:
+                    try:
+                        sel_pr = page.locator('select[name="codPrazoEnviaMP"]')
+                        if sel_pr.count():
+                            sel_pr.select_option(str(prazo_mp))
+                            print(f'   ✅ Prazo MP: {prazo_mp}')
+                            _t.sleep(0.3)
+                    except Exception as e:
+                        print(f'   ⚠️ Prazo MP: {e}')
+                if promotor_mp:
+                    try:
+                        nome_proc = str(promotor_mp).strip()
+                        sel_promotor = page.locator('select[name="loginPromotorNucleoMP"]')
+                        achou = False
+                        if sel_promotor.count():
+                            for j in range(sel_promotor.locator('option').count()):
+                                txt = sel_promotor.locator('option').nth(j).inner_text().strip()
+                                if nome_proc.lower() in txt.lower():
+                                    val = sel_promotor.locator('option').nth(j).get_attribute('value')
+                                    sel_promotor.select_option(val)
+                                    print(f'   ✅ Promotor MP: {txt.strip()}')
+                                    achou = True
+                                    break
+                        if not achou:
+                            print(f'   ⚠️ Promotor "{nome_proc}" não achado (núcleo {cod_nucleo_mp})')
+                    except Exception as e:
+                        print(f'   ⚠️ Promotor MP: {e}')
+
+            # ═══ SOLICITAÇÃO DE OFÍCIO (linha de cumprimento) ═══
+            if solicitar_oficio:
+                try:
+                    # Abre o painel de cumprimento se ainda não estiver
+                    try:
+                        link_cump = page.locator("a:has-text('Cumprimento')").first
+                        if link_cump.count():
+                            link_cump.click()
+                            _t.sleep(0.4)
+                    except Exception:
+                        pass
+                    # Linha de cumprimento tipo OFÍCIO (12)
+                    page.select_option('#tipoCumprimento', '12')
+                    _t.sleep(0.3)
+                    print('   ✅ Linha de cumprimento: Ofício (tipoCumprimento=12)')
+                    # Seleciona o template/ofício no grid de documento quando id dado
+                    if oficio_template_id:
+                        try:
+                            # codTipoDocumento do ofício: CIAP=5, RPV=7 → o
+                            # código do select não é o id do template; busca
+                            # pela descrição do template.
+                            from processes.models import DocumentTemplate
+                            tmpl = DocumentTemplate.objects.filter(
+                                id=oficio_template_id, active=True).first()
+                            if tmpl:
+                                sel_td = page.locator('select[name="codTipoDocumento"]')
+                                if sel_td.count():
+                                    desc_alvo = tmpl.name.lower()
+                                    valor = None
+                                    for opt in sel_td.locator('option').all():
+                                        t = (opt.inner_text() or '').strip()
+                                        if t and desc_alvo in t.lower():
+                                            valor = opt.get_attribute('value')
+                                            break
+                                    if valor:
+                                        sel_td.select_option(valor)
+                                        print(f'   ✅ Ofício selecionado: {tmpl.name}')
+                                        _t.sleep(0.3)
+                        except Exception as e:
+                            print(f'   ⚠️ Template ofício: {e}')
+                    # Adiciona a linha (btnAddCumprimento)
+                    page.click('#btnAddCumprimento')
+                    _t.sleep(0.8)
+                    print('   ✅ Cumprimento de ofício adicionado')
+                except Exception as e:
+                    print(f'   ⚠️ Solicitação de ofício: {e}')
+
+        except Exception as e:
+            print(f'   ⚠️ Preencher MP/ofício: {e}')
 
     def executar_com_intimacao_ar(
         self,
