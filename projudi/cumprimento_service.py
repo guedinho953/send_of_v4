@@ -124,6 +124,36 @@ class CumprimentoService:
                     # é sinalizado pelo chamador quando for caso
                 }
                 historico = self._extrair_historico_comunicacao(proc)
+
+                # ── ComunicacaoTracker ANTES do FluxoDecisor (exceto DJEN) ──
+                # Se nenhuma parte intima por domicílio eletrônico, verifica
+                # se o ato já foi comunicado à parte. Se sim, NÃO duplica:
+                # pula (não gera novo cumprimento) e registra o motivo.
+                precheck = self._precheck_tracker(partes_classif, tipo_ato, proc)
+                ja_comunicadas = precheck.get('ja_comunicadas', {})
+                if ja_comunicadas:
+                    nomes = ', '.join(ja_comunicadas.keys())
+                    print(f'   ⏭️ {proc_num}: comunicação já realizada p/ {nomes} '
+                          f'— pulando (evita duplicar).')
+                    resultados.append({
+                        'processo': proc,
+                        'movimentacao': mov,
+                        'rag': rag,
+                        'template': template,
+                        'classificacao': resultado_cls,
+                        'decisao': {
+                            'tipo': 'ja_comunicado',
+                            'partes': [],
+                            'justificativa': (
+                                'Comunicação já realizada para: '
+                                f'{nomes}. Detalhe: '
+                                f'{next(iter(ja_comunicadas.values())).get("mensagem", "")}'
+                            ),
+                        },
+                        'texto_mov': texto,
+                    })
+                    continue
+
                 decisor = FluxoDecisor(
                     partes_raw, partes_classif, ato_data,
                     historico_comunicacao=historico,
@@ -147,10 +177,16 @@ class CumprimentoService:
         return resultados
 
     def _melhor_match(self, texto, similares, templates_validos):
-        """Encontra o melhor match RAG + template."""
+        """Encontra o melhor match RAG + template.
+
+        Usa o MESMO método limpo do CLI (_palavras_para_match — sem
+        stopwords/pontuação) e o MESMO threshold (≥70% do MENOR texto).
+        Antes usava normalizar_texto cru, o que deixava passar falsos
+        positivos (despachos casavam por palavras genéricas do cabeçalho).
+        """
         from processes.models import RAGExample
-        from processes.movimentacoes_service import normalizar_texto
-        palavras_texto = set(normalizar_texto(texto).split())
+        from processes.movimentacoes_service import _palavras_para_match
+        palavras_texto = _palavras_para_match(texto)
 
         for s in similares:
             # Âncora do match = observação do despacho (texto longo da decisão
@@ -158,9 +194,9 @@ class CumprimentoService:
             # observação. É a observação que espelha o texto dos documentos
             # baixados das movimentações.
             texto_rag = s.get('despacho_observacao') or s.get('despacho_ato') or ''
-            palavras_rag_s = set(normalizar_texto(texto_rag).split())
-            total_s = max(len(palavras_rag_s), 1)
-            if len(palavras_texto & palavras_rag_s) / total_s < 0.70:
+            palavras_rag_s = _palavras_para_match(texto_rag)
+            base_s = max(min(len(palavras_texto), len(palavras_rag_s)), 1)
+            if len(palavras_texto & palavras_rag_s) / base_s < 0.70:
                 continue
             try:
                 rag = RAGExample.objects.get(id=s['id'])
@@ -315,6 +351,64 @@ class CumprimentoService:
             })
         return out
 
+    def _extrair_movimentacoes_tracker(self, proc) -> List[Dict]:
+        """Movimentações do processo p/ alimentar o ComunicacaoTracker.
+
+        Prioriza o banco (Movement); se não há nada cadastrado, baixa a
+        página DadosProcesso e extrai do Projudi. Usado para o pré-check
+        de "comunicação já realizada" ANTES da decisão de canal.
+        """
+        from processes.models import Movement
+        try:
+            mvs = list(Movement.objects.filter(process=proc).values()[:200])
+            if mvs:
+                return mvs
+        except Exception:
+            pass
+        if not proc.projudi_url:
+            return []
+        try:
+            session = self.projudi_service._get_session_from_cookies() or (None, None)
+            session = session[0] if isinstance(session, tuple) else session
+            if not session:
+                return []
+            r = session.get(proc.projudi_url, timeout=15)
+            if r.status_code != 200 or 'expirou' in r.text.lower():
+                return []
+            from projudiProcessNavigator import ProcessoParser
+            parser = ProcessoParser(r.text)
+            movs, _ = parser.extrair_movimentacoes()
+            return movs
+        except Exception:
+            return []
+
+    def _precheck_tracker(self, partes_classif, tipo_ato, proc) -> Dict:
+        """Tracker ANTES do FluxoDecisor: comunicação já feita? (exceto DJEN).
+
+        Regra (Ivan, 2026-08-06): se nenhuma parte tem domicílio eletrônico
+        (DJEN), consulta o histórico de comunicações ANTES de decidir o canal.
+        Se o ato já foi comunicado à parte (expedida/lida/pendente), não duplica.
+        Retorna { 'ja_comunicadas': {parte: {existe,evento,situacao,mensagem}} }
+        """
+        # Só roda quando NENHUMA parte intima por DJEN/eletrônico
+        if any(p.get('domicilio_cnj') or p.get('recebe_intimacao_email')
+               for p in partes_classif):
+            return {'ja_comunicadas': {}}
+        try:
+            from projudi.comunicacao_tracker import ComunicacaoTracker
+            tracker = ComunicacaoTracker(self._extrair_movimentacoes_tracker(proc))
+        except Exception:
+            return {'ja_comunicadas': {}}
+        ja = {}
+        for p in partes_classif:
+            nome = (p.get('nome') or '').strip()
+            if not nome:
+                continue
+            r = tracker.ja_expedida(tipo_ato, nome)
+            if r.get('existe'):
+                ja[nome] = r
+        return {'ja_comunicadas': ja}
+
     # =================================================================
     # IMPORTAR (criar CumprimentoRecord a partir da decisão)
     # =================================================================
@@ -325,6 +419,31 @@ class CumprimentoService:
         rag = data.get('rag')
         template = data.get('template')
         texto_mov = data.get('texto_mov', '')
+
+        # ── Comunicação JÁ realizada (pre-check do ComunicacaoTracker) ──
+        # Não duplica: registra um cumprimento "dispensado" com o motivo para
+        # o usuário ver no dashboard, mas NÃO gera novo fluxo de envio.
+        if decisao.get('tipo') == 'ja_comunicado':
+            record, created = CumprimentoRecord.objects.update_or_create(
+                processo=processo.number,
+                fluxo='dispensado',
+                defaults={
+                    'numero_processo_cnj': getattr(processo, 'number', ''),
+                    'fluxo_justificativa': (
+                        decisao.get('justificativa')
+                        or 'Comunicação já realizada (pre-check tracker).'
+                    ),
+                    'act_verb': '',
+                    'snippet': texto_mov[:2000],
+                    'template_used': template,
+                    'rag_example': rag,
+                    'url_processo': getattr(processo, 'projudi_url', ''),
+                    'status': 'dispensado',
+                    'user': self.user,
+                }
+            )
+            self._log(record, 'info', f"Comunicação já realizada — não duplica. {decisao.get('justificativa', '')}")
+            return record
 
         # Se for ato sem destinatário, cria um único registro
         if decisao.get('tipo') == 'ato_sem_destinatario':

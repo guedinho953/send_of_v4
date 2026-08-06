@@ -310,30 +310,56 @@ def normalizar_texto(texto: str) -> str:
     )
 
 
+# Stopwords comuns do português + jargão de cabeçalho/assinatura do Projudi.
+# O matching RAG as ignora: sem parões, RAGs com texto curto (ex. "vista ao
+# Ministério Público") são afogadas por RAGs irrelevantes que só casam por
+# termos genéricos de cabeçalho (a/da/do/de/o/e/que/estado/...).
+STOPWORDS_RAG = frozenset("""
+a o e de da do em um uma ao dos das na nas no nos com por parar se os as
+dele dela deles delas seu sua seus suas este esta estes estas esse essa esses
+essas aquele aquela aqueles aquelas isto isso aquilo nao nem mais menos
+também ainda ja tem sido processo numero n tribunal vara sistema juizados
+especiais paulo afonso poder judiciario brasil data assinatura eletronica quinta
+conforme portugues descrito contrato desc ano
+""".split())
+
+
+def _palavras_para_match(texto: str) -> set:
+    """Tokens úteis p/ matching RAG: normaliza, remove pontuação e stopwords."""
+    import re
+    txt = normalizar_texto(texto)
+    tokens = re.findall(r'[a-z0-9]+', txt)
+    return {t for t in tokens if t and t not in STOPWORDS_RAG}
+
+
 def buscar_cumprimentos_similares(texto_movimentacao: str, top_k: int = 3) -> List[Dict]:
     """
     Busca exemplos RAG similares ao texto da movimentacao.
-    Compara palavras em comum com o texto do despacho + cumprimentos.
-    NÃO limita a 200 RAGs — considera TODAS as ativas (o limite antigo
-    [:200] fazia RAGs recém-criadas ficarem de fora).
+
+    Compara palavras em comum (ignorando stopwords/pontuação) entre o
+    texto recebido e o despacho + cumprimentos de cada RAG ativa.
+    NÃO limita a 200 RAGs — considera TODAS as ativas.
     """
     from .models import RAGExample
     exemplos = RAGExample.objects.filter(active=True)
     resultados = []
 
-    palavras_atual = set(normalizar_texto(texto_movimentacao).split())
+    palavras_atual = _palavras_para_match(texto_movimentacao)
     for ex in exemplos:
         # Usa despacho_ato + despacho_observacao (conteúdo real da decisão)
-        texto_busca = normalizar_texto(
-            ex.despacho_ato + ' ' + ex.despacho_observacao)
-        for c in ex.cumprimentos:
-            texto_busca += ' ' + normalizar_texto(
-                c.get('ato', '') + ' ' + c.get('observacao', ''))
-        palavras_hist = set(texto_busca.split())
+        texto_busca = ex.despacho_ato + ' ' + (ex.despacho_observacao or '')
+        for c in ex.cumprimentos or []:
+            texto_busca += ' ' + c.get('ato', '') + ' ' + c.get('observacao', '')
+        palavras_hist = _palavras_para_match(texto_busca)
         intersecao = palavras_atual & palavras_hist
         if len(intersecao) >= 2:
+            # 'excesso' = palavras da RAG que NÃO estão no texto (ruído).
+            # Quanto menor, mais específica/aderente é a RAG para o caso.
+            excesso = len(palavras_hist - palavras_atual)
             resultados.append({
                 'similaridade': len(intersecao),
+                'jaccard': (len(intersecao) / max(min(len(palavras_atual), len(palavras_hist)), 1)),
+                'excesso': excesso,
                 'id': ex.id,
                 'processo': ex.process.number if ex.process else None,
                 'despacho_ato': ex.despacho_ato[:200],
@@ -344,7 +370,15 @@ def buscar_cumprimentos_similares(texto_movimentacao: str, top_k: int = 3) -> Li
                 'sequencia_cumprimento': ex.sequencia_cumprimento or [],
             })
 
-    resultados.sort(key=lambda x: x['similaridade'], reverse=True)
+    # Ranqueia por jaccard (proporção de cobertura) — RAGs com poucas
+    # palavras-chave exatas sobem; RAGs longas/genéricas descem. Desempate
+    # pelo MENOR excesso (palavras da RAG fora do texto): quando duas RAGs
+    # empatam em cobertura, vence a mais enxuta — evita que uma RAG com
+    # texto extra (ex.: inversão do ônus) seja escolhida para um despacho
+    # que só pede a intimação simples.
+    resultados.sort(
+        key=lambda x: (x['jaccard'], -x['excesso'], x['similaridade']),
+        reverse=True)
     return resultados[:top_k]
 
 

@@ -116,15 +116,14 @@ def rastrear_e_expedir(tipo=None):
             melhor = None
             template = None
             rag = None
-            from processes.movimentacoes_service import normalizar_texto
-            palavras_texto = set(normalizar_texto(texto).split())
+            from processes.movimentacoes_service import _palavras_para_match
+            palavras_texto = _palavras_para_match(texto)
 
             for s in similares:
                 # Usa despacho_ato + observacao para comparação (mais preciso)
                 # A observacao tem o conteúdo real da decisão (ex: detalhes do CIAP/RPV)
-                texto_rag = normalizar_texto(
+                palavras_rag_s = _palavras_para_match(
                     s['despacho_ato'] + ' ' + s.get('despacho_observacao', ''))
-                palavras_rag_s = set(texto_rag.split())
                 total_s = max(len(palavras_texto & palavras_rag_s), 1)
                 # Usa o menor dos dois textos como base para o threshold
                 # Isso evita que RAGs com texto muito longo sejam penalizados
@@ -787,6 +786,7 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                     fallback_polo=passo.get('fallback_polo'),
                     motivo_intimacao=passo.get('motivo_intimacao', '3'),
                     expedir_ar=bool(passo.get('expedir_ar', False)),
+                    fallback_ar=bool(passo.get('fallback_ar', False)),
                     tipo_intimacao=passo.get('tipo_intimacao', 'geral'),
                     codigo_tipo_ar=passo.get('codigo_tipo_ar'),
                     natureza_override=passo.get('natureza'),
@@ -868,6 +868,7 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                     fallback_polo=passo.get('fallback_polo'),
                     motivo_intimacao=passo.get('motivo_intimacao', '3'),
                     expedir_ar=bool(passo.get('expedir_ar', True)),
+                    fallback_ar=bool(passo.get('fallback_ar', False)),
                     tipo_intimacao=passo.get('tipo_intimacao', 'geral'),
                     codigo_tipo_ar=passo.get('codigo_tipo_ar'),
                     natureza_override=passo.get('natureza'),

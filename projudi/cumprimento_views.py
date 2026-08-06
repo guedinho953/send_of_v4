@@ -53,6 +53,19 @@ class CumprimentoDashboardView(LoginRequiredMixin, TemplateView):
             qs = qs.filter(fluxo=fluxo_filter)
 
         context['cumprimentos'] = qs.order_by('-created_at')[:50]
+
+        # ── Intimações expedidas pelos Correios (AR) mas NÃO assinadas ──
+        # Filtro status='pendente' + fluxo='ar': o fluxo 'ar' só é criado quando
+        # o AR foi expedido sem assinatura concluída. Ficam na lista para
+        # controle manual até a assinatura ser finalizada no Projudi.
+        context['ar_pendentes_assinatura'] = CumprimentoRecord.objects.filter(
+            user=user, status='pendente', fluxo='ar'
+        ).order_by('-created_at')[:30]
+        context['ar_pendentes_assinatura_count'] = (
+            CumprimentoRecord.objects.filter(user=user, status='pendente',
+                                             fluxo='ar').count()
+        )
+
         context['session_active'] = self._session_ativa(user)
         context['auto_rastrear_ativo'] = os.path.exists('/tmp/auto_rastrear.pid')
         return context

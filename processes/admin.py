@@ -105,7 +105,33 @@ class RAGExampleAdmin(admin.ModelAdmin):
               ']</code>'}),
         ('Controle', {'fields': ['active', 'suggested_templates']}),
     ]
-    actions = ['expedir_ciap']
+    actions = ['expedir_ciap', 'duplicar_rag']
+
+    def duplicar_rag(self, request, queryset):
+        """Cria uma cópia (ativa) de cada RAG selecionada, com sequência copiada."""
+        criadas = 0
+        for rag in queryset:
+            nova = RAGExample(
+                process=rag.process,
+                oficio=rag.oficio,
+                despacho_ato=rag.despacho_ato + (' (cópia)' if not rag.despacho_ato.endswith(' (cópia)') else ''),
+                despacho_observacao=rag.despacho_observacao,
+                despacho_data=rag.despacho_data,
+                despacho_autor=rag.despacho_autor,
+                evento_despacho=rag.evento_despacho,
+                cumprimentos=rag.cumprimentos,
+                documentos=rag.documentos,
+                sequencia_cumprimento=json.loads(json.dumps(rag.sequencia_cumprimento or [])),
+                active=rag.active,
+            )
+            nova.save()
+            nova.suggested_templates.set(rag.suggested_templates.all())
+            criadas += 1
+        self.message_user(
+            request,
+            f'{criadas} RAG(s) duplicada(s) — ajuste despacho_ato/observação e o processo na cópia.',
+        )
+    duplicar_rag.short_description = 'Duplicar RAG selecionada(s)'
 
     def resumo_sequencia(self, obj):
         seq = obj.sequencia_cumprimento or []

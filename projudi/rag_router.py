@@ -220,6 +220,16 @@ def _executar_sequencia(sequencia, mov, proc_num, texto,
                         descricao_mov=passo.get('descricao_mov', 'Intimação'),
                         fallback_mov=passo.get('fallback_mov'),
                         fallback_uf=passo.get('fallback_uf'),
+                        expedir_ar=bool(passo.get('expedir_ar', False)),
+                        fallback_ar=bool(passo.get('fallback_ar', False)),
+                        assinar_ar=passo.get('assinar_ar', False),
+                        prazo_intimacao=passo.get('prazo_intimacao', ''),
+                        fallback_mandado=(
+                            passo.get('fallback') in ('mandado', 'solicitar_mandado',
+                                                      'solicitar_expedicao')
+                            or bool(passo.get('fallback_mandado'))
+                        ),
+                        mandado_explicito=True,
                     )
                     if ok:
                         print(' → ✅ Intimação eletrônica concluída')

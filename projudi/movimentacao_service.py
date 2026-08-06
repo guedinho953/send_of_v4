@@ -1697,6 +1697,8 @@ class MovimentacaoService:
         fallback_uf: str = None,
         fallback_mandado: bool = False,
         mandado_explicito: bool = False,
+        fallback_ar: bool = False,
+        fallback_registrar: bool = False,
         prazo_intimacao: str = '3',
         fallback_polo=None,
         motivo_intimacao: str = '3',
@@ -1747,6 +1749,13 @@ class MovimentacaoService:
                           (match do histórico de comunicações), registra a
                           solicitação de expedição de mandado (sem expedir)
                           em vez da intimação eletrônica. Canal AR → pula.
+            fallback_ar: Se True, quando o canal da parte for AR (não tem
+                          domicílio eletrônico — última intimação por AR),
+                          NÃO pula: expede a intimação pelos CORREIOS com AR
+                          digital (2º clique, como o passo intimacao_correio).
+                          Combinar com assinar_ar (False = deixa página aberta
+                          p/ assinatura manual). Se False (default), canal AR
+                          continua pulando ("fazer manualmente").
             mandado_explicito: Se True, a sequência já tem passo explícito
                           de mandado/solicitação — o pre-check só pula a
                           intimação (não registra solicitação duplicada).
@@ -1898,9 +1907,19 @@ class MovimentacaoService:
                     ultimo = ints[-1]
                     ultimo_meio = ultimo.get('meio_comunicacao')
                     if ultimo_meio == 'ar':
-                        print(f'   ⏸️ Última intimação por AR ({ultimo.get("ato", "")[:60]})')
-                        print('   ⏸️ Pulando intimação eletrônica (fazer manualmente)')
-                        return True
+                        if fallback_ar:
+                            # fallback_ar: a parte não tem domicílio eletrônico
+                            # (última comunicação por AR) → em vez de pular,
+                            # expede a intimação pelos CORREIOS com AR digital
+                            # (2º clique). Não retorna aqui; segue o fluxo da
+                            # movimentação + expedição (expedir_ar forçado).
+                            print(f'   🚚 Última intimação por AR ({ultimo.get("ato", "")[:60]})')
+                            print('   🚚 fallback_ar=true → expedindo pelos CORREIOS (AR digital)')
+                            expedir_ar = True
+                        else:
+                            print(f'   ⏸️ Última intimação por AR ({ultimo.get("ato", "")[:60]})')
+                            print('   ⏸️ Pulando intimação eletrônica (fazer manualmente)')
+                            return True
                     # ── Domicílio eletrônico tem precedência sobre o canal do
                     # histórico: parte com envelope (intimação eletrônica) ou
                     # Domicílio CNJ (favicon) intima eletronicamente — NUNCA

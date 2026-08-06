@@ -9,6 +9,27 @@ Funções:
      gerou retorno (lida, devolvida, cumprida).
   3. Emparelha expedidas com lidas/devolvidas usando dados do
      ProcessoParser + CommunicationTracking existente.
+
+VISÃO FUTURA (proposta registrada em 2026-08-06 — ainda NÃO implementada):
+  - FISCALIZAR PRAZOS: usar o emparelhamento expedida→lida para calcular
+    se o prazo da comunicação foi respeitado (data de expedição → data de
+    leitura/retorno) e alertar comunicações com prazo vencido sem retorno.
+  - FISCALIZAR CUMPRIMENTOS: para cada comunicação expedida, verificar se
+    o comando judicial associado foi cumprido (retorno lido/cumprido x
+    pendente/vencido), alimentando o dashboard de "cumprimentos aguardando".
+  - CONTEXTO DE EVENTOS PASSADOS PARA CUMPRIR O EVENTO ATUAL: ao executar
+    uma movimentação, o tracker pode fornecer os EVENTOS ANTERIORES do
+    processo (ex.: citação/AR/audiência de eventos passados) como contexto
+    para decidir e preencher o ato atual — p. ex., o número do evento que
+    originou o prazo, quem já foi intimado, qual meio funcionou antes.
+    Isso viabiliza despachos que fazem remissão a atos anteriores (RAG
+    contextual via `referenced_event_obj`).
+  Como fazer depois: expor os dados já emparelhados (_expedidas/_lidas/
+  _pendentes com data_obj) via métodos de consulta (ex.: listar_expedidas
+  sem retorno há mais de N dias, obter_evento_por_tipo(tipo, parte)) e
+  criar uma view/endpoint de fiscalização que consome essas consultas.
+  Nada disso existe ainda — por ora o tracker é usado apenas no pré-check
+  de duplicidade antes do FluxoDecisor.
 """
 
 import re

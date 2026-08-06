@@ -190,6 +190,81 @@ JSON validado no processo 0000386 (saiu da fila):
    Sem template → só Mov581 com `fallback_mov`. `mandado_explicito: true` →
    sequência já tem passo de mandado, não duplica.
 
+**Fallback de AR** (`fallback_ar: true`) — 2026-08-06:
+No passo `intimacao_eletronica`, quando a última comunicação da parte é **AR**
+(não tem domicílio eletrônico), o default é **PULAR** ("fazer manualmente").
+Adicionar `"fallback_ar": true` faz o fluxo, em vez de pular, **expedir pelos
+CORREIOS com AR digital** (2º clique, como o passo `intimacao_correio`). Juntar
+com `"assinar_ar": false` para deixar a página aberta (assinatura manual):
+
+```json
+{
+  "tipo": "intimacao_eletronica",
+  "fluxo": "analisar",
+  "fluxo_fallback": true,
+  "codigo_mov": "581",
+  "descricao_mov": "Intimação",
+  "observacao": "Intime-se a parte autora, através de sua defesa, para apresentar manifestação sobre a proposta de pagamento do débito",
+  "motivo_intimacao": "3",
+  "prazo_intimacao": "2",
+  "polo": "res",
+  "fallback_ar": true,
+  "assinar_ar": false
+}
+```
+- Parte com domicílio eletrônico continua intimando por DJEN
+  (fallback_ar não altera esse caso).
+- ⚠️ Se `expedir_ar` já vem como true no passo, o fallback_ar é irrelevante
+  (o fluxo AR já está ativo).
+
+**Controle de AR não assinado (dashboard)** — 2026-08-06:
+Quando o AR é expedido mas a assinatura não é concluída (`assinar_ar: false`
+ou falha na assinatura), o `CumprimentoRecord` é criado com
+`status='pendente'` e `fluxo='ar'` (justificativa: "AR expedido mas
+AGUARDANDO assinatura"). Esses registros aparecem:
+1. **Dashboard principal** (`/`): painel "✍️ Intimações Expedidas —
+   Aguardando Assinatura (AR)" com cards de cada processo + seção
+   "📋 Cumprimentos Recentes" (últimos 10).
+2. **Dashboard de Cumprimentos** (`/projudi/cumprimentos/`): contados em
+   "Pendentes" e listados com filtro `?status=pendente`.
+Filtro usado na view: `CumprimentoRecord.objects.filter(status='pendente',
+fluxo='ar')`. Todas as não assinadas no automático ficam nessa lista até a
+assinatura ser concluída manualmente no Projudi.
+
+**ComunicacaoTracker ANTES do FluxoDecisor (evitar duplicidade)** — 2026-08-06:
+No caminho do dashboard (`cumprimento_service.buscar_cumprimentos_pendentes`),
+antes de decidir o canal com o `FluxoDecisor`, roda um **pré-check com o
+`ComunicacaoTracker`**: se NENHUMA parte tem domicílio eletrônico (DJEN),
+consulta o histórico de comunicações e, se o ato já foi comunicado à parte
+(expedida/lida/pendente), **NÃO duplica** — cria um `CumprimentoRecord` com
+`status='dispensado'` e justificativa "Comunicação já realizada". Partes com
+DJEN (intimação eletrônica) pular o pré-check e seguem direto.
+- Métodos novos: `_extrair_movimentacoes_tracker()` (lê Movement ou baixa
+  DadosProcesso) e `_precheck_tracker()`.
+- Novos campos da decisão: `tipo='ja_comunicado'`.
+
+**⚠️ VISÃO FUTURA (proposta, NÃO implementada):** o ComunicacaoTracker deve
+ser usado também para **fiscalizar prazos e cumprimentos de comunicações** e
+para **fornecer contexto de eventos passados ao cumprir o evento atual** —
+usar o emparelhamento expedida→lida (`_expedidas`/`_lidas`/`_pendentes` com
+`data_obj`) para (a) calcular se o prazo foi respeitado e alertar comunicações
+vencidas sem retorno, e (b) alimentar despachos que remetem a atos anteriores
+(RAG contextual via `referenced_event_obj`, pegando o evento que originou
+prazo/meio/quem já foi intimado). Proposta completa no docstring do
+`projudi/comunicacao_tracker.py`.
+
+**Matching RAG — alinhar CLI e dashboard (evitar falsos positivos)** — 2026-08-06:
+Sintoma: despachos eram executados com RAG errada (ex.: a RAG de "intimar a
+parte de uma ordem sobre pedido liminar" pegou um despacho de "intimem-se as
+partes promovidas para ciência dos documentos"). CAUSA: o caminho do DASHBOARD
+(`cumprimento_service._melhor_match`) usava `normalizar_texto` CRU (sem remover
+stopwords/pontuação) e threshold sobre o TAMANHO da RAG — despachos casavam por
+palavras genéricas do cabeçalho. O CLI (`expedir_rapido`) já usava o método limpo.
+CORREÇÃO: `_melhor_match` agora usa o MESMO `_palavras_para_match` (remove
+stopwords/pontuação) e o MESMO threshold (≥70% do MENOR texto) do CLI. As duas
+caminhos ficaram consistentes. Se aparecer falso positivo de novo, checar se os
+dois caminhos usam critérios iguais.
+
 ---
 
 ## 5. Matching RAG (como o sistema decide qual RAG executar)
