@@ -1718,6 +1718,10 @@ class MovimentacaoService:
         promotor_mp: str = None,
         solicitar_oficio: bool = False,
         oficio_template_id: int = None,
+        # ── Solicitação de expedição de MANDADO na MESMA movimentação ──
+        solicitar_mandado: bool = False,
+        mandado_polo=None,
+        mandado_subtipo: str = '3',
         # Modo teste: preenche tudo (intimação, MP, ofício) mas NÃO clica em
         # Concluir nem expede/assina o AR — deixa a página aberta p/ revisão.
         nao_concluir: bool = False,
@@ -1936,95 +1940,103 @@ class MovimentacaoService:
                         print('   ✅ Parte(s) com Domicílio CNJ/eletrônico — intimando eletronicamente (sem fallback de mandado)')
                     elif ultimo_meio in ('mandado', 'precatoria'):
                         print(f'   ⏸️ Última intimação por mandado ({ultimo.get("ato", "")[:60]})')
-                        if mandado_explicito:
+                        if solicitar_mandado:
+                            # Solicitação de mandado na MESMA movimentação: não
+                            # retorna — segue para o Playwright, que intima
+                            # eletronicamente (painel Autoras/Rés) e adiciona a
+                            # linha de cumprimento de mandado no MESMO grid.
+                            print('   🔄 solicitar_mandado=true na mesma mov — '
+                                  'seguindo (linha de mandado no grid, sem Mov581 extra)')
+                        elif mandado_explicito:
                             print('   ⏸️ Última intimação por mandado — sequência já tem passo explícito de mandado/solicitação; pulando intimação (sem solicitação duplicada)')
                             return True
-                        if not fallback_mandado:
+                        elif not fallback_mandado:
                             print('   ⏸️ Última intimação por mandado — sem fallback configurado no JSON, pulando (fazer manual)')
                             return True
-                        print('   ⏸️ Última intimação por mandado — fallback: registrando solicitação de expedição (sem expedir)')
-                        try:
-                            # Identifica a(s) parte(s) — 'fallback_polo' no JSON
-                            # (mesmo vocabulário do mandado); default: réus.
-                            parte_nome = ''
+                        else:
+                            print('   ⏸️ Última intimação por mandado — fallback: registrando solicitação de expedição (sem expedir)')
                             try:
-                                partes_raw = parser.extrair_partes(parser.soup)
-                                autoras = [p.get('nome', '').strip() for p in partes_raw
-                                           if p.get('tipo', '').upper() in ('EXEQUENTE', 'PROMOVENTE')]
-                                reus = [p.get('nome', '').strip() for p in partes_raw
-                                        if p.get('tipo', '').upper() not in ('EXEQUENTE', 'PROMOVENTE')]
+                                # Identifica a(s) parte(s) — 'fallback_polo' no JSON
+                                # (mesmo vocabulário do mandado); default: réus.
+                                parte_nome = ''
+                                try:
+                                    partes_raw = parser.extrair_partes(parser.soup)
+                                    autoras = [p.get('nome', '').strip() for p in partes_raw
+                                               if p.get('tipo', '').upper() in ('EXEQUENTE', 'PROMOVENTE')]
+                                    reus = [p.get('nome', '').strip() for p in partes_raw
+                                            if p.get('tipo', '').upper() not in ('EXEQUENTE', 'PROMOVENTE')]
 
-                                def _escolher(candidatos):
-                                    """1 → direto; vários → específico pelo
-                                    histórico; não achou → TODOS os candidatos."""
-                                    cands = [c for c in candidatos if c]
-                                    if len(cands) <= 1:
+                                    def _escolher(candidatos):
+                                        """1 → direto; vários → específico pelo
+                                        histórico; não achou → TODOS os candidatos."""
+                                        cands = [c for c in candidatos if c]
+                                        if len(cands) <= 1:
+                                            return cands
+                                        dests = [(m.get('data_obj') or date.min,
+                                                  str(m.get('destinatario') or '').upper())
+                                                 for m in movs if m.get('destinatario')
+                                                 and m.get('categoria') in ('intimacao', 'citacao')]
+                                        dests.sort(key=lambda x: x[0], reverse=True)
+                                        for _, dest in dests:
+                                            if dest and len(dest) >= 5:
+                                                for nome in cands:
+                                                    nr = nome.upper()
+                                                    if dest in nr or nr in dest:
+                                                        return [nome]
                                         return cands
-                                    dests = [(m.get('data_obj') or date.min,
-                                              str(m.get('destinatario') or '').upper())
-                                             for m in movs if m.get('destinatario')
-                                             and m.get('categoria') in ('intimacao', 'citacao')]
-                                    dests.sort(key=lambda x: x[0], reverse=True)
-                                    for _, dest in dests:
-                                        if dest and len(dest) >= 5:
-                                            for nome in cands:
-                                                nr = nome.upper()
-                                                if dest in nr or nr in dest:
-                                                    return [nome]
-                                    return cands
 
-                                polos = fallback_polo or 'reu_especifico'
-                                if isinstance(polos, str):
-                                    polos = [polos]
-                                nomes = []
-                                for polo in polos:
-                                    polo = str(polo).lower().strip()
-                                    if polo in ('todos', 'ambos', 'todas', 'todas_as_partes',
-                                                'autores_e_res', 'autoreseres'):
-                                        nomes.extend(autoras + reus)
-                                    elif polo in ('autores', 'autoras', 'promoventes', 'exequentes'):
-                                        nomes.extend(a for a in autoras if a)
-                                    elif polo in ('autor_especifico', 'autora_especifica',
-                                                  'autora_especifico', 'especifico_autor',
-                                                  'especifica_autora'):
-                                        nomes.extend(_escolher(autoras))
-                                    elif polo in ('res', 'rés', 'reus', 'réus', 'executados', 'promovidos'):
-                                        nomes.extend(r for r in reus if r)
-                                    else:  # 'reu_especifico', 'especifico' ou default
-                                        nomes.extend(_escolher(reus))
-                                parte_nome = ' / '.join(dict.fromkeys(n for n in nomes if n))
-                                if parte_nome:
-                                    print(f'   🎯 Parte: {parte_nome[:60]}')
-                            except Exception:
-                                pass
-                            record = self.importar(
-                                processo_numero=processo_numero,
-                                act_verb='solicitar_expedicao',
-                                observacao=observacao or 'Solicitada Expedicao de Mandado',
-                                categoria='outro',
-                                processo_cnj=processo_numero,
-                                parte_nome=parte_nome,
-                                url_processo=url_dados,
-                                codigo_movimentacao='581',
-                                descricao_movimentacao='Solicitada a Expedição de Mandado',
-                            )
-                            if fallback_template_id:
-                                # ── EXPEDIR o mandado COMPLETO (não só Mov581):
-                                # tipoCumprimento=4 + subtipo + destinatário +
-                                # CumprimentoCartorio + FCKeditor — igual ao
-                                # passo `mandado`. ──
-                                return self._expedir_mandado_fallback(
-                                    processo_numero, parte_nome,
-                                    fallback_template_id,
-                                    fallback_subtipo or '11',
-                                    fallback_prazo or '',
-                                    session, saved_cookies)
-                            # Sem template → comportamento antigo (só Mov581
-                            # de solicitação, sem confecção).
-                            return bool(self.executar(record))
-                        except Exception as e:
-                            print(f'   ⚠️ Solicitação de expedição falhou: {e}')
-                            return False
+                                    polos = fallback_polo or 'reu_especifico'
+                                    if isinstance(polos, str):
+                                        polos = [polos]
+                                    nomes = []
+                                    for polo in polos:
+                                        polo = str(polo).lower().strip()
+                                        if polo in ('todos', 'ambos', 'todas', 'todas_as_partes',
+                                                    'autores_e_res', 'autoreseres'):
+                                            nomes.extend(autoras + reus)
+                                        elif polo in ('autores', 'autoras', 'promoventes', 'exequentes'):
+                                            nomes.extend(a for a in autoras if a)
+                                        elif polo in ('autor_especifico', 'autora_especifica',
+                                                      'autora_especifico', 'especifico_autor',
+                                                      'especifica_autora'):
+                                            nomes.extend(_escolher(autoras))
+                                        elif polo in ('res', 'rés', 'reus', 'réus', 'executados', 'promovidos'):
+                                            nomes.extend(r for r in reus if r)
+                                        else:  # 'reu_especifico', 'especifico' ou default
+                                            nomes.extend(_escolher(reus))
+                                    parte_nome = ' / '.join(dict.fromkeys(n for n in nomes if n))
+                                    if parte_nome:
+                                        print(f'   🎯 Parte: {parte_nome[:60]}')
+                                except Exception:
+                                    pass
+                                record = self.importar(
+                                    processo_numero=processo_numero,
+                                    act_verb='solicitar_expedicao',
+                                    observacao=observacao or 'Solicitada Expedicao de Mandado',
+                                    categoria='outro',
+                                    processo_cnj=processo_numero,
+                                    parte_nome=parte_nome,
+                                    url_processo=url_dados,
+                                    codigo_movimentacao='581',
+                                    descricao_movimentacao='Solicitada a Expedição de Mandado',
+                                )
+                                if fallback_template_id:
+                                    # ── EXPEDIR o mandado COMPLETO (não só Mov581):
+                                    # tipoCumprimento=4 + subtipo + destinatário +
+                                    # CumprimentoCartorio + FCKeditor — igual ao
+                                    # passo `mandado`. ──
+                                    return self._expedir_mandado_fallback(
+                                        processo_numero, parte_nome,
+                                        fallback_template_id,
+                                        fallback_subtipo or '11',
+                                        fallback_prazo or '',
+                                        session, saved_cookies)
+                                # Sem template → comportamento antigo (só Mov581
+                                # de solicitação, sem confecção).
+                                return bool(self.executar(record))
+                            except Exception as e:
+                                print(f'   ⚠️ Solicitação de expedição falhou: {e}')
+                                return False
         except Exception as e:
             print(f'   ⚠️ Pre-check canal comunicação: {e}')
 
@@ -2279,12 +2291,15 @@ class MovimentacaoService:
 
                     # ── Vistas ao MP + solicitação de ofício (mêsma movimentação)
                     #    preenchidos ANTES do Concluir. ──
-                    if envia_mp or solicitar_oficio:
-                        self._preencher_mp_oficio(
-                            page, natureza_processo,
-                            envia_mp, cod_nucleo_mp, tipo_parecer_mp,
-                            prazo_mp, promotor_mp, solicitar_oficio,
-                            oficio_template_id)
+                    if envia_mp:
+                        self._preencher_vistas_mp(
+                            page, cod_nucleo_mp, tipo_parecer_mp,
+                            prazo_mp, promotor_mp)
+                    if solicitar_oficio:
+                        self._preencher_solicitar_oficio(page, oficio_template_id)
+                    if solicitar_mandado:
+                        self._preencher_solicitar_mandado(
+                            page, mandado_subtipo)
 
                     time.sleep(2)
 
@@ -2350,12 +2365,15 @@ class MovimentacaoService:
                         print(f'   ⚠️ Painel/motivo (FLUXO B): {e}')
 
                     # ── Vistas ao MP + solicitação de ofício (mêsma movimentação) ──
-                    if envia_mp or solicitar_oficio:
-                        self._preencher_mp_oficio(
-                            page, natureza_processo,
-                            envia_mp, cod_nucleo_mp, tipo_parecer_mp,
-                            prazo_mp, promotor_mp, solicitar_oficio,
-                            oficio_template_id)
+                    if envia_mp:
+                        self._preencher_vistas_mp(
+                            page, cod_nucleo_mp, tipo_parecer_mp,
+                            prazo_mp, promotor_mp)
+                    if solicitar_oficio:
+                        self._preencher_solicitar_oficio(page, oficio_template_id)
+                    if solicitar_mandado:
+                        self._preencher_solicitar_mandado(
+                            page, mandado_subtipo)
 
                     # Concluir movimentação
                     if nao_concluir:
@@ -2540,137 +2558,178 @@ class MovimentacaoService:
         ('criminal', 'audiencia'): ('55794', 'INTIMAÇÃO PARA AUDIÊNCIA CRIMINAL'),
     }
 
-    def _preencher_mp_oficio(
-        self, page, natureza_processo,
-        envia_mp=False, cod_nucleo_mp='31', tipo_parecer_mp='6',
-        prazo_mp='5', promotor_mp=None, solicitar_oficio=False,
-        oficio_template_id=None,
+    def _preencher_vistas_mp(
+        self, page, cod_nucleo_mp='31', tipo_parecer_mp='6',
+        prazo_mp='5', promotor_mp=None,
     ) -> None:
-        """Preenche Vistas ao MP e/ou solicitação de ofício na MESMA página
-        da intimação eletrônica, ANTES do Concluir (um único Concluir).
+        """Vistas ao MP na MESMA movimentação (ANTES do Concluir).
 
-        MP: expande painel envio órgão externo, marca enviaMP, seleciona
+        Expande o painel envio órgão externo, marca enviaMP e seleciona
         Núcleo → tipo de parecer → prazo → promotor (via DWR).
-
-        Ofício: solicita a expedição do ofício adicionando a linha de
-        cumprimento do ofício no grid (tipoCumprimento=12 = Ofício) e
-        seleciona o template correspondente quando oficio_template_id é dado
-        (5 = Ofício CIAP, 7 = Ofício RPV).
         """
-        if not (envia_mp or solicitar_oficio):
-            return
         import time as _t
         try:
-            # ═══ VISTAS AO MP ═══
-            if envia_mp:
-                try:
-                    page.locator('#imgBotao_panelEnvioOrgaoExterno').first.click()
-                    _t.sleep(0.5)
-                    print('   ✅ Painel envio órgão externo expandido')
-                except Exception:
-                    pass
-                try:
-                    cb = page.locator('input[name="enviaMP"]')
-                    if cb.count():
-                        cb.check()
-                        print('   ✅ enviaMP marcado')
-                        _t.sleep(0.5)
-                except Exception:
-                    pass
-                try:
-                    sel_nucleo = page.locator('select[name="codNucleoMP"]')
-                    if sel_nucleo.count():
-                        sel_nucleo.select_option(cod_nucleo_mp)
-                        print(f'   ✅ Núcleo MP: {cod_nucleo_mp}')
-                        _t.sleep(0.8)  # DWR popula o promotor
-                except Exception as e:
-                    print(f'   ⚠️ Núcleo MP: {e}')
-                if tipo_parecer_mp is not None:
-                    try:
-                        sel_tp = page.locator('select[name="codTipoEnvioMP"]')
-                        if sel_tp.count():
-                            sel_tp.select_option(str(tipo_parecer_mp))
-                            print(f'   ✅ Tipo parecer MP: {tipo_parecer_mp}')
-                            _t.sleep(0.3)
-                    except Exception as e:
-                        print(f'   ⚠️ Tipo parecer MP: {e}')
-                if prazo_mp is not None:
-                    try:
-                        sel_pr = page.locator('select[name="codPrazoEnviaMP"]')
-                        if sel_pr.count():
-                            sel_pr.select_option(str(prazo_mp))
-                            print(f'   ✅ Prazo MP: {prazo_mp}')
-                            _t.sleep(0.3)
-                    except Exception as e:
-                        print(f'   ⚠️ Prazo MP: {e}')
-                if promotor_mp:
-                    try:
-                        nome_proc = str(promotor_mp).strip()
-                        sel_promotor = page.locator('select[name="loginPromotorNucleoMP"]')
-                        achou = False
-                        if sel_promotor.count():
-                            for j in range(sel_promotor.locator('option').count()):
-                                txt = sel_promotor.locator('option').nth(j).inner_text().strip()
-                                if nome_proc.lower() in txt.lower():
-                                    val = sel_promotor.locator('option').nth(j).get_attribute('value')
-                                    sel_promotor.select_option(val)
-                                    print(f'   ✅ Promotor MP: {txt.strip()}')
-                                    achou = True
-                                    break
-                        if not achou:
-                            print(f'   ⚠️ Promotor "{nome_proc}" não achado (núcleo {cod_nucleo_mp})')
-                    except Exception as e:
-                        print(f'   ⚠️ Promotor MP: {e}')
-
-            # ═══ SOLICITAÇÃO DE OFÍCIO (linha de cumprimento) ═══
-            if solicitar_oficio:
-                try:
-                    # Abre o painel de cumprimento se ainda não estiver
-                    try:
-                        link_cump = page.locator("a:has-text('Cumprimento')").first
-                        if link_cump.count():
-                            link_cump.click()
-                            _t.sleep(0.4)
-                    except Exception:
-                        pass
-                    # Linha de cumprimento tipo OFÍCIO (12)
-                    page.select_option('#tipoCumprimento', '12')
-                    _t.sleep(0.3)
-                    print('   ✅ Linha de cumprimento: Ofício (tipoCumprimento=12)')
-                    # Seleciona o template/ofício no grid de documento quando id dado
-                    if oficio_template_id:
-                        try:
-                            # codTipoDocumento do ofício: CIAP=5, RPV=7 → o
-                            # código do select não é o id do template; busca
-                            # pela descrição do template.
-                            from processes.models import DocumentTemplate
-                            tmpl = DocumentTemplate.objects.filter(
-                                id=oficio_template_id, active=True).first()
-                            if tmpl:
-                                sel_td = page.locator('select[name="codTipoDocumento"]')
-                                if sel_td.count():
-                                    desc_alvo = tmpl.name.lower()
-                                    valor = None
-                                    for opt in sel_td.locator('option').all():
-                                        t = (opt.inner_text() or '').strip()
-                                        if t and desc_alvo in t.lower():
-                                            valor = opt.get_attribute('value')
-                                            break
-                                    if valor:
-                                        sel_td.select_option(valor)
-                                        print(f'   ✅ Ofício selecionado: {tmpl.name}')
-                                        _t.sleep(0.3)
-                        except Exception as e:
-                            print(f'   ⚠️ Template ofício: {e}')
-                    # Adiciona a linha (btnAddCumprimento)
-                    page.click('#btnAddCumprimento')
-                    _t.sleep(0.8)
-                    print('   ✅ Cumprimento de ofício adicionado')
-                except Exception as e:
-                    print(f'   ⚠️ Solicitação de ofício: {e}')
-
+            page.locator('#imgBotao_panelEnvioOrgaoExterno').first.click()
+            _t.sleep(0.5)
+            print('   ✅ Painel envio órgão externo expandido')
+        except Exception:
+            pass
+        try:
+            cb = page.locator('input[name="enviaMP"]')
+            if cb.count():
+                cb.check()
+                print('   ✅ enviaMP marcado')
+                _t.sleep(0.5)
+        except Exception:
+            pass
+        try:
+            sel_nucleo = page.locator('select[name="codNucleoMP"]')
+            if sel_nucleo.count():
+                sel_nucleo.select_option(cod_nucleo_mp)
+                print(f'   ✅ Núcleo MP: {cod_nucleo_mp}')
+                _t.sleep(0.8)  # DWR popula o promotor
         except Exception as e:
-            print(f'   ⚠️ Preencher MP/ofício: {e}')
+            print(f'   ⚠️ Núcleo MP: {e}')
+        if tipo_parecer_mp is not None:
+            try:
+                sel_tp = page.locator('select[name="codTipoEnvioMP"]')
+                if sel_tp.count():
+                    sel_tp.select_option(str(tipo_parecer_mp))
+                    print(f'   ✅ Tipo parecer MP: {tipo_parecer_mp}')
+                    _t.sleep(0.3)
+            except Exception as e:
+                print(f'   ⚠️ Tipo parecer MP: {e}')
+        if prazo_mp is not None:
+            try:
+                sel_pr = page.locator('select[name="codPrazoEnviaMP"]')
+                if sel_pr.count():
+                    sel_pr.select_option(str(prazo_mp))
+                    print(f'   ✅ Prazo MP: {prazo_mp}')
+                    _t.sleep(0.3)
+            except Exception as e:
+                print(f'   ⚠️ Prazo MP: {e}')
+        if promotor_mp:
+            try:
+                nome_proc = str(promotor_mp).strip()
+                sel_promotor = page.locator('select[name="loginPromotorNucleoMP"]')
+                achou = False
+                if sel_promotor.count():
+                    for j in range(sel_promotor.locator('option').count()):
+                        txt = sel_promotor.locator('option').nth(j).inner_text().strip()
+                        if nome_proc.lower() in txt.lower():
+                            val = sel_promotor.locator('option').nth(j).get_attribute('value')
+                            sel_promotor.select_option(val)
+                            print(f'   ✅ Promotor MP: {txt.strip()}')
+                            achou = True
+                            break
+                if not achou:
+                    print(f'   ⚠️ Promotor "{nome_proc}" não achado (núcleo {cod_nucleo_mp})')
+            except Exception as e:
+                print(f'   ⚠️ Promotor MP: {e}')
+
+    def _preencher_solicitar_oficio(self, page, oficio_template_id=None) -> None:
+        """Solicita a expedição do ofício na MESMA movimentação (ANTES do
+        Concluir): adiciona a linha de cumprimento tipo OFÍCIO (12) no grid e
+        seleciona o template quando oficio_template_id é dado (5 = CIAP,
+        7 = RPV). Sem confecção (só a solicitação na movimentação)."""
+        import time as _t
+        try:
+            # Abre o painel de cumprimento se ainda não estiver
+            try:
+                link_cump = page.locator("a:has-text('Cumprimento')").first
+                if link_cump.count():
+                    link_cump.click()
+                    _t.sleep(0.4)
+            except Exception:
+                pass
+            # Linha de cumprimento tipo OFÍCIO (12)
+            page.select_option('#tipoCumprimento', '12')
+            _t.sleep(0.3)
+            print('   ✅ Linha de cumprimento: Ofício (tipoCumprimento=12)')
+            # Seleciona o template/ofício no grid de documento quando id dado
+            if oficio_template_id:
+                try:
+                    # codTipoDocumento do ofício: CIAP=5, RPV=7 → o
+                    # código do select não é o id do template; busca
+                    # pela descrição do template.
+                    from processes.models import DocumentTemplate
+                    tmpl = DocumentTemplate.objects.filter(
+                        id=oficio_template_id, active=True).first()
+                    if tmpl:
+                        sel_td = page.locator('select[name="codTipoDocumento"]')
+                        if sel_td.count():
+                            desc_alvo = tmpl.name.lower()
+                            valor = None
+                            for opt in sel_td.locator('option').all():
+                                t = (opt.inner_text() or '').strip()
+                                if t and desc_alvo in t.lower():
+                                    valor = opt.get_attribute('value')
+                                    break
+                            if valor:
+                                sel_td.select_option(valor)
+                                print(f'   ✅ Ofício selecionado: {tmpl.name}')
+                                _t.sleep(0.3)
+                except Exception as e:
+                    print(f'   ⚠️ Template ofício: {e}')
+            # Adiciona a linha (btnAddCumprimento)
+            page.click('#btnAddCumprimento')
+            _t.sleep(0.8)
+            print('   ✅ Cumprimento de ofício adicionado')
+        except Exception as e:
+            print(f'   ⚠️ Solicitação de ofício: {e}')
+
+    def _preencher_solicitar_mandado(
+            self, page, mandado_subtipo: str = '3') -> None:
+        """Solicita a expedição do mandado na MESMA movimentação (ANTES do
+        Concluir): adiciona a linha de cumprimento tipo MANDADO (4) +
+        subtipoCumprimento + destinatário no grid — SEM criar uma Mov581
+        extra. Independe de MP/ofício (pode vir sozinho)."""
+        import time as _t
+        try:
+            # Abre o painel de cumprimento se ainda não estiver
+            # (pode já estar aberto do ofício acima)
+            try:
+                link_cump = page.locator("a:has-text('Cumprimento')").first
+                if link_cump.count():
+                    link_cump.click()
+                    _t.sleep(0.4)
+            except Exception:
+                pass
+            # Linha de cumprimento tipo MANDADO (4) + subtipo
+            page.select_option('#tipoCumprimento', '4')
+            _t.sleep(0.3)
+            subtipo = mandado_subtipo or '3'
+            st = page.locator(
+                '#subtipoCumprimento, select[name="subtipoCumprimento"]').first
+            if st.count():
+                st.select_option(subtipo)
+                _t.sleep(0.3)
+            print(f'   ✅ Linha de cumprimento: Mandado (tipoCumprimento=4, '
+                  f'subtipo={subtipo})')
+            # Seleciona o(s) destinatário(s) (as partes do polo) —
+            # best-effort: escolhe as opções existentes no grid.
+            try:
+                sel_dest = page.locator(
+                    '#codigoDestinatario, select[name="codigoDestinatario"]').first
+                if sel_dest.count():
+                    valores = [o.get_attribute('value') for o in
+                               sel_dest.locator('option').all()
+                               if (o.get_attribute('value') or '').strip()]
+                    if valores:
+                        try:
+                            page.select_option(
+                                '#codigoDestinatario', valores)
+                            print(f'   ✅ Destinatário(s) ({len(valores)}) selecionados')
+                        except Exception:
+                            page.select_option(
+                                '#codigoDestinatario', valores[0])
+            except Exception:
+                pass
+            page.click('#btnAddCumprimento')
+            _t.sleep(0.8)
+            print('   ✅ Cumprimento de mandado adicionado (mesma movimentação)')
+        except Exception as e:
+            print(f'   ⚠️ Solicitação de mandado: {e}')
 
     def executar_com_intimacao_ar(
         self,

@@ -795,6 +795,10 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                     fallback_template_id=passo.get('fallback_template_id'),
                     fallback_subtipo=passo.get('fallback_subtipo'),
                     fallback_prazo=passo.get('fallback_prazo'),
+                    # ── Solicitação de mandado NA MESMA movimentação ──
+                    solicitar_mandado=bool(passo.get('solicitar_mandado', False)),
+                    mandado_polo=passo.get('mandado_polo'),
+                    mandado_subtipo=str(passo.get('mandado_subtipo', '3')),
                 )
                 if ok:
                     print('   ✅ Intimação eletrônica concluída')
@@ -885,6 +889,10 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                     promotor_mp=passo.get('promotor_mp'),
                     solicitar_oficio=bool(passo.get('solicitar_oficio', False)),
                     oficio_template_id=passo.get('oficio_template_id'),
+                    # ── Solicitação de mandado NA MESMA movimentação ──
+                    solicitar_mandado=bool(passo.get('solicitar_mandado', False)),
+                    mandado_polo=passo.get('mandado_polo'),
+                    mandado_subtipo=str(passo.get('mandado_subtipo', '3')),
                     nao_concluir=bool(passo.get('nao_concluir', False)),
                 )
                 if ok:
