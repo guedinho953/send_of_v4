@@ -108,14 +108,24 @@ class EmailSender:
     
     def _construir_mensagem(self, oficio: OficioData) -> MIMEMultipart:
         """Constrói mensagem de email com HTML e brasão"""
-        
+
+        from datetime import datetime
         logo_cid = make_msgid(domain="tjba.jus.br")[1:-1]
         msg_id = make_msgid()
-        
-        html = self._gerar_html(oficio.texto_html, logo_cid)
+
+        # Subject padronizado: "Oficio - nº XXX/2026 - SEC"
+        assunto_oficio = oficio.numero_oficio.strip()
+        if not assunto_oficio:
+            assunto_oficio = oficio.assunto or "Oficio"
+        subject = f"Oficio - n\xba {assunto_oficio}"
+
+        # Corpo com protocolo
+        agora = datetime.now()
+        protocolo = agora.strftime("%d/%m/%Y as %H:%M")
+        html = self._gerar_html(oficio.texto_html, logo_cid, protocolo, oficio.email_destino, oficio.url_oficio)
         
         msg = MIMEMultipart("related")
-        msg["Subject"] = oficio.assunto
+        msg["Subject"] = subject
         msg["From"] = self.config.remetente
         msg["To"] = oficio.email_destino
         msg["Message-ID"] = msg_id
@@ -145,8 +155,19 @@ class EmailSender:
         
         return msg
     
-    def _gerar_html(self, texto_oficio: str, logo_cid: str) -> str:
-        """Gera HTML do email"""
+    def _gerar_html(self, texto_oficio: str, logo_cid: str,
+                    protocolo: str = '', email_destino: str = '',
+                    url_oficio: str = '') -> str:
+        """Gera HTML do email com protocolo e info de envio"""
+        bloco_protocolo = ''
+        if protocolo:
+            bloco_protocolo = f"""
+            <hr style="margin: 20px auto; width: 80%; border: none; border-top: 1px solid #ccc;">
+            <div style="font-size: 11px; color: #666; text-align: center;">
+                Protocolado em {protocolo}<br>
+                E-mail: {email_destino}<br>
+                Link: <a href="{url_oficio}" style="color: #2563eb;">{url_oficio}</a>
+            </div>"""
         return f"""
         <html>
         <head></head>
@@ -171,6 +192,7 @@ class EmailSender:
             <div style="text-align: justify; margin: 0 auto; width: 80%; max-width: 600px;">
             {texto_oficio}
             </div>
+            {bloco_protocolo}
         </body>
         </html>
         """

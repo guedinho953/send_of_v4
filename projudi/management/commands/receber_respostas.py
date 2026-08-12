@@ -139,6 +139,11 @@ class Command(BaseCommand):
             chave = _normalizar_assunto(oficio.assunto)
             if chave:
                 mapa[chave] = oficio
+            # Tambem indexa pelo subject padronizado "Oficio - nº XXX/2026 - SEC"
+            # para casar com replies do novo formato
+            chave_nova = _normalizar_assunto(f"Oficio - n\xba {oficio.numero_oficio}")
+            if chave_nova and chave_nova != chave:
+                mapa[chave_nova] = oficio
         return mapa
 
     def _encontrar_oficio_por_email(self, msg, mapa_assuntos: dict):

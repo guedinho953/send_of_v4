@@ -109,6 +109,30 @@
             </button>
         </form>
     {% endif %}
+    {% if enviados_para_juntar > 0 %}
+        <form method="post" action="{% url 'projudi:oficio_bulk_juntar' %}" style="display:inline;" onsubmit="return confirm('Juntar {{ enviados_para_juntar }} oficio(s) ja enviados?')">
+            {% csrf_token %}
+            <button type="submit" class="btn" style="background:linear-gradient(135deg,#059669,#34d399); color:white; font-weight:600; box-shadow:0 2px 8px rgba(5,150,105,0.4);">
+                📎 Juntar {{ enviados_para_juntar }} Enviados
+            </button>
+        </form>
+    {% endif %}
+    {% if pendentes > 0 %}
+        <form method="post" action="{% url 'projudi:oficio_bulk_dispensar' %}" style="display:inline;" onsubmit="return confirm('Dispensar {{ pendentes }} oficio(s) pendentes? (enviado fora do sistema)')">
+            {% csrf_token %}
+            <button type="submit" class="btn" style="background:linear-gradient(135deg,#6b21a8,#a855f7); color:white; font-weight:600; box-shadow:0 2px 8px rgba(107,33,168,0.4);">
+                🚫 Dispensar {{ pendentes }} Pendentes
+            </button>
+        </form>
+    {% endif %}
+    {% if juntados_para_dispensar > 0 %}
+        <form method="post" action="{% url 'projudi:oficio_bulk_dispensar_juntados' %}" style="display:inline;" onsubmit="return confirm('Arquivar {{ juntados_para_dispensar }} oficio(s) ja juntados?')">
+            {% csrf_token %}
+            <button type="submit" class="btn" style="background:linear-gradient(135deg,#6b7280,#9ca3af); color:white; font-weight:600; box-shadow:0 2px 8px rgba(107,114,128,0.4);">
+                🗂️ Arquivar {{ juntados_para_dispensar }} Juntados
+            </button>
+        </form>
+    {% endif %}
     <!-- Botao: processar pendentes (envia ou junta impossibilidade) -->
     <form method="post" action="{% url 'projudi:oficio_processar_pendentes' %}" style="display:inline;">
         {% csrf_token %}

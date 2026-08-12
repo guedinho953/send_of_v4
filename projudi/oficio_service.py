@@ -138,6 +138,8 @@ class OficioService:
         # Extrai numero CNJ dos dados brutos (se disponivel)
         processo_cnj = getattr(oficio_data, 'processo_cnj', '') or ''
         
+        # Remove status dos defaults — NUNCA sobrescrever status existente.
+        # A sincronização não pode resetar 'enviado'/'juntado'/'dispensado' para 'pendente'.
         record, created = OficioRecord.objects.update_or_create(
             processo=oficio_data.processo,
             numero_oficio=oficio_data.numero_oficio,
@@ -151,22 +153,22 @@ class OficioService:
                 'url_baixa': oficio_data.url_baixa,
                 'texto_html': oficio_data.texto_html,
                 'user': self.user,
-                'status': 'pendente',
             }
         )
 
         if created:
+            # Só seta como pendente se for um ofício NOVO (nunca visto antes)
+            record.status = 'pendente'
+            record.save(update_fields=['status'])
             self._log(record, 'info',
                 f"Oficio {oficio_data.numero_oficio} importado do Projudi e aguardando envio.",
                 {'acao': 'importacao'}
             )
         else:
-            # Atualiza o CNJ se mudou
-            if processo_cnj and processo_cnj != record.numero_processo_cnj:
-                record.numero_processo_cnj = processo_cnj
-                record.save()
+            # Preserva o status original — se já foi enviado/dispensado, continua assim
             self._log(record, 'info',
-                f"Oficio {oficio_data.numero_oficio} atualizado com novos dados do Projudi.",
+                f"Oficio {oficio_data.numero_oficio} atualizado com novos dados do Projudi "
+                f"(status mantido: {record.status}).",
                 {'acao': 'atualizacao'}
             )
 
@@ -357,6 +359,7 @@ class OficioService:
             data_envio = record.data_envio.strftime('%d/%m/%Y') if record.data_envio else ''
             hora_envio = record.hora_envio.strftime('%H:%M') if record.hora_envio else ''
             observacao = (
+                f"Oficio - n {record.numero_oficio} - "
                 f"E-mail enviado com sucesso para {record.email_destino} "
                 f"em {data_envio} as {hora_envio}. "
                 f"Link do oficio: {record.url_oficio}"

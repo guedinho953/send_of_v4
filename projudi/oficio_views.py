@@ -31,10 +31,13 @@ class OficioDashboardView(LoginRequiredMixin, TemplateView):
         qs = OficioRecord.objects.filter(user=user)
         context['total'] = qs.count()
         context['pendentes'] = qs.filter(status='pendente').count()
+        context['pendentes_dispensar'] = qs.filter(status='pendente').count()
+        context['enviados_para_juntar'] = qs.filter(status='enviado').count()
         context['enviados'] = qs.filter(status__in=['enviado', 'juntado']).count()
         context['juntados'] = qs.filter(status='juntado').count()
         context['falhas'] = qs.filter(status__in=['falhou_email', 'falhou_juntada']).count()
         context['dispensados'] = qs.filter(status='dispensado').count()
+        context['juntados_para_dispensar'] = qs.filter(status='juntado').count()
 
         # Filtragem por status
         status_filter = self.request.GET.get('status', '')
@@ -252,6 +255,93 @@ class OficioBulkSendView(LoginRequiredMixin, View):
         if enviados == 0 and falhas == 0:
             messages.info(request, "Nenhum oficio pendente para enviar.")
         
+        return HttpResponseRedirect(reverse('projudi:oficio_dashboard'))
+
+
+class OficioBulkJuntarView(LoginRequiredMixin, View):
+    """
+    POST /projudi/oficios/juntar-em-massa/
+    Junta todos os oficios ja enviados por email.
+    """
+    def post(self, request):
+        service = OficioService(request.user)
+        a_juntar = OficioRecord.objects.filter(user=request.user, status='enviado')
+        
+        juntados = 0
+        falhas = 0
+        
+        for record in a_juntar:
+            try:
+                resultado = service.juntar_oficio(record)
+                if resultado.get('juntado'):
+                    juntados += 1
+                else:
+                    falhas += 1
+            except Exception as e:
+                falhas += 1
+                service.criar_log(record, 'erro_juntada', f"Erro ao juntar em lote: {str(e)[:200]}")
+        
+        if juntados > 0:
+            messages.success(request, f"✅ {juntados} oficios juntados com sucesso!")
+        if falhas > 0:
+            messages.warning(request, f"⚠️ {falhas} oficios nao puderam ser juntados. Verifique os logs.")
+        if juntados == 0 and falhas == 0:
+            messages.info(request, "Nenhum oficio pendente de juntada.")
+        
+        return HttpResponseRedirect(reverse('projudi:oficio_dashboard'))
+
+
+class OficioBulkDispensarView(LoginRequiredMixin, View):
+    """
+    POST /projudi/oficios/dispensar-em-massa/
+    Dispensa todos os oficios pendentes em lote.
+    """
+    def post(self, request):
+        pendentes = OficioRecord.objects.filter(user=request.user, status='pendente')
+        count = pendentes.count()
+        
+        for record in pendentes:
+            record.status = 'dispensado'
+            record.save(update_fields=['status'])
+            OficioLog.objects.create(
+                oficio=record,
+                tipo='info',
+                mensagem=f"Oficio dispensado em lote por {request.user.full_name or request.user.email}.",
+                detalhes={'status_anterior': 'pendente', 'lote': True}
+            )
+        
+        if count > 0:
+            messages.success(request, f"🚫 {count} oficios dispensados em lote.")
+        else:
+            messages.info(request, "Nenhum oficio pendente para dispensar.")
+        
+        return HttpResponseRedirect(reverse('projudi:oficio_dashboard'))
+
+
+class OficioBulkDispensarJuntadosView(LoginRequiredMixin, View):
+    """
+    POST /projudi/oficios/dispensar-juntados/
+    Dispensa todos os oficios ja juntados (limpa a lista).
+    """
+    def post(self, request):
+        juntados = OficioRecord.objects.filter(user=request.user, status='juntado')
+        count = juntados.count()
+
+        for record in juntados:
+            record.status = 'dispensado'
+            record.save(update_fields=['status'])
+            OficioLog.objects.create(
+                oficio=record,
+                tipo='info',
+                mensagem=f"Oficio juntado dispensado em lote por {request.user.full_name or request.user.email}.",
+                detalhes={'status_anterior': 'juntado', 'lote': True}
+            )
+
+        if count > 0:
+            messages.success(request, f"🚫 {count} oficios juntados dispensados (arquivados).")
+        else:
+            messages.info(request, "Nenhum oficio juntado para arquivar.")
+
         return HttpResponseRedirect(reverse('projudi:oficio_dashboard'))
 
 
