@@ -766,7 +766,9 @@ class OficioService:
     def juntar_resposta(self, record: OficioRecord) -> Dict:
         """
         Registra acuse de recebimento da resposta no Projudi (cod 2011).
-        Segue o mesmo padrao de _juntar_via_requests.
+        Se a resposta for bounce/entrega falhou (postmaster), registra como
+        impossibilidade de cumprimento em vez de resposta normal.
+
         Retorna {'juntado': bool, 'erro': str|None}
         """
         if record.status_retorno == 'sem_retorno':
@@ -774,6 +776,49 @@ class OficioService:
         if record.status_retorno == 'processado':
             return {'juntado': False, 'erro': 'Resposta ja foi juntada anteriormente'}
 
+        # Detecta se a resposta eh bounce/entrega falhou
+        remetente = (record.remetente_retorno or '').lower()
+        conteudo = (record.conteudo_retorno or '').lower()
+        eh_bounce = (
+            'postmaster' in remetente
+            or 'mailer-daemon' in remetente
+            or 'delivery has failed' in conteudo
+            or 'undeliverable' in conteudo
+            or 'entrega falhou' in conteudo
+            or 'nao foi possivel entregar' in conteudo
+        )
+
+        if eh_bounce:
+            # Registra como impossibilidade de cumprimento (formal/humanizado)
+            self._log(record, 'info',
+                f"Resposta eh bounce/entrega falhou ({remetente}). "
+                f"Registrando impossibilidade de cumprimento.",
+                {'etapa': 'detecta_bounce', 'remetente': record.remetente_retorno}
+            )
+            motivo = (
+                f"e-mail enviado para {record.email_destino} retornou como "
+                f"nao entregue (bounce). Remetente do retorno: "
+                f"{record.remetente_retorno}. Conteudo: {(record.conteudo_retorno or '')[:200]}"
+            )
+            sucesso = self.juntar_resposta_impossibilidade(record, motivo=motivo)
+            if sucesso:
+                record.status_retorno = 'processado'
+                record.status = 'juntado'
+                record.save(update_fields=['status_retorno', 'status'])
+                self._log(record, 'resposta',
+                    f"Impossibilidade de cumprimento juntada no Projudi "
+                    f"(bounce: {remetente}).",
+                    {'etapa': 'bounce_juntado', 'remetente': record.remetente_retorno}
+                )
+                return {'juntado': True, 'erro': None}
+            else:
+                self._log(record, 'erro_juntada',
+                    f"Falha ao juntar impossibilidade de cumprimento (bounce).",
+                    {'etapa': 'bounce_falha'}
+                )
+                return {'juntado': False, 'erro': 'Falha ao juntar impossibilidade'}
+
+        # Resposta normal (nao bounce)
         try:
             sucesso, motivo, snippet = self._juntar_resposta_via_requests(record)
             if sucesso:
@@ -1034,14 +1079,34 @@ class OficioService:
         }
         resp_post = session.post(post_url, files=multipart_data, timeout=15)
 
-        # 9. Verifica resultado
+        # 9. Verifica resultado (igual _verificar_sucesso_juntada)
+        from bs4 import BeautifulSoup as Bs
+        snippet = resp_post.text[:800]
+
         if resp_post.status_code != 200:
             msg = f"HTTP {resp_post.status_code} ao submeter baixa."
-            self._log(record, 'erro_baixa', msg, {'etapa': 'submeter'})
+            self._log(record, 'erro_baixa', msg, {'etapa': 'submeter', 'snippet': snippet[:200]})
             return False, msg
+
         if 'login' in resp_post.url.lower():
             msg = "Sessao expirou durante a baixa."
-            self._log(record, 'erro_baixa', msg, {'etapa': 'sessao'})
+            self._log(record, 'erro_baixa', msg, {'etapa': 'sessao', 'snippet': snippet[:200]})
+            return False, msg
+
+        # Verifica se o Projudi retornou erro
+        texto_lower = resp_post.text.lower()
+        if 'ocorreu um erro' in texto_lower:
+            msg = "Projudi retornou 'Ocorreu um erro' ao tentar baixar."
+            self._log(record, 'erro_baixa', msg, {'etapa': 'projudi', 'snippet': snippet})
+            return False, msg
+
+        # Verifica se o formulario ainda esta presente (nao processou)
+        soup = Bs(resp_post.text, 'html.parser')
+        form = soup.find('form')
+        if form and 'MarcaRecebimento' in str(form.get('action', '')):
+            # Ainda na pagina de baixa = nao processou
+            msg = "Formulario MarcaRecebimento ainda presente - baixa nao processada."
+            self._log(record, 'erro_baixa', msg, {'etapa': 'form_presente', 'snippet': snippet})
             return False, msg
 
         # Sucesso

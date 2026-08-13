@@ -392,3 +392,174 @@ CNJ) quebra na etapa de expedição pelos Correios ("Não achei o select
 name=tipo" com link de AR) → lança `falha` **mesmo a intimação tendo concluído**.
 Se a intimação é eletrônica, use `expedir_ar=false` pra registrar como
 `cumprido`.
+
+---
+
+## 2026-08-13 — Baixa de Ofícios (MarcaRecebimento), Juntada de Retornos e RAGs Genéricos
+
+### 1. Baixa Automática de Ofícios (MarcaRecebimento)
+
+**Problema:** Ofícios enviados por email que tiveram resposta (status_retorno='recebido')
+precisavam ser "baixados" no Projudi manualmente — ninguém fazia.
+
+**Solução:** Criado fluxo completo de baixa via `MarcaRecebimento`:
+
+1. `OficioService.realizar_baixa(record)` — acessa `url_baixa`, parseia o form,
+   preenche `dataLeitura` com data/hora atual, clica "Submeter"
+2. **Verificação robusta** — após POST, checa:
+   - HTTP 200
+   - Não redirecionou pro login
+   - Projudi não retornou "Ocorreu um erro"
+   - Formulário MarcaRecebimento não está mais presente (processou)
+3. **Status:** `status_retorno='processado'` após sucesso
+
+**Views criadas:**
+| URL | Função |
+|---|---|
+| `POST /oficios/<pk>/baixar/` | Baixa individual (`OficioBaixarView`) |
+| `POST /oficios/baixar-recebidos/` | Baixa em lote (`OficioBulkBaixarView`) |
+
+**Comando:**
+```bash
+python manage.py baixar_oficios_recebidos              # default 90 dias
+python manage.py baixar_oficios_recebidos --dias 60    # custom
+python manage.py baixar_oficios_recebidos --dry-run    # só lista
+```
+
+**Filtro dos elegíveis:** `status='juntado'` + `status_retorno='processado'`
++ `url_baixa != ''` + `data_retorno >= N dias atrás`.
+
+**Config:** `OFICIO_BAIXA_DIAS_ESPERA = 90` em `settings.py`.
+
+### 2. Juntada de Retornos — Formato Padrão e Encoding
+
+**Problema:** A observação registrada no Projudi ao juntar a resposta vinha com
+formato verboso e caracteres corrompidos (`2ÂªVSJ`, `NÂº`).
+
+**Formato padronizado:**
+```
+RECEBIDO O OFICIO REF 2ª VSJ - 160/2026 - SEC - Proc nº 0001505-15.2026.8.05.0191
+por ciap.pauloafonso@seap.ba.gov.br em 13/08/2026 as 13:28 hs; Resposta Ok, recebido.
+```
+
+**Correção de encoding latin-1 corrompido:**
+```python
+def _corrigir_latin(texto):
+    try:
+        return texto.encode('latin-1').decode('utf-8')
+    except Exception:
+        return texto
+```
+Converte "2Âª" → "2ª", "NÂº" → "Nº" (UTF-8 lido como latin-1).
+
+**Aplicado em:** `_juntar_resposta_via_requests()` no campo `observacao`.
+
+### 3. Detecção de Bounce — Impossibilidade de Cumprimento
+
+**Problema:** Quando o email do ofício bounceava (postmaster, entrega falhou),
+a juntada registrava como se fosse uma resposta válida — enganoso.
+
+**Solução:** `juntar_resposta()` agora detecta bounce antes de juntar:
+
+```python
+eh_bounce = (
+    'postmaster' in remetente
+    or 'mailer-daemon' in remetente
+    or 'delivery has failed' in conteudo
+    or 'undeliverable' in conteudo
+    or 'entrega falhou' in conteudo
+    or 'nao foi possivel entregar' in conteudo
+)
+```
+
+Se bounce → chama `juntar_resposta_impossibilidade()` com motivo humanizado:
+```
+Impossibilidade de cumprimento do Oficio n 075/2026- SEC, processo ...
+Motivo: e-mail enviado para ... retornou como nao entregue (bounce).
+Foi tentado o envio automatico em ... sem exito. Aguarda providencias
+do Cartorio para novo encaminhamento.
+```
+
+Se não bounce → juntada normal com formato RECEBIDO.
+
+### 4. Receber Respostas — Aceita Ofícios Dispensados
+
+**Problema:** O `_processar_acuse` ignorava ofícios com `status='dispensado'`,
+mesmo que ainda estivessem `status_retorno='sem_retorno'`. Todos os 87 ofícios
+importados do Projudi estavam como dispensado, então nenhuma resposta era capturada.
+
+**Antes:**
+```python
+if oficio.status_retorno != "sem_retorno" or oficio.status == "dispensado":
+    return False
+```
+
+**Depois:**
+```python
+if oficio.status_retorno != "sem_retorno":
+    return False
+```
+
+### 5. Juntada de Resposta Agora Seta `status='juntado'`
+
+**Problema:** `juntar_resposta()` mudava `status_retorno` pra `'processado'`
+mas **não mudava** o `status` do ofício. Isso impedia o botão "Baixar" de
+aparecer (que exigia `status='juntado'`).
+
+**Corrigido:** `record.status = 'juntado'` adicionado no save.
+
+**Fluxo completo do ofício:**
+```
+Pendente → Enviar → status='enviado'
+  → Resposta email → status_retorno='recebido'
+    → Juntar Retornos → status='juntado' + status_retorno='processado'
+      → Após N dias → Baixar (MarcaRecebimento) → completo
+```
+
+### 6. RAGs Genéricos para Decisões "Valendo como Mandado"
+
+**Problema:** RAGs específicos demais não capturavam variações de decisões
+com o mesmo comando ("INDEFIRO O PEDIDO LIMINAR" + "Intimem-se" + "valendo
+como mandado").
+
+**Criados:**
+| RAG | `despacho_ato` | Captura |
+|---|---|---|
+| **#2486** | `DECISÃO - INDEFIRO O PEDIDO LIMINAR - VALENDO COMO MANDADO` | CDC consumerista + "anos/meses" + inversão ônus |
+| **#2487** | `DECISÃO COM FORÇA DE MANDADO - INDEFIRO O PEDIDO LIMINAR - TUTELA DE URGÊNCIA NATUREZA SATISFATIVA - ART. 300 CPC - INTIMAÇÕES NECESSÁRIAS - CUMPRA-SE COM URGÊNCIA` | CPC/posse + natureza satisfativa |
+
+**Sequência de ambos:** Intimar todos (polo=todos) via DJEN, prazo 5 dias,
+fallback solicitar expedição.
+
+### 7. `_melhor_match` Melhorado (rag_router.py)
+
+**Problema:** O `_melhor_match` em `rag_router.py` usava `set(texto.lower().split())`
+(palavras cruas com pontuação/stopwords) e apenas o `despacho_ato` (título curto)
+como âncora. Isso quebrava com hífens, superscript `¹`, e stopwords.
+
+**Corrigido:** Alinhado com a lógica do `cumprimento_service.py`:
+- Usa `_palavras_para_match()` (remove stopwords, acentos, pontuação)
+- Usa `despacho_observacao` (texto completo) como âncora, fallback `despacho_ato`
+- Compara contra o **menor** texto (min)
+
+### 8. Encoding no Projudi
+
+O Projudi usa **ISO-8859-1 (latin-1)**. Toda submissão multipart deve usar:
+```python
+multipart_data = {
+    k: (None, str(v).encode('latin-1', errors='replace'))
+    for k, v in payload.items()
+}
+```
+`errors='replace'` substitui caracteres não-latin-1 por `?` em vez de quebrar.
+
+### 9. Botões no Dashboard de Ofícios
+
+**Sequência completa de botões no dashboard de Ofícios:**
+```
+📤 Enviar Pendentes → 📎 Juntar Enviados → 📎 Juntar N Retornos → ✅ Baixar N Recebidos → 🗂️ Arquivar Juntados
+```
+
+**Detail do Ofício:** botão "✅ Baixar" (vermelho) aparece quando
+`status='juntado'` + `status_retorno='processado'` + `url_baixa` preenchida.
+
