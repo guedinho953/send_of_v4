@@ -778,7 +778,8 @@ class OficioService:
             sucesso, motivo, snippet = self._juntar_resposta_via_requests(record)
             if sucesso:
                 record.status_retorno = 'processado'
-                record.save(update_fields=['status_retorno'])
+                record.status = 'juntado'
+                record.save(update_fields=['status_retorno', 'status'])
                 self._log(record, 'resposta',
                     f"Resposta juntada no Projudi (Cumprimento de Oficio - 11383). {motivo}",
                     {'etapa': 'acuse', 'motivo_sucesso': motivo}
@@ -865,12 +866,33 @@ class OficioService:
         data_fmt = record.data_retorno or timezone.now()
         remetente = record.remetente_retorno or 'Remetente desconhecido'
         proc_cnj = record.numero_processo_cnj or record.processo
-        conteudo = (record.conteudo_retorno or '')[:200]
+
+        # Corrige encoding latin-1 corrompido (ex: "2Âª" → "2ª", "NÂº" → "Nº")
+        def _corrigir_latin(texto):
+            try:
+                return texto.encode('latin-1').decode('utf-8')
+            except Exception:
+                return texto
+
+        remetente = _corrigir_latin(remetente)
+        proc_cnj = _corrigir_latin(proc_cnj)
+
+        # Extrai apenas o texto util da resposta (remove cabecalho de email)
+        conteudo_raw = (record.conteudo_retorno or '').strip()
+        conteudo_raw = _corrigir_latin(conteudo_raw)
+        # Remove o prefixo "Assunto:..." que foi adicionado pelo receber_respostas
+        resposta_util = re.sub(r'^Assunto:.*?\n\n', '', conteudo_raw, flags=re.DOTALL).strip()
+        # Se ainda estiver vazio, usa o conteudo original truncado
+        if not resposta_util:
+            resposta_util = conteudo_raw[:100]
+
+        # Formata observacao no padrao solicitado
         observacao = (
-            f"RECEBIDO Oficio ref: {record.assunto_retorno or record.assunto} "
-            f"Proc: {proc_cnj} "
-            f"em {data_fmt.strftime('%d/%m/%Y')} as {data_fmt.strftime('%H:%M')} hs, "
-            f"por: {remetente}. Resposta: {conteudo}"
+            f"RECEBIDO O OFICIO REF 2ª VSJ - {record.numero_oficio} - "
+            f"Proc nº {proc_cnj} "
+            f"por {remetente} "
+            f"em {data_fmt.strftime('%d/%m/%Y')} as {data_fmt.strftime('%H:%M')} hs; "
+            f"Resposta {resposta_util[:150]}"
         )
         payload['observacao'] = observacao
         payload['observacaoDiligencia'] = ''
@@ -901,6 +923,136 @@ class OficioService:
             sucesso, motivo, snippet = self._verificar_sucesso_juntada(resp_post)
 
         return sucesso, motivo, snippet
+
+    # ------------------------------------------------------------------
+    # BAIXA AUTOMATICA (MarcaRecebimento)
+    # ------------------------------------------------------------------
+    def realizar_baixa(self, record: OficioRecord) -> Tuple[bool, str]:
+        """Acessa url_baixa, preenche dataLeitura com a data atual e Submete.
+
+        Usada para dar baixa em oficios cujo email ja foi respondido
+        (status_retorno='recebido') apos o periodo de carência configurado.
+
+        Retorna (sucesso, mensagem).
+        """
+        if not record.url_baixa:
+            msg = "URL de baixa nao disponivel para este oficio."
+            self._log(record, 'erro_baixa', msg, {'etapa': 'validacao'})
+            return False, msg
+
+        from bs4 import BeautifulSoup
+        import time
+        from datetime import date
+
+        # 1. Sessao
+        result = self.projudi_service._get_session_from_cookies()
+        if result is None:
+            msg = "Sessao nao disponivel para realizar baixa."
+            self._log(record, 'erro_baixa', msg, {'etapa': 'sessao'})
+            return False, msg
+        session, _ = result
+
+        # 2. Acessa pagina de MarcaRecebimento
+        resp = session.get(record.url_baixa, timeout=15)
+        if resp.status_code != 200:
+            msg = f"HTTP {resp.status_code} ao acessar url_baixa."
+            self._log(record, 'erro_baixa', msg, {'etapa': 'http'})
+            return False, msg
+        if 'login' in resp.url.lower():
+            msg = "Sessao expirada - redirecionado para login."
+            self._log(record, 'erro_baixa', msg, {'etapa': 'sessao'})
+            return False, msg
+
+        # 3. Parse do formulario
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        form = soup.find('form')
+        if not form:
+            msg = "Formulario nao encontrado na pagina de baixa."
+            self._log(record, 'erro_baixa', msg, {'etapa': 'parse'})
+            return False, msg
+
+        action = form.get('action', '')
+        if action.startswith('/'):
+            post_url = f"https://projudi.tjba.jus.br{action}"
+        elif action.startswith('http'):
+            post_url = action
+        else:
+            post_url = record.url_baixa
+
+        # 4. Monta payload com todos os campos do form
+        payload = {}
+        for inp in form.find_all('input'):
+            typ = inp.get('type', '')
+            name = inp.get('name')
+            if not name:
+                continue
+            if typ == 'checkbox':
+                if inp.get('checked') is not None:
+                    payload[name] = inp.get('value', '')
+            elif typ == 'radio':
+                if inp.get('checked') is not None:
+                    payload[name] = inp.get('value', '')
+            elif typ in ('hidden', 'text', 'email', 'tel', 'number', 'date', ''):
+                val = inp.get('value', '')
+                if val or typ == 'hidden':
+                    payload[name] = val
+
+        for sel in form.find_all('select'):
+            name = sel.get('name')
+            if not name:
+                continue
+            selected = sel.find('option', selected=True)
+            val = selected.get('value', '') if selected else ''
+            if val and val not in ('-1', '0'):
+                payload[name] = val
+
+        for ta in form.find_all('textarea'):
+            name = ta.get('name')
+            if name:
+                payload[name] = ta.get_text()
+
+        # 5. Preenche dataLeitura com a data de hoje
+        hoje = date.today().strftime('%d/%m/%Y %H:%M')
+        payload['dataLeitura'] = hoje
+
+        # 6. Botao Submeter (image submit)
+        payload['submit.x'] = '10'
+        payload['submit.y'] = '10'
+
+        # 7. Remove campos problemáticos se existirem
+        for campo in ['codDelegacia', 'codPrazoEnviaDelegacia',
+                      'enviaDelegacia', 'enviaMP', 'enviaTurmaRecursal',
+                      'enviaCartorioExtrajudicial', 'arquivar',
+                      'psicossocial', 'contador']:
+            payload.pop(campo, None)
+
+        # 8. Envia
+        time.sleep(1)
+        multipart_data = {
+            k: (None, str(v).encode('latin-1', errors='replace'))
+            for k, v in payload.items()
+        }
+        resp_post = session.post(post_url, files=multipart_data, timeout=15)
+
+        # 9. Verifica resultado
+        if resp_post.status_code != 200:
+            msg = f"HTTP {resp_post.status_code} ao submeter baixa."
+            self._log(record, 'erro_baixa', msg, {'etapa': 'submeter'})
+            return False, msg
+        if 'login' in resp_post.url.lower():
+            msg = "Sessao expirou durante a baixa."
+            self._log(record, 'erro_baixa', msg, {'etapa': 'sessao'})
+            return False, msg
+
+        # Sucesso
+        record.status_retorno = 'processado'
+        record.save(update_fields=['status_retorno'])
+
+        self._log(record, 'info',
+            f"Baixa realizada em {hoje} via MarcaRecebimento.",
+            {'etapa': 'baixa', 'url': record.url_baixa}
+        )
+        return True, f"Baixa realizada em {hoje}"
 
     def fechar(self):
         """Libera recursos Selenium."""

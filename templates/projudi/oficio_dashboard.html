@@ -133,6 +133,22 @@
             </button>
         </form>
     {% endif %}
+    {% if recebidos_pendentes_juntar > 0 %}
+        <form method="post" action="{% url 'projudi:retorno_juntar_todos' %}" style="display:inline;" onsubmit="return confirm('Juntar {{ recebidos_pendentes_juntar }} retorno(s) recebido(s) no Projudi?')">
+            {% csrf_token %}
+            <button type="submit" class="btn" style="background:linear-gradient(135deg,#059669,#34d399); color:white; font-weight:600; box-shadow:0 2px 8px rgba(5,150,105,0.4);">
+                📎 Juntar {{ recebidos_pendentes_juntar }} Retornos
+            </button>
+        </form>
+    {% endif %}
+    {% if elegiveis_baixa > 0 %}
+        <form method="post" action="{% url 'projudi:oficio_bulk_baixar' %}" style="display:inline;" onsubmit="return confirm('Baixar {{ elegiveis_baixa }} oficio(s) com retorno recebido e juntados?')">
+            {% csrf_token %}
+            <button type="submit" class="btn" style="background:linear-gradient(135deg,#dc2626,#f87171); color:white; font-weight:600; box-shadow:0 2px 8px rgba(220,38,38,0.4);">
+                ✅ Baixar {{ elegiveis_baixa }} Recebidos
+            </button>
+        </form>
+    {% endif %}
     <!-- Botao: processar pendentes (envia ou junta impossibilidade) -->
     <form method="post" action="{% url 'projudi:oficio_processar_pendentes' %}" style="display:inline;">
         {% csrf_token %}

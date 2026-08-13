@@ -276,7 +276,7 @@ class Command(BaseCommand):
         if not oficio:
             return False
 
-        if oficio.status_retorno != "sem_retorno" or oficio.status == "dispensado":
+        if oficio.status_retorno != "sem_retorno":
             return False
 
         # Ja registramos resposta para este msg_id?

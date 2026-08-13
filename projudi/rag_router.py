@@ -292,18 +292,27 @@ def _rotear_por_template(template, mov, proc_num, texto,
 def _melhor_match(texto, similares, templates_validos):
     """Encontra o melhor match RAG.
 
+    Usa _palavras_para_match (sem stopwords/pontuação) e o texto COMPLETO
+    da observação (despacho_observacao) como âncora, em vez do título curto
+    (despacho_ato) com palavras cruas. Isso garante que o matching seja
+    robusto mesmo com variações de pontuação, hífens, superscript (¹) e
+    stopwords — essencial para decisões como "VALENDO COMO MANDADO" /
+    "COM FORÇA DE MANDADO" que têm redação variável mas mesmo comando.
+
     Retorna (similar_dict, template, rag_object, ignorar).
     ignorar=True significa que o RAGExample existe mas não tem
     sequencia_cumprimento nem suggested_templates (abstenção).
     """
     from processes.models import RAGExample
-    palavras_texto = set(texto.lower().split())
+    from processes.movimentacoes_service import _palavras_para_match
+    palavras_texto = _palavras_para_match(texto)
 
     # Primeira passada: busca matches com ação (sequência ou template)
     for s in similares:
-        palavras_rag = set(s['despacho_ato'].lower().split())
-        total = max(len(palavras_rag), 1)
-        if len(palavras_texto & palavras_rag) / total < 0.70:
+        texto_rag = s.get('despacho_observacao') or s.get('despacho_ato') or ''
+        palavras_rag_s = _palavras_para_match(texto_rag)
+        base_s = max(min(len(palavras_texto), len(palavras_rag_s)), 1)
+        if len(palavras_texto & palavras_rag_s) / base_s < 0.70:
             continue
         try:
             rag = RAGExample.objects.get(id=s['id'])
@@ -323,9 +332,10 @@ def _melhor_match(texto, similares, templates_validos):
     # Segunda passada: busca matches de abstenção (sem ação alguma)
     # Só retorna se NENHUM match com ação foi encontrado
     for s in similares:
-        palavras_rag = set(s['despacho_ato'].lower().split())
-        total = max(len(palavras_rag), 1)
-        if len(palavras_texto & palavras_rag) / total < 0.70:
+        texto_rag = s.get('despacho_observacao') or s.get('despacho_ato') or ''
+        palavras_rag_s = _palavras_para_match(texto_rag)
+        base_s = max(min(len(palavras_texto), len(palavras_rag_s)), 1)
+        if len(palavras_texto & palavras_rag_s) / base_s < 0.70:
             continue
         try:
             rag = RAGExample.objects.get(id=s['id'])

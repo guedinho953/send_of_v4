@@ -72,6 +72,12 @@
             <button type="submit" class="btn btn-orange">📎 Juntar no Projudi</button>
         </form>
     {% endif %}
+    {% if oficio.status == 'juntado' and oficio.status_retorno == 'recebido' and oficio.url_baixa %}
+        <form method="post" action="{% url 'projudi:oficio_baixar' oficio.pk %}" style="display:inline;">
+            {% csrf_token %}
+            <button type="submit" class="btn" style="background:#dc2626; color:white; font-weight:600;">✅ Baixar</button>
+        </form>
+    {% endif %}
 </div>
 
 <!-- Informacoes -->

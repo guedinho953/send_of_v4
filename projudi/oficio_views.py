@@ -38,6 +38,13 @@ class OficioDashboardView(LoginRequiredMixin, TemplateView):
         context['falhas'] = qs.filter(status__in=['falhou_email', 'falhou_juntada']).count()
         context['dispensados'] = qs.filter(status='dispensado').count()
         context['juntados_para_dispensar'] = qs.filter(status='juntado').count()
+        context['elegiveis_baixa'] = qs.filter(
+            status='juntado',
+            status_retorno='processado',
+        ).exclude(url_baixa='').count()
+        context['recebidos_pendentes_juntar'] = qs.filter(
+            status_retorno='recebido',
+        ).count()
 
         # Filtragem por status
         status_filter = self.request.GET.get('status', '')
@@ -588,7 +595,7 @@ class RetornoJuntarTodosView(LoginRequiredMixin, View):
         service = OficioService(request.user)
         pendentes = OficioRecord.objects.filter(
             user=request.user,
-            status__in=['enviado', 'juntado'],
+            status__in=['enviado', 'juntado', 'dispensado'],
             status_retorno__in=['recebido', 'lido', 'pendente_acao'],
         )
 
@@ -740,4 +747,94 @@ class OficioProcessarPendentesView(LoginRequiredMixin, View):
             messages.success(request, ' | '.join(msgs))
         else:
             messages.info(request, 'Nenhum pendente.')
+        return HttpResponseRedirect(reverse('projudi:oficio_dashboard'))
+
+
+class OficioBaixarView(LoginRequiredMixin, View):
+    """
+    POST /projudi/oficios/<pk>/baixar/
+    Da baixa no oficio via MarcaRecebimento (dataLeitura + Submeter).
+    """
+    def post(self, request, pk):
+        record = get_object_or_404(OficioRecord, pk=pk, user=request.user)
+        service = OficioService(request.user)
+        try:
+            sucesso, msg = service.realizar_baixa(record)
+            if sucesso:
+                messages.success(request,
+                    f"Baixa realizada: {record.numero_oficio} - {msg}")
+            else:
+                messages.error(request,
+                    f"Erro na baixa {record.numero_oficio}: {msg}")
+        except Exception as e:
+            messages.error(request, f"Erro: {str(e)[:200]}")
+        finally:
+            try:
+                service.fechar()
+            except Exception:
+                pass
+        return HttpResponseRedirect(reverse('projudi:oficio_detail', kwargs={'pk': pk}))
+
+
+class OficioBulkBaixarView(LoginRequiredMixin, View):
+    """
+    POST /projudi/oficios/baixar-recebidos/
+    Da baixa em lote nos oficios com retorno recebido, ja juntados,
+    com url_baixa disponivel e com data_retorno ha mais de N dias.
+    """
+    def post(self, request):
+        from django.conf import settings
+        dias_espera = getattr(settings, 'OFICIO_BAIXA_DIAS_ESPERA', 90)
+        from datetime import timedelta
+
+        elegiveis = OficioRecord.objects.filter(
+            user=request.user,
+            status='juntado',               # ja teve resposta registrada no Projudi
+            status_retorno='processado',     # resposta juntada no Projudi
+        ).exclude(url_baixa='')
+
+        # Filtra por data de retorno >= dias_espera
+        if dias_espera > 0:
+            limite = timezone.now() - timedelta(days=dias_espera)
+            elegiveis = elegiveis.filter(data_retorno__lte=limite)
+
+        total = elegiveis.count()
+        if total == 0:
+            messages.info(request,
+                f"Nenhum oficio com retorno recebido ha mais de {dias_espera} dias para baixar.")
+            return HttpResponseRedirect(reverse('projudi:oficio_dashboard'))
+
+        service = OficioService(request.user)
+        baixados = 0
+        erros = 0
+
+        for record in elegiveis:
+            try:
+                sucesso, msg = service.realizar_baixa(record)
+                if sucesso:
+                    baixados += 1
+                else:
+                    erros += 1
+                    service.criar_log(record, 'erro_baixa',
+                        f"Falha na baixa em lote: {msg[:200]}")
+            except Exception as e:
+                erros += 1
+                try:
+                    service.criar_log(record, 'erro_baixa',
+                        f"Excecao na baixa em lote: {str(e)[:200]}")
+                except Exception:
+                    pass
+
+        try:
+            service.fechar()
+        except Exception:
+            pass
+
+        if baixados > 0:
+            messages.success(request, f"✅ {baixados} oficios baixados com sucesso!")
+        if erros > 0:
+            messages.warning(request, f"⚠️ {erros} oficios com erro na baixa.")
+        if baixados == 0 and erros == 0:
+            messages.info(request, "Nenhum oficio elegivel para baixa.")
+
         return HttpResponseRedirect(reverse('projudi:oficio_dashboard'))
