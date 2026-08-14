@@ -1099,38 +1099,76 @@ class CumprimentoService:
             partes.append(getattr(record.template_used, 'descricao', '') or '')
         return '\n'.join(p for p in partes if p)
 
-    def _data_intimacao_do_tracker(self, record: CumprimentoRecord):
-        """Data REAL da intimação da parte, via rastreamento de comunicações.
+    def _processo_resolvido(self, record: CumprimentoRecord):
+        """Resolve o Process (ORM) a partir do CumprimentoRecord.
 
-        Usa ComunicacaoTracker sobre o Movement do processo. Retorna a
-        data (date) da movimentação de intimação CONCLUÍDA/lida para a
-        parte do cumprimento, ou None se não houver.
+        Usa o CNJ (numero_processo_cnj) ou o número interno (processo) para
+        achar o Process. Retorna None se não houver no banco.
         """
-        from processes.models import Movement
-        from projudi.comunicacao_tracker import ComunicacaoTracker
+        from processes.models import Process
+        import re
+        cnj = (getattr(record, 'numero_processo_cnj', '') or '').strip()
+        inter = (getattr(record, 'processo', '') or '').strip()
+        if cnj:
+            p = (Process.objects.filter(number=cnj).first()
+                 or Process.objects.filter(
+                     number_normalized=re.sub(r'\D', '', cnj)).first())
+            if p:
+                return p
+        if inter:
+            return (Process.objects.filter(number=inter).first()
+                    or Process.objects.filter(
+                        number_normalized__icontains=inter).first())
+        return None
 
-        proc = record.processo
-        try:
-            mvs = Movement.objects.filter(process__processo=proc)[:200]
-        except Exception:
-            mvs = []
-        if not mvs:
+    def _data_intimacao_do_tracker(self, record: CumprimentoRecord):
+        """Data REAL de início da intimação da parte, via rastreamento.
+
+        Resolve o Process do cumprimento, lê as Movement do processo e
+        escolhe a data de início do prazo:
+          - fluxo eletronico/DJEN (e advogado): usa a DATA DE DISPONIBILIZAÇÃO
+            no DJEN (Movement.reference_date) mais recente — marco de início
+            da intimação eletrônica.
+          - senão: usa a data de leitura (reading_date) mais recente; depois a
+            data da intimação (act_date); por fim a última referência DJEN.
+        Se record.parte_nome estiver preenchido, filtra por destinatário.
+        """
+        proc = self._processo_resolvido(record)
+        if proc is None:
             return None
+        from processes.models import Movement
         try:
-            # from_movement_queryset mapeia os campos do Movement (Django)
-            # para o formato que o tracker consome (ato_normalizado,
-            # data_obj, communication_status etc.).
-            tracker = ComunicacaoTracker.from_movement_queryset(mvs)
-            info = tracker.ja_expedida('intimacao', record.parte_nome)
-            det = info.get('detalhes') or {}
-            data_obj = det.get('data_obj')
-            if isinstance(data_obj, str):
-                from datetime import datetime
-                try:
-                    data_obj = datetime.strptime(data_obj, '%Y-%m-%d').date()
-                except ValueError:
-                    data_obj = None
-            return data_obj
+            mvs = Movement.objects.filter(process=proc)
+            if not mvs.exists():
+                return None
+            parte = (getattr(record, 'parte_nome', '') or '').strip()
+            base = mvs
+            if parte:
+                f = mvs.filter(recipient__icontains=parte)
+                if f.exists():
+                    base = f
+            # 1) DJEN/eletrônica → data de disponibilização no DJEN
+            if getattr(record, 'fluxo', '') in ('eletronico', 'advogado'):
+                djen = (base.filter(reference_date__isnull=False)
+                        .order_by('-reference_date').first())
+                if djen and djen.reference_date:
+                    return djen.reference_date
+            # 2) leitura real mais recente (intimação lida)
+            lida = (base.exclude(reading_date__isnull=True)
+                    .order_by('-reading_date').first())
+            if lida and lida.reading_date:
+                return lida.reading_date
+            # 3) qualquer intimação (data do ato)
+            inta = base.filter(category='intimacao').order_by('-act_date').first()
+            if inta and inta.act_date:
+                return inta.act_date
+            # 4) última referência DJEN do processo todo (fora do filtro parte)
+            ref = (Movement.objects.filter(process=proc,
+                                           reference_date__isnull=False)
+                   .order_by('-reference_date').first())
+            if ref and ref.reference_date:
+                return ref.reference_date
+            return None
         except Exception:
             return None
 
