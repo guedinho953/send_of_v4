@@ -838,7 +838,7 @@ class MovimentacaoService:
                     try:
                         campo_desc = page.locator('input[name="descricao"]')
                         if campo_desc.count():
-                            campo_desc.fill(certidao_titulo)
+                            campo_desc.fill('Certidão Criminal - art. 76 Lei 9.099/95')
                             time.sleep(0.3)
                     except Exception:
                         pass
@@ -1199,7 +1199,7 @@ class MovimentacaoService:
                         # Campo descricao (título da certidão)
                         campo_desc = page.locator('input[name="descricao"]')
                         if campo_desc.count():
-                            campo_desc.fill(certidao_titulo)
+                            campo_desc.fill('Certidão Criminal - art. 76 Lei 9.099/95')
                             time.sleep(0.3)
                     except Exception:
                         pass

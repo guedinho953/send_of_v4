@@ -588,15 +588,6 @@ class CumprimentoService:
         """
         # Garante o cálculo de prazo (já feito em executar_cumprimento, mas
         # reaplica se por acaso não houver prazo_info).
-        # Lê a config do RAG (observacao_prazo / expede_certidao_prazo /
-        # polo_prazo) ANTES de gerar a observação, para que o polo
-        # (autor/réu/ambos) seja refletido no texto e na certidão.
-        cfg = self._config_prazo_do_rag(record)
-        polo = cfg.get('polo_prazo')
-        if polo and not record.parte_papel:
-            record.parte_papel = polo
-            record.save(update_fields=['parte_papel'])
-
         if not record.prazo_info:
             try:
                 self.gerar_observacao_prazo(record)
@@ -614,17 +605,12 @@ class CumprimentoService:
         certidao_html = (self._html_certidao_prazo(record)
                          if cfg['expede_certidao_prazo'] else '')
 
-        # Papel final (autor/réu/ambos) — JSON da RAG (polo_prazo)
-        # sobrepõe o parte_papel do record.
-        papel = self._papel_resolvido(record)
-
         record.status = 'processando'
         record.save(update_fields=['status'])
         self._log(
             record, 'execucao',
             f"Mov581 ({record.fluxo}) — obs_prazo={bool(observacao)}, "
-            f"certidao_prazo={bool(certidao_html)}, "
-            f"polo={papel}.")
+            f"certidao_prazo={bool(certidao_html)}.")
 
         # Cria o MovimentacaoRecord correspondente.
         from projudi.models import MovimentacaoRecord
@@ -640,7 +626,6 @@ class CumprimentoService:
                                            if certidao_html
                                            else 'Cumprimento de Decisão'),
                 'parte_nome': record.parte_nome or '',
-                'parte_papel': record.parte_papel or '',
                 'url_processo': record.url_processo or '',
                 'user': self.user,
                 'rag_example': getattr(record, 'rag_example', None),
@@ -651,20 +636,14 @@ class CumprimentoService:
             mov.observacao = observacao
             mov.categoria = 'certidao' if certidao_html else 'registro'
             mov.act_verb = 'certifique-se' if certidao_html else 'registre-se'
-            mov.parte_papel = record.parte_papel or ''
             mov.status = 'pendente'
             mov.save(update_fields=['observacao', 'categoria',
-                                    'act_verb', 'parte_papel', 'status'])
+                                    'act_verb', 'status'])
 
         try:
             from projudi.movimentacao_service import MovimentacaoService
             svc = MovimentacaoService(self.user)
-            ok = svc.executar_requests(
-                mov,
-                certidao_html=certidao_html,
-                certidao_titulo=('Certidão de Prazo'
-                                 if certidao_html else None) or '',
-            )
+            ok = svc.executar_requests(mov, certidao_html=certidao_html)
         except Exception as e:
             record.status = 'falha'
             record.save(update_fields=['status'])
@@ -679,8 +658,7 @@ class CumprimentoService:
             "Mov581 concluída." if ok else "Falha na Mov581.")
         return {'status': record.status, 'fluxo': record.fluxo,
                 'certidao': bool(certidao_html),
-                'observacao': bool(observacao),
-                'polo': record.parte_papel or ''}
+                'observacao': bool(observacao)}
 
     def _executar_via_movimentacao(self, record: CumprimentoRecord) -> Dict:
         """Helper para fluxos que vão a Mov581 (eletronico/advogado/etc.).
@@ -942,10 +920,7 @@ class CumprimentoService:
         Args:
             forcar: mesmo que já exista prazo_info, recalcula.
         """
-        # Só pula se já houver cálculo E observação gerada (evita
-        # recalcular à toa, mas permite regerar o texto se estiver vazio).
-        if (record.prazo_info and record.observacao_prazo
-                and not forcar and not (data_inicio or prazo_dias)):
+        if record.prazo_info and not forcar and not (data_inicio or prazo_dias):
             return {'status': 'ok', 'prazo_info': record.prazo_info,
                     'observacao': record.observacao_prazo,
                     'resultado': None, 'mensagem': 'Já calculado.'}
@@ -1033,12 +1008,10 @@ class CumprimentoService:
         """
         rag = getattr(record, 'rag_example', None)
         if not rag:
-            return {'observacao_prazo': False, 'expede_certidao_prazo': False,
-                    'polo_prazo': None}
+            return {'observacao_prazo': False, 'expede_certidao_prazo': False}
         seq = getattr(rag, 'sequencia_cumprimento', None) or []
         if not seq:
-            return {'observacao_prazo': False, 'expede_certidao_prazo': False,
-                    'polo_prazo': None}
+            return {'observacao_prazo': False, 'expede_certidao_prazo': False}
 
         tipo_rag = {
             'eletronico': 'movimentacao', 'advogado': 'movimentacao',
@@ -1062,23 +1035,12 @@ class CumprimentoService:
                         item = it
                         break
         if item is None:
-            return {'observacao_prazo': False, 'expede_certidao_prazo': False,
-                    'polo_prazo': None}
-
-        # polo_prazo: para quem corre o prazo — 'autor' | 'reu' | 'ambos'.
-        # Se omitido no JSON, infere pelo fluxo (eletronico/advogado/ar
-        # costumam ser para o réu; mandado/oficio têm polo próprio).
-        polo = item.get('polo_prazo')
-        if polo is None:
-            polo = 'reu' if record.fluxo in (
-                'eletronico', 'advogado', 'ar', 'email',
-                'email_condicional', 'movimentacao_simples') else None
+            return {'observacao_prazo': False, 'expede_certidao_prazo': False}
 
         return {
             'observacao_prazo': bool(item.get('observacao_prazo', False)),
             'expede_certidao_prazo': bool(
                 item.get('expede_certidao_prazo', False)),
-            'polo_prazo': polo,
         }
 
     def _texto_despacho_record(self, record: CumprimentoRecord) -> str:
@@ -1111,16 +1073,13 @@ class CumprimentoService:
 
         proc = record.processo
         try:
-            mvs = Movement.objects.filter(process__processo=proc)[:200]
+            mvs = list(Movement.objects.filter(process__processo=proc)[:200])
         except Exception:
             mvs = []
         if not mvs:
             return None
         try:
-            # from_movement_queryset mapeia os campos do Movement (Django)
-            # para o formato que o tracker consome (ato_normalizado,
-            # data_obj, communication_status etc.).
-            tracker = ComunicacaoTracker.from_movement_queryset(mvs)
+            tracker = ComunicacaoTracker(mvs)
             info = tracker.ja_expedida('intimacao', record.parte_nome)
             det = info.get('detalhes') or {}
             data_obj = det.get('data_obj')
@@ -1152,49 +1111,6 @@ class CumprimentoService:
         }.get(fluxo, 'Intimação')
 
     @staticmethod
-    def _rotulo_parte(parte_papel: str, parte_nome: str) -> str:
-        """Rótulo de PARA QUEM é a contagem de prazo (autor / réu / ambos).
-
-        Usado na certidão de prazo e na observação para deixar claro se o
-        prazo corre para a parte autora, para o réu, ou para ambos.
-        """
-        papel = (parte_papel or '').lower()
-        nome = (parte_nome or '').strip()
-        sufixo = f' {nome}' if nome else ''
-        if papel in ('autor', 'autora', 'promovente', 'requerente'):
-            return f'à parte autora{sufixo}'
-        if papel in ('reu', 'reu_especifico', 'executado', 'requerido',
-                     'promovido'):
-            return f'ao réu{sufixo}'
-        if papel in ('ambos', 'todos', 'autores', 'res'):
-            return 'aos autores e réus'
-        # Sem papel definido: cai no genérico (mas tenta o nome se houver).
-        return f'à(s) parte(s){sufixo}' if nome else 'à(s) parte(s)'
-
-    @staticmethod
-    def _papel_resolvido(record: 'CumprimentoRecord') -> str:
-        """Papel final para a contagem de prazo.
-
-        Prioridade: JSON da RAG (polo_prazo: 'autor'/'reu'/'ambos')
-        sobrepõe o parte_papel do record. Retorna o papel normalizado
-        que _rotulo_parte entende ('autor'/'reu'/...).
-        """
-        cfg = CumprimentoService._config_prazo_do_rag(record)
-        polo = cfg.get('polo_prazo')
-        if polo:
-            p = str(polo).lower()
-            if p in ('autor', 'autora', 'promovente', 'requerente',
-                     'autor_especifico', 'autores'):
-                return 'autor'
-            if p in ('reu', 'reu_especifico', 'executado', 'requerido',
-                     'promovido', 'res'):
-                return 'reu'
-            if p in ('ambos', 'todos', 'autores_e_reus'):
-                return 'ambos'
-        # Fallback: parte_papel do record.
-        return (getattr(record, 'parte_papel', '') or '').lower()
-
-    @staticmethod
     def _texto_observacao_prazo(record, res, modo) -> str:
         """Gera o texto controlado da observação de prazo (padrão 2ª VSJ).
 
@@ -1218,8 +1134,6 @@ class CumprimentoService:
 
         rotulo = CumprimentoService._rotulo_intimacao(
             record.fluxo, res.djen, modo)
-        papel = CumprimentoService._papel_resolvido(record)
-        parte = CumprimentoService._rotulo_parte(papel, record.parte_nome)
         inicio = res.dias_contados[0] if res.dias_contados else None
 
         if res.djen:
@@ -1229,8 +1143,7 @@ class CumprimentoService:
             regra_excl = '; o dia da leitura não conta'
 
         return (
-            f'{rotulo} — Prazo de {res.prazo_dias} dias úteis '
-            f'{parte}. '
+            f'{rotulo} — Prazo de {res.prazo_dias} dias úteis. '
             f'Leitura em {res.data_inicio:%d/%m/%Y}{regra_excl}; '
             f'início da contagem em {inicio:%d/%m/%Y}; '
             f'término em {res.ultimo_dia:%d/%m/%Y} '
@@ -1319,8 +1232,7 @@ class CumprimentoService:
             from datetime import date as _date
             ctx = {
                 'processo': record.numero_processo_cnj or record.processo,
-                'parte': CumprimentoService._rotulo_parte(
-                    self._papel_resolvido(record), record.parte_nome),
+                'parte': record.parte_nome or '...',
                 'observacao_prazo': record.observacao_prazo or '',
                 'data': _date.today().strftime('%d/%m/%Y'),
                 'servidor': (getattr(self.user, 'full_name', '')

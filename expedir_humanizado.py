@@ -273,55 +273,27 @@ def expedir_processo(proc, session, cookies_dict):
             page.screenshot(path='/tmp/pw_step2b_concluido.png')
             print(f'   ✅ Movimentacao concluida! URL: {page.url}')
             
-            # === PASSO 3: CumprimentoCartorio -> Redigir sem AR com modelo RPA ===
+            # === PASSO 3: CumprimentoCartorio -> Redigir sem AR (link direto) ===
             print('   [3/5] 📋 Abrindo Cumprimento Cartorio...')
             url_cump = 'https://projudi.tjba.jus.br/projudi/listagens/CumprimentoCartorio?tipo=oficio&acao=expedir'
             page.goto(url_cump, wait_until='networkidle')
             time.sleep(3)
             page.screenshot(path='/tmp/pw_step3_cumprimento.png')
             
-            # Encontrar o form do processo gerado e selecionar modelo "oficio RPA" (85079)
-            print('   🔍 Selecionando modelo de oficio RPA...')
-            cump_result = page.evaluate('''() => {
-                // Procurar a linha do processo correto ou usar o ultimo cumprimento
-                var forms = document.querySelectorAll('form[name^="formCumprimento"]');
-                if (forms.length === 0) return {erro: 'nenhum form encontrado'};
-                
-                var form = forms[forms.length - 1];
-                var sel = form.querySelector('select[name="codModelo"]');
-                if (!sel) return {erro: 'select codModelo nao encontrado', form: form.name};
-                
-                // Procurar opcao RPA
-                var rpaValue = null;
-                for (var i = 0; i < sel.options.length; i++) {
-                    if (sel.options[i].text.toLowerCase().includes('rpa')) {
-                        rpaValue = sel.options[i].value;
-                        break;
-                    }
-                }
-                if (!rpaValue) return {erro: 'modelo RPA nao encontrado', opcoes: Array.from(sel.options).map(o => o.text)};
-                
-                sel.value = rpaValue;
-                return {ok: true, form: form.name, codModelo: rpaValue};
-            }''')
-            print(f'   📝 {cump_result}')
-            
-            if not cump_result.get('ok'):
-                print(f'   ❌ ERRO na selecao do modelo: {cump_result}')
-                page.screenshot(path='/tmp/pw_erro_modelo.png')
-                browser.close()
-                return False
-            
-            # Submeter o form com gerarar=false (Redigir sem AR)
-            form_name = cump_result['form']
-            print(f'   🔄 Submetendo {form_name} para redigir sem AR...')
+            # Clicar no ultimo link "Redigir sem AR" (flow documentado no FLUXO_COMPLETO.md)
+            print('   🔍 Clicando no ultimo "Redigir sem AR"...')
             with page.expect_navigation(timeout=15000):
-                page.evaluate(f'''() => {{
-                    var form = document.forms['{form_name}'];
-                    form.gerarar.value = 'false';
-                    form.submit();
-                }}''')
-                time.sleep(3)
+                page.evaluate('''() => {
+                    var links = document.querySelectorAll('a');
+                    for (var i = links.length - 1; i >= 0; i--) {
+                        if (links[i].innerText.trim() === 'Redigir sem AR') {
+                            links[i].click();
+                            return {ok: true};
+                        }
+                    }
+                    return {ok: false};
+                }''')
+                time.sleep(2)
             
             time.sleep(3)
             page.screenshot(path='/tmp/pw_step4_editor.png')
@@ -412,24 +384,39 @@ def expedir_processo(proc, session, cookies_dict):
             # === PASSO 6: Registrar ===
             print('   🔄 Procurando Registrar...')
             registrar = page.locator("input[value='Registrar'], input[src*='registrar']").first
+            registrou = False
             if registrar.count():
                 registrar.scroll_into_view_if_needed()
                 time.sleep(1)
                 registrar.click()
                 time.sleep(3)
                 page.screenshot(path='/tmp/pw_step6_registrado.png')
+                registrou = True
                 print('   ✅ Registrar clicado!')
+                # Aguarda reload apos registrar (sobe um pouco no caso de confirmacao)
+                for _ in range(5):
+                    time.sleep(1)
+                    if any('consultar' in (page.content() or '').lower()):
+                        break
             else:
                 print('   ⚠️ Registrar nao encontrado')
                 page.screenshot(path='/tmp/pw_step5_sem_registrar.png')
-            
-            # Verificar sucesso
-            html_final = page.content()
-            if any(k in html_final.lower() for k in ['registrado', 'sucesso', 'confirmado', 'ofícios para expedir', 'cumprimentocartorio']):
-                sucesso = True
-                print('   ✅ CONFIRMADO: Oficio expedido no Projudi!')
+
+            # Verificar sucesso: confirmar que a expedicao foi registrada.
+            # So gravar no banco se o Registrar foi clicado E a pag final confirma.
+            if registrou:
+                # Confirma relendo o content apos o reload do Registrar
+                html_final = page.content() or ''
+                if any(k in html_final.lower() for k in ['registrado', 'sucesso', 'confirmado', 'fora da lista', 'cumprimentocartorio']):
+                    sucesso = True
+                    print('   ✅ CONFIRMADO: Oficio expedido e registrado no Projudi!')
+                else:
+                    # fallback: se voltou para CumprimentoCartorio, considera confirmado
+                    if 'CumprimentoCartorio' in page.url:
+                        sucesso = True
+                        print('   ✅ CONFIRMADO: retornou para CumprimentoCartorio (expedido).')
             else:
-                print(f'   ⚠️ Nao confirmado automaticamente. URL: {page.url}')
+                print(f'   ⚠️ Registrar NAO foi clicado. URL: {page.url}')
             
             browser.close()
     except Exception as e:
@@ -487,25 +474,38 @@ def processar_fila():
 
 # ====== CARREGAR COOKIES (sempre antes de qualquer fluxo) ======
 print('\n========== Carregando cookies ==========')
-cookies_paths = [
-    COOKIES_PATH,
-    os.path.expanduser('~/.projudi_cookies.json'),
-    '/tmp/projudi_cookies.json',
-]
 cookies_dict = {}
-for cp in cookies_paths:
-    if os.path.exists(cp):
-        with open(cp) as f:
-            data = json.load(f)
-            if isinstance(data, dict):
-                cookies_dict = data
-            elif isinstance(data, list):
-                cookies_dict = {c['name']: c['value'] for c in data if 'name' in c}
-        print(f'   ✅ Cookies carregados de {cp}')
-        break
 
-if not cookies_dict:
-    print('   ❌ Cookies não encontrados!')
+# 1) Sessão salva no banco Django (ProjudiSession ativa)
+try:
+    from projudi.models import ProjudiSession
+    sessao = ProjudiSession.objects.filter(status='active').first()
+    if sessao and sessao.cookies and 'JSESSIONID' in sessao.cookies:
+        cookies_dict = sessao.cookies if isinstance(sessao.cookies, dict) else json.loads(sessao.cookies)
+        print(f'   ✅ Cookies carregados do banco (ProjudiSession #{sessao.id})')
+except Exception as e:
+    print(f'   ⚠️ Banco indisponivel: {e}')
+
+# 2) Fallback: arquivos JSON
+if not cookies_dict or 'JSESSIONID' not in cookies_dict:
+    cookies_paths = [
+        COOKIES_PATH,
+        os.path.expanduser('~/.projudi_cookies.json'),
+        '/tmp/projudi_cookies.json',
+    ]
+    for cp in cookies_paths:
+        if os.path.exists(cp):
+            with open(cp) as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    cookies_dict = data
+                elif isinstance(data, list):
+                    cookies_dict = {c['name']: c['value'] for c in data if 'name' in c}
+            print(f'   ✅ Cookies carregados de {cp}')
+            break
+
+if not cookies_dict or 'JSESSIONID' not in cookies_dict:
+    print('   ❌ Cookies não encontrados (nem no banco nem em arquivo)!')
     sys.exit(1)
 
 # Criar sessão

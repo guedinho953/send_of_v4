@@ -1,0 +1,46 @@
+diff --git a/projudi/admin.py b/projudi/admin.py
+index bf6ca0b..6ab60aa 100644
+--- a/projudi/admin.py
++++ b/projudi/admin.py
+@@ -1,4 +1,5 @@
+ from django.contrib import admin
++from datetime import date
+ 
+ from .models import (
+     ProjudiSession, Court, Vara, Judge,
+@@ -6,6 +7,7 @@ from .models import (
+     MandadoRecord, MandadoLog,
+     CumprimentoRecord, CumprimentoLog,
+     MovimentacaoRecord, MovimentacaoLog,
++    Feriado, SuspensaoPrazo,
+ )
+ 
+ 
+@@ -116,3 +118,27 @@ class MovimentacaoLogAdmin(admin.ModelAdmin):
+     def mensagem_resumo(self, obj):
+         return obj.mensagem[:80] + '...' if len(obj.mensagem) > 80 else obj.mensagem
+     mensagem_resumo.short_description = 'Mensagem'
++
++
++@admin.register(Feriado)
++class FeriadoAdmin(admin.ModelAdmin):
++    list_display = ['nome', 'tipo', 'escopo', 'data_ou_fixa', 'court', 'vara',
++                    'is_active', 'tenant']
++    list_filter = ['tipo', 'escopo', 'is_active', 'court', 'tenant']
++    search_fields = ['nome']
++    list_editable = ['is_active']
++    readonly_fields = ['created_at', 'updated_at']
++
++    def data_ou_fixa(self, obj):
++        return obj.as_date(date.today().year) if obj.tipo == 'fixo' else obj.data
++    data_ou_fixa.short_description = 'Data'
++
++
++@admin.register(SuspensaoPrazo)
++class SuspensaoPrazoAdmin(admin.ModelAdmin):
++    list_display = ['nome', 'tipo', 'escopo', 'data_inicio', 'data_fim',
++                    'court', 'vara', 'is_active', 'tenant']
++    list_filter = ['tipo', 'escopo', 'is_active', 'court', 'tenant']
++    search_fields = ['nome']
++    list_editable = ['is_active']
++    readonly_fields = ['created_at', 'updated_at']

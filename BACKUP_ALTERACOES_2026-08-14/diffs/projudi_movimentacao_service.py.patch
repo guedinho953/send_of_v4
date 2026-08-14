@@ -1,0 +1,24 @@
+diff --git a/projudi/movimentacao_service.py b/projudi/movimentacao_service.py
+index 9b79d8c..4d417e4 100644
+--- a/projudi/movimentacao_service.py
++++ b/projudi/movimentacao_service.py
+@@ -619,7 +619,8 @@ class MovimentacaoService:
+                            prazo_mp: str = '5',
+                            promotor_mp: str = None,
+                            cod_analise: str = None,
+-                           certidao_html: str = None) -> bool:
++                           certidao_html: str = None,
++                           certidao_titulo: str = 'Certidão Criminal - art. 76 Lei 9.099/95') -> bool:
+         """Executa movimentação via Playwright headless + submit via JavaScript.
+ 
+         Args:
+@@ -651,6 +652,9 @@ class MovimentacaoService:
+                           concluir.
+             certidao_html: Se informado, insere documento certidão no FCKeditor
+                           antes de Concluir (SelectArquivo + redigirTexto).
++            certidao_titulo: Título (campo 'descricao') do documento certidão.
++                          Default mantém o texto da certidão criminal (art. 76).
++                          Para Certidão de Prazo, passe 'Certidão de Prazo'.
+ 
+         FLUXO:
+           1. Abre MovimentarProcesso via Playwright (headless)

@@ -1,0 +1,696 @@
+diff --git a/projudi/cumprimento_service.py b/projudi/cumprimento_service.py
+index dc38749..c79bfac 100644
+--- a/projudi/cumprimento_service.py
++++ b/projudi/cumprimento_service.py
+@@ -513,6 +513,20 @@ class CumprimentoService:
+ 
+         fluxo = record.fluxo
+ 
++        # ─── Análise de prazo (observação/certidão controlada por JSON) ───
++        # Gera prazo_info + observacao_prazo a partir do rastreamento de
++        # comunicações (data real da intimação), do despacho e da RAG.
++        # Alimenta a observação do Mov581 / certidão nos fluxos abaixo.
++        # Pula mandado/ofício (fluxo próprio de expedição) e edital
++        # (publicação em diário, sem contagem de prazo de intimação).
++        if fluxo in ('eletronico', 'advogado', 'ar', 'email',
++                     'email_condicional', 'movimentacao_simples'):
++            try:
++                self.gerar_observacao_prazo(record)
++            except Exception as e:
++                self._log(record, 'erro',
++                          f'Falha ao gerar análise de prazo: {e}')
++
+         # ─── Mandado → roteia para MandadoService ───
+         if fluxo in ('mandado', 'mandado_precatorio'):
+             self._log(record, 'execucao',
+@@ -563,16 +577,96 @@ class CumprimentoService:
+ 
+     def _executar_movimentacao_simples(self, record: CumprimentoRecord) -> Dict:
+         """Executa movimentação simples (Mov581) no Projudi.
+-        Implementação real via Playwright ou requests futuramente.
++
++        Liga a contagem de prazo ao envio real:
++          - observação de prazo (se RAG 'observacao_prazo'=True) →
++            campo observação do Mov581.
++          - certidão de prazo (se RAG 'expede_certidao_prazo'=True) →
++            HTML do DocumentTemplate 'Certidão de Prazo' injetado no
++            FCKeditor (igual certidão criminal).
++        Usa MovimentacaoService.executar_requests (já suporta certidao_html).
+         """
++        # Garante o cálculo de prazo (já feito em executar_cumprimento, mas
++        # reaplica se por acaso não houver prazo_info).
++        if not record.prazo_info:
++            try:
++                self.gerar_observacao_prazo(record)
++            except Exception as e:
++                self._log(record, 'erro',
++                          f'Falha ao calcular prazo: {e}')
++                record.status = 'falha'
++                record.save(update_fields=['status'])
++                return {'status': 'falha', 'fluxo': record.fluxo,
++                        'erro': str(e)}
++
++        cfg = self._config_prazo_do_rag(record)
++        observacao = (self.observacao_para_movimentacao(record)
++                      if cfg['observacao_prazo'] else '')
++        certidao_html = (self._html_certidao_prazo(record)
++                         if cfg['expede_certidao_prazo'] else '')
++
+         record.status = 'processando'
+         record.save(update_fields=['status'])
+-        self._log(record, 'execucao',
+-                  "Pronto para Mov581 (Tipo Documental). "
+-                  "Aguardando implementação da automação.")
+-        record.status = 'cumprido'
++        self._log(
++            record, 'execucao',
++            f"Mov581 ({record.fluxo}) — obs_prazo={bool(observacao)}, "
++            f"certidao_prazo={bool(certidao_html)}.")
++
++        # Cria o MovimentacaoRecord correspondente.
++        from projudi.models import MovimentacaoRecord
++        mov, _ = MovimentacaoRecord.objects.get_or_create(
++            processo=record.processo,
++            numero_processo_cnj=record.numero_processo_cnj or '',
++            act_verb='certifique-se' if certidao_html else 'registre-se',
++            defaults={
++                'categoria': 'certidao' if certidao_html else 'registro',
++                'observacao': observacao,
++                'codigo_movimentacao': '581',
++                'descricao_movimentacao': ('Certidão de Prazo'
++                                           if certidao_html
++                                           else 'Cumprimento de Decisão'),
++                'parte_nome': record.parte_nome or '',
++                'url_processo': record.url_processo or '',
++                'user': self.user,
++                'rag_example': getattr(record, 'rag_example', None),
++                'status': 'pendente',
++            },
++        )
++        if mov.pk:  # já existia: atualiza observação/categoria
++            mov.observacao = observacao
++            mov.categoria = 'certidao' if certidao_html else 'registro'
++            mov.act_verb = 'certifique-se' if certidao_html else 'registre-se'
++            mov.status = 'pendente'
++            mov.save(update_fields=['observacao', 'categoria',
++                                    'act_verb', 'status'])
++
++        try:
++            from projudi.movimentacao_service import MovimentacaoService
++            svc = MovimentacaoService(self.user)
++            ok = svc.executar_requests(mov, certidao_html=certidao_html)
++        except Exception as e:
++            record.status = 'falha'
++            record.save(update_fields=['status'])
++            self._log(record, 'erro', f'Erro ao executar Mov581: {e}')
++            return {'status': 'falha', 'fluxo': record.fluxo,
++                    'erro': str(e)}
++
++        record.status = 'cumprido' if ok else 'falha'
+         record.save(update_fields=['status'])
+-        return {'status': 'cumprido', 'fluxo': 'movimentacao_simples'}
++        self._log(
++            record, 'execucao',
++            "Mov581 concluída." if ok else "Falha na Mov581.")
++        return {'status': record.status, 'fluxo': record.fluxo,
++                'certidao': bool(certidao_html),
++                'observacao': bool(observacao)}
++
++    def _executar_via_movimentacao(self, record: CumprimentoRecord) -> Dict:
++        """Helper para fluxos que vão a Mov581 (eletronico/advogado/etc.).
++
++        Igual a _executar_movimentacao_simples, mas mantém o fluxo
++        original no log/retorno.
++        """
++        return self._executar_movimentacao_simples(record)
+ 
+     def _executar_ar(self, record: CumprimentoRecord) -> Dict:
+         """Expende a intimação PELOS CORREIOS (AR digital) no Projudi.
+@@ -625,20 +719,17 @@ class CumprimentoService:
+         return {'status': 'pendente', 'fluxo': record.fluxo}
+ 
+     def _executar_eletronico(self, record: CumprimentoRecord) -> Dict:
+-        """Registra intimação via DJEN.
+-        Implementação real: Mov581 no Projudi.
++        """Registra intimação via DJEN (Mov581 no Projudi).
++
++        A contagem de prazo e (se o RAG pedir) a observação/certidão de
++        prazo já foram preparadas em executar_cumprimento; aqui apenas
++        executa a movimentação simples com esses dados.
+         """
+-        self._log(record, 'execucao',
+-                  "Intimação eletrônica via DJEN.")
+-        return {'status': 'pendente', 'fluxo': 'eletronico'}
++        return self._executar_via_movimentacao(record)
+ 
+     def _executar_advogado(self, record: CumprimentoRecord) -> Dict:
+-        """Registra intimação ao advogado (via DJEN).
+-        Implementação real: apenas Mov581.
+-        """
+-        self._log(record, 'execucao',
+-                  "Intimação ao advogado via DJEN.")
+-        return {'status': 'pendente', 'fluxo': 'advogado'}
++        """Registra intimação ao advogado (via DJEN / Mov581)."""
++        return self._executar_via_movimentacao(record)
+ 
+     def _executar_edital(self, record: CumprimentoRecord) -> Dict:
+         """Gera edital de intimação.
+@@ -649,6 +740,538 @@ class CumprimentoService:
+         return {'status': 'pendente', 'fluxo': 'edital'}
+ 
+     # =================================================================
++    # PRAZOS (contagem processual)
++    # =================================================================
++    def calcular_prazo(self, data_inicio, prazo_dias, feriados_extra=None,
++                       incluir_dia_inicio=False, modo='uteis', djen=False,
++                       tenant=None, court=None, vara=None):
++        """Calcula prazo processual em dias úteis (CPC/CNJ).
++
++        Delega para PrazoService (projudi/prazo_service.py). Regras:
++        dia da intimação não conta; fds/feriado/recesso (20/12 a 22/01)
++        suspendem; 'ultimo_dia' = N-ésimo dia útil; 'data_decurso' =
++        dia seguinte.
++
++        Se 'tenant' for informado, carrega feriados e suspensões de prazo
++        CADASTRADOS no banco (modelos Feriado/SuspensaoPrazo) em vez de
++        usar só feriados_extra. O cadastro é isolado por tenant e filtrável
++        por court/vara (escopos estadual/comarca/vara).
++
++        Args:
++            data_inicio: date da intimação/publicação (não conta).
++            prazo_dias: int > 0.
++            feriados_extra: {ano: [date, ...]} c/ feriados municipais,
++                semana de baixa e feriados móveis do ano (fallback se não
++                houver tenant).
++            incluir_dia_inicio: True se o dia da intimação conta.
++            modo: 'uteis' (padrão) ou 'corridos'.
++            djen: True aplica a regra do CPC art. 5º §3º — intimação
++                eletrônica (DJEN): o 1º dia da intimação e o 1º dia útil
++                subsequente NÃO contam; a contagem inicia no 3º dia útil.
++            tenant: accounts.Tenant p/ carregar cadastro de feriados/
++                suspensões do banco.
++            court/vara: filtros de escopo (opcionais).
++
++        Returns:
++            ResultadoPrazo (ultimo_dia, data_decurso, dias_contados,
++            dias_excluidos, relatorio()).
++        """
++        from projudi.prazo_service import PrazoService
++
++        if tenant is not None:
++            svc = PrazoService.from_db(tenant=tenant, court=court, vara=vara)
++        else:
++            svc = PrazoService(feriados_extra=feriados_extra)
++
++        return svc.contar_prazo(
++            data_inicio, prazo_dias,
++            incluir_dia_inicio=incluir_dia_inicio, modo=modo, djen=djen,
++        )
++
++    def contar_prazo_por_fluxo(self, fluxo, data_inicio, prazo_dias,
++                               modo='uteis', tenant=None, court=None, vara=None):
++        """Atalho que aplica a regra de contagem conforme o fluxo de
++        comunicação (art. 5º §3º / art. 219 §1º do CPC):
++
++          - 'eletronico' (DJEN): djen=True  → 1º dia da intimação + 1º
++            dia útil subsequente NÃO contam; conta do 3º dia útil.
++          - 'advogado': djen=False → dia do recebimento NÃO conta;
++            conta do dia seguinte (regra padrão de intimação pessoal).
++          - 'decadencial': modo='decadencial' → conta TODOS os dias,
++            sem fds/feriado/recesso/suspensão (ex: decadência de 1 ano).
++          - demais fluxos (ar, correio, mandado, edital...): djen=False
++            (o dia do ato não conta; conta do dia seguinte).
++
++        Args:
++            fluxo: CumprimentoRecord.fluxo (ou string equivalente).
++            data_inicio/prazo_dias/modo/tenant/court/vara: ver calcular_prazo.
++
++        Returns:
++            ResultadoPrazo.
++        """
++        djen = (fluxo == 'eletronico')
++        if modo == 'decadencial':
++            djen = False
++        return self.calcular_prazo(
++            data_inicio, prazo_dias, modo=modo, djen=djen,
++            tenant=tenant, court=court, vara=vara,
++        )
++
++    def contar_decadencial(self, data_inicio, prazo_dias,
++                           tenant=None, court=None, vara=None,
++                           incluir_dia_inicio=False):
++        """Prazo decadencial: corre diariamente, sem qualquer suspensão.
++
++        Veja PrazoService.contar_decadencial. Útil p/ avaliar decadência
++        (ex: art. 208 CC) a partir da data do fato/ato.
++        """
++        return self.calcular_prazo(
++            data_inicio, prazo_dias, modo='decadencial',
++            incluir_dia_inicio=incluir_dia_inicio,
++            tenant=tenant, court=court, vara=vara,
++        )
++
++    # =================================================================
++    # ANÁLISE DE PRAZO → OBSERVAÇÃO / CERTIDÃO (JSON CONTROLADO)
++    # =================================================================
++    @staticmethod
++    def extrair_prazo_do_despacho(texto: str) -> Dict:
++        """Extrai data de início e número de dias do despacho.
++
++        Tenta identificar no texto do despacho/observação:
++          - Data da intimação/publicação: "intimado em 09/02/2026",
++            "publicado em 10/02/2026", "ciência em 09/02/2026", ou
++            "data da intimação: 09/02/2026".
++          - Prazo em dias: "prazo de 15 dias", "no prazo de 10 (dez)
++            dias", "15 dias úteis", "intimo a parte em 15 dias".
++
++        Returns:
++            {'data_inicio': date|None, 'prazo_dias': int|None,
++             'modo': 'uteis'|'corridos'|'decadencial', 'encontrado': bool}
++        """
++        import re
++        from datetime import datetime
++
++        resultado = {
++            'data_inicio': None, 'prazo_dias': None,
++            'modo': 'uteis', 'encontrado': False,
++        }
++        if not texto:
++            return resultado
++
++        # ── Data de início (intimação/publicação/ciência) ──
++        padroes_data = [
++            r'(?:intim|public|ci[êe]ncia|citad)[ãoa\w\s]*?em\s*(\d{1,2}/\d{1,2}/\d{4})',
++            r'data\s+da\s+(?:intima[çc][ãa]o|public)[ãa\w\s]*?[:\s]*(\d{1,2}/\d{1,2}/\d{4})',
++        ]
++        for pad in padroes_data:
++            m = re.search(pad, texto, re.IGNORECASE)
++            if m:
++                try:
++                    resultado['data_inicio'] = datetime.strptime(
++                        m.group(1), '%d/%m/%Y').date()
++                    break
++                except ValueError:
++                    pass
++
++        # ── Prazo em dias ──
++        m_prazo = re.search(
++            r'(\d{1,3})\s*(?:\([^)]*\)\s*)?dias?\s*(?:[úu]teis|corridos|)?',
++            texto, re.IGNORECASE)
++        if m_prazo:
++            try:
++                resultado['prazo_dias'] = int(m_prazo.group(1))
++            except ValueError:
++                pass
++
++        # ── Modo ──
++        txt_low = texto.lower()
++        if re.search(r'decad', txt_low):
++            resultado['modo'] = 'decadencial'
++        elif re.search(r'dias?\s+corridos|corridos?', txt_low):
++            resultado['modo'] = 'corridos'
++
++        resultado['encontrado'] = bool(
++            resultado['data_inicio'] and resultado['prazo_dias'])
++        return resultado
++
++    def gerar_observacao_prazo(self, record: CumprimentoRecord,
++                               tenant=None, court=None, vara=None,
++                               data_inicio=None, prazo_dias=None,
++                               modo=None, forcar=False) -> Dict:
++        """Conta o prazo e gera a observação/certidão controlada por JSON.
++
++        Fontes de extração (prioridade):
++          1. Rastreamento de comunicações (Movement do processo): DATA
++             REAL em que a parte foi intimada (situação concluída/lida).
++             É a fonte autorizada da data_inicio.
++          2. Atos do despacho / RAG (record.snippet ou RAGExample
++             despacho_observacao/despacho_ato): NÚMERO DE DIAS e o tipo
++             de prazo (úteis/corridos/decadencial).
++          Override manual via data_inicio / prazo_dias / modo.
++
++        Salva:
++          - record.prazo_info  → JSON serializável do PrazoService
++          - record.observacao_prazo → texto controlado (padrão 2ª VSJ)
++
++        O JSON resultante (ver montar_json_envio) é o que vai ser enviado
++        na observação do Mov581 e/ou na certidão.
++
++        Args:
++            forcar: mesmo que já exista prazo_info, recalcula.
++        """
++        if record.prazo_info and not forcar and not (data_inicio or prazo_dias):
++            return {'status': 'ok', 'prazo_info': record.prazo_info,
++                    'observacao': record.observacao_prazo,
++                    'resultado': None, 'mensagem': 'Já calculado.'}
++
++        tenant = tenant or (self.user.tenant if self.user else None)
++        if not tenant:
++            raise ValueError('gerar_observacao_prazo exige tenant.')
++
++        # ── Fonte 1: rastreamento de comunicações (data real da intimação) ──
++        data_tracker = self._data_intimacao_do_tracker(record)
++        # ── Fonte 2: atos do despacho / RAG (prazo em dias + modo) ──
++        texto_despacho = self._texto_despacho_record(record)
++        extr = self.extrair_prazo_do_despacho(texto_despacho)
++
++        data_inicio = data_inicio or data_tracker or extr['data_inicio']
++        prazo_dias = prazo_dias or extr['prazo_dias']
++        modo = modo or extr['modo'] or 'uteis'
++
++        if not data_inicio or not prazo_dias:
++            self._log(
++                record, 'erro',
++                'Não foi possível determinar data/prazo. Tracker='
++                f'{data_tracker}, despacho='
++                f'(início={extr["data_inicio"]}, dias={extr["prazo_dias"]}).',
++                detalhes={'tracker': data_tracker, 'despacho': extr},
++            )
++            return {'status': 'erro',
++                    'mensagem': 'Data/prazo não determinados (tracker+despacho).'}
++
++        res = self.contar_prazo_por_fluxo(
++            record.fluxo, data_inicio, prazo_dias, modo=modo,
++            tenant=tenant, court=court, vara=vara,
++        )
++
++        observacao = self._texto_observacao_prazo(record, res, modo)
++        record.prazo_info = res.to_dict()
++        record.observacao_prazo = observacao
++
++        # ── Decisão observação vs certidão ──
++        # Lê do RAGExample vinculado (sequencia_cumprimento): cada item
++        # pode trazer 'observacao_prazo' e 'expede_certidao_prazo'.
++        # Isso É a fonte autorizada (você configura na RAG).
++        cfg = self._config_prazo_do_rag(record)
++        observacao_prazo_flag = cfg['observacao_prazo']
++        certidao_prazo_flag = cfg['expede_certidao_prazo']
++
++        # Persiste as flags no prazo_info p/ consulta/debug.
++        record.prazo_info['observacao_prazo'] = observacao_prazo_flag
++        record.prazo_info['expede_certidao_prazo'] = certidao_prazo_flag
++
++        record.save(
++            update_fields=['prazo_info', 'observacao_prazo'])
++
++        self._log(
++            record, 'decisao',
++            f'Prazo calculado ({modo}, djen={res.djen}): '
++            f'último dia {res.ultimo_dia:%d/%m/%Y}, '
++            f'decurso {res.data_decurso:%d/%m/%Y}. '
++            f'Fonte data: {"tracker" if data_tracker else "despacho"}. '
++            f'RAG: observacao_prazo={observacao_prazo_flag}, '
++            f'expede_certidao_prazo={certidao_prazo_flag}.',
++            detalhes=res.to_dict(),
++        )
++        return {'status': 'ok', 'prazo_info': res.to_dict(),
++                'observacao': observacao, 'resultado': res,
++                'fonte_data': 'tracker' if data_tracker else 'despacho',
++                'observacao_prazo': observacao_prazo_flag,
++                'expede_certidao_prazo': certidao_prazo_flag}
++
++    @staticmethod
++    def _config_prazo_do_rag(record: CumprimentoRecord) -> Dict:
++        """Lê a configuração de prazo do RAGExample vinculado ao cumprimento.
++
++        O RAGExample.sequencia_cumprimento é uma lista ordenada de atos;
++        cada item pode trazer:
++          - 'observacao_prazo': bool  → colocar a contagem de prazo na
++            observação da movimentação (Mov581).
++          - 'expede_certidao_prazo': bool → expedir a CERTIDÃO DE PRAZO
++            (documento à parte, diferente de outras certidões).
++        O item é casado pelo 'tipo' (ex: 'movimentacao') ou, se não
++        houver tipo, pelo trecho de 'observacao' presente no snippet.
++
++        Retorna {'observacao_prazo': bool, 'expede_certidao_prazo': bool}.
++        Default: ambos False se não houver RAG ou item correspondente.
++        """
++        rag = getattr(record, 'rag_example', None)
++        if not rag:
++            return {'observacao_prazo': False, 'expede_certidao_prazo': False}
++        seq = getattr(rag, 'sequencia_cumprimento', None) or []
++        if not seq:
++            return {'observacao_prazo': False, 'expede_certidao_prazo': False}
++
++        tipo_rag = {
++            'eletronico': 'movimentacao', 'advogado': 'movimentacao',
++            'ar': 'movimentacao', 'email': 'movimentacao',
++            'email_condicional': 'movimentacao',
++            'movimentacao_simples': 'movimentacao', 'edital': 'movimentacao',
++            'mandado': 'mandado', 'mandado_precatorio': 'mandado',
++            'oficio': 'oficio', 'intimacao': 'intimacao',
++        }.get(record.fluxo, record.fluxo)
++        item = None
++        for it in seq:
++            if isinstance(it, dict) and it.get('tipo') == tipo_rag:
++                item = it
++                break
++        if item is None and record.snippet:
++            snip = record.snippet.lower()
++            for it in seq:
++                if isinstance(it, dict):
++                    obs = (it.get('observacao') or '').lower()
++                    if obs and obs in snip:
++                        item = it
++                        break
++        if item is None:
++            return {'observacao_prazo': False, 'expede_certidao_prazo': False}
++
++        return {
++            'observacao_prazo': bool(item.get('observacao_prazo', False)),
++            'expede_certidao_prazo': bool(
++                item.get('expede_certidao_prazo', False)),
++        }
++
++    def _texto_despacho_record(self, record: CumprimentoRecord) -> str:
++        """Concatena as fontes textuais do ato: snippet + RAG matchada.
++
++        O RAG (despacho_observacao/despacho_ato) é a âncora do conteúdo do
++        ato; o snippet é o trecho da decisão. Ambos alimentam a extração
++        do número de dias e do tipo de prazo.
++        """
++        partes = [record.snippet or '']
++        # RAG vinculada ao cumprimento (se houver)
++        if getattr(record, 'rag_example', None):
++            rag = record.rag_example
++            partes.append(rag.despacho_observacao or '')
++            partes.append(rag.despacho_ato or '')
++        # Template usado (pode conter metadados do ato)
++        if record.template_used:
++            partes.append(getattr(record.template_used, 'descricao', '') or '')
++        return '\n'.join(p for p in partes if p)
++
++    def _data_intimacao_do_tracker(self, record: CumprimentoRecord):
++        """Data REAL da intimação da parte, via rastreamento de comunicações.
++
++        Usa ComunicacaoTracker sobre o Movement do processo. Retorna a
++        data (date) da movimentação de intimação CONCLUÍDA/lida para a
++        parte do cumprimento, ou None se não houver.
++        """
++        from processes.models import Movement
++        from projudi.comunicacao_tracker import ComunicacaoTracker
++
++        proc = record.processo
++        try:
++            mvs = list(Movement.objects.filter(process__processo=proc)[:200])
++        except Exception:
++            mvs = []
++        if not mvs:
++            return None
++        try:
++            tracker = ComunicacaoTracker(mvs)
++            info = tracker.ja_expedida('intimacao', record.parte_nome)
++            det = info.get('detalhes') or {}
++            data_obj = det.get('data_obj')
++            if isinstance(data_obj, str):
++                from datetime import datetime
++                try:
++                    data_obj = datetime.strptime(data_obj, '%Y-%m-%d').date()
++                except ValueError:
++                    data_obj = None
++            return data_obj
++        except Exception:
++            return None
++
++    @staticmethod
++    def _rotulo_intimacao(fluxo: str, djen: bool, modo: str) -> str:
++        """Rótulo de COMO foi feita a intimação (prefixo do texto)."""
++        if modo == 'decadencial':
++            return 'Prazo decadencial'
++        if djen or fluxo == 'eletronico':
++            return 'Intimação eletrônica (DJEN)'
++        return {
++            'ar': 'Intimação via AR (Correios)',
++            'email': 'Intimação eletrônica (e-mail)',
++            'email_condicional': 'Intimação eletrônica (e-mail)',
++            'advogado': 'Intimação ao advogado',
++            'edital': 'Intimação por edital',
++            'mandado': 'Intimação por mandado',
++            'movimentacao_simples': 'Intimação',
++        }.get(fluxo, 'Intimação')
++
++    @staticmethod
++    def _texto_observacao_prazo(record, res, modo) -> str:
++        """Gera o texto controlado da observação de prazo (padrão 2ª VSJ).
++
++        Texto GENÉRICO e elegante: identifica COMO foi a intimação
++        (DJEN / AR / advogado / e-mail / etc.) e os 4 marcos da contagem
++        (leitura, início, término, decurso). Sem citar artigos.
++
++        Regras de exclusão (refletidas no texto):
++          - DJEN: não contam a LEITURA nem o 1º dia útil SEGUINTE à
++            leitura (início no 3º dia útil).
++          - demais meios: o dia da leitura/recebimento não conta.
++          - decadencial: conta todos os dias (sem exclusão).
++        """
++        if modo == 'decadencial':
++            return (
++                f'Prazo decadencial de {res.prazo_dias} dias. '
++                f'Início em {res.data_inicio:%d/%m/%Y}, '
++                f'término em {res.ultimo_dia:%d/%m/%Y} '
++                f'(decorrido o prazo em {res.data_decurso:%d/%m/%Y}).'
++            )
++
++        rotulo = CumprimentoService._rotulo_intimacao(
++            record.fluxo, res.djen, modo)
++        inicio = res.dias_contados[0] if res.dias_contados else None
++
++        if res.djen:
++            regra_excl = ('; não contam a leitura nem o 1º dia útil '
++                          'subsequente à leitura')
++        else:
++            regra_excl = '; o dia da leitura não conta'
++
++        return (
++            f'{rotulo} — Prazo de {res.prazo_dias} dias úteis. '
++            f'Leitura em {res.data_inicio:%d/%m/%Y}{regra_excl}; '
++            f'início da contagem em {inicio:%d/%m/%Y}; '
++            f'término em {res.ultimo_dia:%d/%m/%Y} '
++            f'(decorrido o prazo em {res.data_decurso:%d/%m/%Y}).'
++        )
++
++    def observacao_para_movimentacao(self, record: CumprimentoRecord) -> str:
++        """Observação a ser enviada no Mov581 (campo observação da movimentação).
++
++        Regra (fonte autorizada = RAGExample.sequencia_cumprimento):
++          - 'expede_certidao_prazo'=True → NÃO vai pra observação (a
++            certidão é documento à parte). Retorna ''.
++          - 'observacao_prazo'=True e não é certidão → retorna o texto
++            controlado (observacao_prazo).
++          - Caso contrário → retorna '' (não polui a movimentação).
++
++        Garante que prazo_info esteja calculado.
++        """
++        if not record.prazo_info:
++            self.gerar_observacao_prazo(record)
++        tem_prazo = bool(record.prazo_info.get('ultimo_dia')) if isinstance(
++            record.prazo_info, dict) else False
++        if not tem_prazo:
++            return ''
++        cfg = self._config_prazo_do_rag(record)
++        if cfg['expede_certidao_prazo']:
++            # Mesmo expedindo certidão, a observação de prazo pode (ou não)
++            # ir para a movimentação se 'observacao_prazo'=True.
++            return record.observacao_prazo if cfg['observacao_prazo'] else ''
++        return record.observacao_prazo if cfg['observacao_prazo'] else ''
++
++    def montar_json_envio(self, record: CumprimentoRecord) -> Dict:
++        """JSON controlado que será enviado (observação do Mov581 / certidão).
++
++        Consolida prazo_info + observacao_prazo + dados do cumprimento.
++        Se ainda não houver prazo_info, tenta gerar a partir do despacho.
++
++        Flags de controle (true/false) — fonte = RAGExample:
++          - 'prazo_calculado': True se há prazo calculado.
++          - 'certidao': True se 'expede_certidao_prazo' (RAG) pede a
++            certidão de prazo → 'texto_certidao' traz o HTML.
++          - 'observacao_prazo': True se 'observacao_prazo' (RAG) pede que
++            a contagem vá para a observação do Mov581 → 'observacao'.
++        """
++        if not record.prazo_info:
++            self.gerar_observacao_prazo(record)
++
++        tem_prazo = bool(
++            record.prazo_info and record.prazo_info.get('ultimo_dia'))
++        cfg = self._config_prazo_do_rag(record)
++        certidao = cfg['expede_certidao_prazo']
++        obs_prazo = cfg['observacao_prazo']
++
++        texto_certidao = self._html_certidao_prazo(
++            record) if (tem_prazo and certidao) else ''
++
++        return {
++            'processo': record.processo,
++            'numero_processo_cnj': record.numero_processo_cnj,
++            'fluxo': record.fluxo,
++            'parte_nome': record.parte_nome,
++            'prazo': record.prazo_info,
++            'prazo_calculado': tem_prazo,            # true/false
++            'observacao_prazo': obs_prazo,          # true/false
++            'certidao': certidao,                   # true/false
++            'observacao': record.observacao_prazo if (
++                tem_prazo and obs_prazo) else '',
++            'texto_certidao': texto_certidao,       # preenchido só se certidao=true
++        }
++
++    def _html_certidao_prazo(self, record: CumprimentoRecord) -> str:
++        """HTML da certidão de prazo a partir do JSON controlado.
++
++        Usa o mesmo texto genérico de observação (observacao_prazo),
++        embrulhado no cabeçalho de certidão. Datas em %d/%m/%Y.
++        """
++        p = record.prazo_info or {}
++        if not p:
++            return ''
++        # 1) Tenta o DocumentTemplate 'Certidão de Prazo' (base Ofício CIAP).
++        try:
++            from processes.models import DocumentTemplate
++            from django.template import Template, Context
++            tpl = DocumentTemplate.objects.get(
++                name='Certidão de Prazo', active=True)
++            from datetime import date as _date
++            ctx = {
++                'processo': record.numero_processo_cnj or record.processo,
++                'parte': record.parte_nome or '...',
++                'observacao_prazo': record.observacao_prazo or '',
++                'data': _date.today().strftime('%d/%m/%Y'),
++                'servidor': (getattr(self.user, 'full_name', '')
++                             or getattr(self.user, 'first_name', '') or '...'),
++            }
++            return tpl.render(ctx)
++        except Exception:
++            pass
++        # 2) Fallback: HTML simples.
++        from datetime import datetime
++        def _fmt(d):
++            if isinstance(d, str):
++                try:
++                    d = datetime.strptime(d, '%Y-%m-%d').date()
++                except ValueError:
++                    return d
++            if hasattr(d, 'strftime'):
++                return d.strftime('%d/%m/%Y')
++            return str(d)
++        d_ini = _fmt(p.get('data_inicio', ''))
++        d_fim = _fmt(p.get('ultimo_dia', ''))
++        d_dec = _fmt(p.get('data_decurso', ''))
++        dias = p.get('dias_contados', [])
++        n = len(dias)
++        # Texto genérico (mesmo da observação), sem repetir o óbvio.
++        texto = record.observacao_prazo or (
++            f'Prazo de {p.get("prazo_dias")} dias {p.get("modo")}. '
++            f'Leitura em {d_ini}, término em {d_fim} '
++            f'(decorrido o prazo em {d_dec}).'
++        )
++        return (
++            f'<p><b>CERTIDÃO DE PRAZO</b></p>'
++            f'<p>Certifico que, referente ao processo nº '
++            f'{record.numero_processo_cnj or record.processo}, '
++            f'a parte {record.parte_nome or "..."} — {texto}</p>'
++            f'<p>O prazo encerra-se em <b>{d_fim}</b> '
++            f'(decurso do prazo em {d_dec}), totalizando {n} dias '
++            f'contados.</p>'
++        )
+     # DISPENSAR
+     # =================================================================
+     def dispensar_cumprimento(self, record: CumprimentoRecord) -> Dict:
