@@ -246,10 +246,51 @@ def expedir_mandado(mandado_id=None, processo_cnj=None, dry_run=False):
                     print('   ✅ Subtipo cumprimento: Intimação (3)')
             except Exception as e:
                 print(f'   Subtipo cumprimento: não encontrado ({e})')
-            # Destinatário = código da parte (precisa descobrir)
-            # page.select_option('#codigoDestinatario', '...')
-            page.click('#btnAddCumprimento')
-            time.sleep(1)
+            # Destinatário = código da parte. #codigoDestinatario é SINGLE-SELECT:
+            # para CADA destinatário, seleciona UM → clica btnAddCumprimento.
+            # Padrão documentado em APRENDIZADOS_MANDADO_DESTINATARIO_2026-08-17.md.
+            try:
+                dest_sel = page.locator(
+                    '#codigoDestinatario, select[name="codigoDestinatario"]').first
+                if not dest_sel.count():
+                    print('   ⚠️ Select de destinatário não encontrado — mandado NÃO adicionado')
+                else:
+                    opts = dest_sel.locator('option').all()
+                    alvos = []
+                    for opt in opts:
+                        ot = (opt.inner_text() or '').strip()
+                        ov = opt.get_attribute('value') or ''
+                        if not ot or ot.lower().startswith('selecione'):
+                            continue
+                        if ot.lower().startswith('outro destinatar'):
+                            continue
+                        if ov and ov not in ('-1', '-2'):
+                            alvos.append((ot, ov))
+                    # Filtra pelo nome da parte (fallback: todos do polo)
+                    alvo_nome = (party.name or '').upper().strip()
+                    if alvo_nome and alvos:
+                        filtrados = [(t, v) for t, v in alvos
+                                     if alvo_nome in t.upper() or t.upper() in alvo_nome]
+                        if filtrados:
+                            alvos = filtrados
+                            print(f'   ✅ Filtrando destinatário por nome: {party.name[:40]}')
+                        else:
+                            print(f'   ⚠️ "{party.name[:40]}" não achado → fallback: todos do polo')
+                    adicionados = 0
+                    for ot, ov in alvos:
+                        try:
+                            page.select_option('#codigoDestinatario', ov)
+                            time.sleep(0.3)
+                            page.click('#btnAddCumprimento')
+                            time.sleep(0.8)
+                            adicionados += 1
+                            print(f'   ✅ Mandado destinatário: {ot[:50]} ({ov})')
+                        except Exception as e:
+                            print(f'   ⚠️ Destinatário {ot[:40]}: {e}')
+                    if not adicionados:
+                        print('   ❌ Nenhum destinatário selecionado — mandado NÃO adicionado')
+            except Exception as e:
+                print(f'   ⚠️ Erro selecionando destinatário: {e}')
             print('   ✅ Cumprimento adicionado')
 
             # Concluir

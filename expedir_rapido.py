@@ -14,6 +14,10 @@ os.environ['DJANGO_SETTINGS_MODULE'] = 'core.settings'
 os.environ['DJANGO_ALLOW_ASYNC_UNSAFE'] = 'true'
 import django; django.setup()
 
+# Flag global de teste: quando True, desativa o bloqueio de RAG por frases
+# (NÃO FAZER/NÃO CUMPRIR). Definida pela flag --ignorar-bloqueio no CLI.
+IGNORAR_BLOQUEIO = False
+
 import requests
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
@@ -109,6 +113,24 @@ def rastrear_e_expedir(tipo=None):
             if len(texto) < 50:
                 continue
 
+            # ── BLOQUEIO DETERMINÍSTICO POR FRASES (NÃO FAZER/NÃO CUMPRIR) ──
+            # Verifica ANTES do matching por similaridade. Se alguma RAG ativa
+            # com 'frases_bloqueio' preenchido disparar (substring real), o
+            # fluxo BLOQUEIA — não executa mandado, ofício nem intimação.
+            if not IGNORAR_BLOQUEIO:
+                try:
+                    from processes.movimentacoes_service import encontrar_bloqueio
+                    rag_bloq = encontrar_bloqueio(texto)
+                    if rag_bloq:
+                        frases = rag_bloq.frases_bloqueio or []
+                        print(f'\n  {proc_num}: 🚫 BLOQUEADO (frases: '
+                              f'{rag_bloq.id} {list(frases)[:3]}) '
+                              f'— não executa fluxo')
+                        # Registra no log (sem marcar erro)
+                        continue
+                except Exception as e:
+                    print(f'   ⚠️ Erro no encontro de bloqueio: {e}')
+
             similares = buscar_cumprimentos_similares(texto, top_k=30)
             if not similares:
                 continue
@@ -158,6 +180,21 @@ def rastrear_e_expedir(tipo=None):
                         )
                         if not tem_sinal_oficio:
                             continue
+                    # ── CRÍTICO: RAG com sequência vazia/None = BLOQUEIO ──
+                    # Cadastrar RAG com sequencia_cumprimento vazio significa
+                    # "NÃO CUMPRIR / NÃO FAZER / TEMPESTIVIDADE" — o sistema
+                    # deve BLOQUEAR totalmente e NÃO cair para o próximo match
+                    # (que poderia ter sequência e executar indevidamente).
+                    # Se --ignorar-bloqueio for usado, pula este bloqueio para teste.
+                    if not rag_cand.sequencia_cumprimento:
+                        if IGNORAR_BLOQUEIO:
+                            # Pula o bloqueio — continua fluxo normal
+                            pass
+                        else:
+                            melhor = s
+                            rag = rag_cand
+                            break  # bloqueia — não tenta RAG abaixo
+                    # ── Fim do bloqueio ──
                     if rag_cand.sequencia_cumprimento:
                         # Verifica tipo na sequência
                         seq_tipos = {p.get('tipo') for p in rag_cand.sequencia_cumprimento}
@@ -197,6 +234,14 @@ def rastrear_e_expedir(tipo=None):
                     rag.sequencia_cumprimento, mov, proc_num, texto,
                     session, cookies_dict, user, rag)
                 expedidos += 1
+                continue
+
+            # ── BLOQUEIO REAL: RAG com sequência vazia/None = NÃO FAZER nada ──
+            # (Não cai para o print de template nem para CommandAnalyzer.)
+            if rag and not rag.sequencia_cumprimento and melhor:
+                ato_curto = (rag.despacho_ato or "")[:40]
+                print(f'\n  {proc_num}: BLOQUEADO (RAG {rag.id} "{ato_curto}") '
+                      f'sem sequência — não executa fluxo')
                 continue
 
             pct = len(palavras_texto & set(melhor['despacho_ato'].lower().split())) / max(len(set(melhor['despacho_ato'].lower().split())), 1)
@@ -2616,7 +2661,11 @@ if __name__ == '__main__':
     parser.add_argument('--mandados-only', action='store_true', help='Só mandados')
     parser.add_argument('--oficios-only', action='store_true', help='Só ofícios')
     parser.add_argument('--mov-only', action='store_true', help='Só movimentações (intimações, certidões)')
+    parser.add_argument('--ignorar-bloqueio', action='store_true', help='Ignora bloqueio RAG vazia (apenas para teste)')
     args = parser.parse_args()
+    if args.ignorar_bloqueio:
+        IGNORAR_BLOQUEIO = True
+        print('🚨 --ignorar-bloqueio ativo: bloqueio por frases desativado')
 
     if args.mandados_only:
         rastrear_e_expedir(tipo='mandado')

@@ -104,6 +104,16 @@ class RAGExampleAdmin(admin.ModelAdmin):
               '&nbsp; {"tipo": "oficio", "template_id": 7}<br>'
               ']</code>'}),
         ('Controle', {'fields': ['active', 'suggested_templates']}),
+        ('Frases Bloqueadoras (NÃO FAZER/NÃO CUMPRIR)',
+         {'fields': ['frases_bloqueio', 'exigir_todas_frases'],
+          'classes': ['wide'],
+          'description':
+              'Deixe VAZIO para uma RAG normal (executa sequência). '
+              'Preencha para BLOQUEAR o fluxo quando a frase aparecer no '
+              'despacho. Ex.: ["certifique-se sobre a tempestividade"]. '
+              'Se "exigir_todas_frases", TODAS devem aparecer (AND); senão, '
+              'qualquer uma bloqueia (OR).'},
+        ),
     ]
     actions = ['expedir_ciap', 'duplicar_rag']
 

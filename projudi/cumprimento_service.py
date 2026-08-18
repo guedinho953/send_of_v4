@@ -1147,6 +1147,29 @@ class CumprimentoService:
                 f = mvs.filter(recipient__icontains=parte)
                 if f.exists():
                     base = f
+            # --- NOVO: Buscar intimação específica da penhora ---
+            # Primeiro: atos que tenham 'penhora' + 'intimação' no description
+            penhora_intima = base.filter(
+                act_description__icontains='penhora'
+            ).filter(
+                category='intimacao'
+            ).order_by('-act_date').first()
+            if penhora_intima and penhora_intima.act_date:
+                return penhora_intima.act_date
+            # Segundo: 'auto de penhora' ou 'penhora realizada'
+            auto_penhora = base.filter(
+                act_description__icontains='penhora realizada'
+            ).order_by('-act_date').first()
+            if auto_penhora and auto_penhora.act_date:
+                return auto_penhora.act_date
+            # --- NOVO: Buscar intimação de SENTENÇA (pós-publicação) ---
+            # Intimação após a publicação da sentença
+            sentenca_intima = base.filter(
+                act_description__icontains='sentença'
+            ).order_by('-act_date').first()
+            if sentenca_intima and sentenca_intima.act_date:
+                return sentenca_intima.act_date
+            # --- FIM NOVO ---
             # 1) DJEN/eletrônica → data de disponibilização no DJEN
             if getattr(record, 'fluxo', '') in ('eletronico', 'advogado'):
                 djen = (base.filter(reference_date__isnull=False)

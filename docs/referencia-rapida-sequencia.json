@@ -4,12 +4,12 @@
   "TIPOS_DE_PASSO": {
     "movimentacao": "Mov581 genérico (certidões, certificações)",
     "intimacao_eletronica": "Mov581 + intimação DJEN (painel Autoras/Rés)",
-    "intimacao_completa": "UMA movimentação: intimação eletrônica + AR assinado + Vistas ao MP + solicitação de ofício (1 Concluir só)",
+    "intimacao_completa": "UMA movimentação: intimação eletrônica (+AR) + Vistas ao MP + solicitação de ofício + localizador + certidão (1 Concluir só). Use as flags abaixo para ativar cada método:",
     "intimacao_correio": "Intimação pelos CORREIOS (AR digital — 2º clique 'expedir com ar digital')",
     "solicitar_expedicao": "Só Mov581: SOLICITA o mandado (NÃO confecciona)",
     "mandado": "Expede o mandado COMPLETO (tipoCumprimento=4+subtipo+destinatário+FCKeditor)",
     "oficio": "Expede ofício completo",
-    "localizar": "Só altera o localizador (requests)",
+    "localizar": "Só altera o localizador (requests). No JSON use: executar_localizador: true|false, tipo_localizador: '9376'|'22614'|",
     "vistas_mp": "Vistas ao MP (Mov581 + enviaMP)",
     "certidao_criminal": "Certidão criminal art. 76 (DigitarTexto)",
     "buscar_processo": "Só busca processo por nome (sem movimentar)"

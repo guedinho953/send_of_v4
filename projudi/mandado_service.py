@@ -295,14 +295,36 @@ class MandadoService:
 
                 # Seleciona destinatário
                 nome_dest = parte_nome
+                dest_selecionado = False
                 if nome_dest:
                     try:
                         opt = page.locator(f'#codigoDestinatario option:text("{nome_dest}")').first
                         if opt.count():
                             val = opt.get_attribute('value')
                             page.select_option('#codigoDestinatario', val)
+                            dest_selecionado = True
                     except Exception:
                         pass
+
+                # Fallback: se não selecionou pelo nome, lista as opções do
+                # dropdown#codigoDestinatario e seleciona o primeiro destino REAL
+                # (ignorando placeholder/sem valor) automaticamente.
+                if not dest_selecionado:
+                    try:
+                        opts = page.locator('#codigoDestinatario option').all()
+                        for opt in opts:
+                            val = opt.get_attribute('value')
+                            texto = (opt.inner_text() or '').strip()
+                            if val and texto and val != '0' and 'selecione' not in texto.lower():
+                                page.select_option('#codigoDestinatario', val)
+                                print(f'   🎯 Destinatário selecionado automaticamente: {texto} (val={val})')
+                                dest_selecionado = True
+                                break
+                    except Exception:
+                        pass
+                
+                if not dest_selecionado:
+                    print('   ⚠️ Nenhum destinatário encontrado no #codigoDestinatario')
 
                 page.click('#btnAddCumprimento')
                 time.sleep(1)

@@ -332,6 +332,40 @@ def _palavras_para_match(texto: str) -> set:
     return {t for t in tokens if t and t not in STOPWORDS_RAG}
 
 
+def encontrar_bloqueio(texto_movimentacao: str):
+    """PROCURA DETERMINÍSTICA de bloqueio por frases-chave (NÃO FAZER/NÃO CUMPRIR).
+
+    Verifica, entre todas as RAGs ATIVAS com `frases_bloqueio` preenchido,
+    se o texto da movimentação contém a(s) frase(s) bloqueadora(s).
+
+    - `exigir_todas_frases=True`  → TODAS devem aparecer (AND)
+    - `exigir_todas_frases=False` → QUALQUER uma já bloqueia (OR)
+
+    Retorna a RAG de bloqueio encontrada (primeira que dispara) ou None.
+    É DETERMINÍSTICO: não depende de Jaccard nem de contagem de palavras —
+    apenas de substring real. Corre ANTES do matching por similaridade.
+    """
+    from .models import RAGExample
+    texto_comp = normalizar_texto(texto_movimentacao)
+    if not texto_comp:
+        return None
+    rags = RAGExample.objects.filter(active=True)
+    for rag in rags.exclude(frases_bloqueio=[]).exclude(frases_bloqueio=[None]):
+        frases = rag.frases_bloqueio or []
+        # Normaliza cada frase p/ comparação sem acento/caixa
+        frases_norm = [normalizar_texto(f) for f in frases if f]
+        if not frases_norm:
+            continue
+        presentes = [f for f in frases_norm if f and f in texto_comp]
+        if rag.exigir_todas_frases:
+            disparado = len(presentes) == len(frases_norm)
+        else:
+            disparado = len(presentes) > 0
+        if disparado:
+            return rag
+    return None
+
+
 def buscar_cumprimentos_similares(texto_movimentacao: str, top_k: int = 3) -> List[Dict]:
     """
     Busca exemplos RAG similares ao texto da movimentacao.

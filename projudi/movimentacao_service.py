@@ -2302,8 +2302,16 @@ class MovimentacaoService:
                     if solicitar_oficio:
                         self._preencher_solicitar_oficio(page, oficio_template_id)
                     if solicitar_mandado:
+                        # Computar parte_nome baseando no polo (mandado_polo)
+                        # reu_especifico -> tenta nome específico; fallback -> None (todos do polo)
+                        polo_norm = str(mandado_polo or '').lower()
+                        if polo_norm in ('reu_especifico', 'res', 'reus', 'róes',
+                                         'executados', 'promovidos', 'autores', 'autoras'):
+                            parte_nome = None  # todos do polo
+                        else:
+                            parte_nome = ''  # não filtrar
                         self._preencher_solicitar_mandado(
-                            page, mandado_subtipo)
+                            page, mandado_subtipo, parte_nome)
 
                     time.sleep(2)
 
@@ -2683,7 +2691,7 @@ class MovimentacaoService:
             print(f'   ⚠️ Solicitação de ofício: {e}')
 
     def _preencher_solicitar_mandado(
-            self, page, mandado_subtipo: str = '3') -> None:
+            self, page, mandado_subtipo: str = '3', parte_nome: 'str | None' = '') -> None:
         """Solicita a expedição do mandado na MESMA movimentação (ANTES do
         Concluir): adiciona a linha de cumprimento tipo MANDADO (4) +
         subtipoCumprimento + destinatário no grid — SEM criar uma Mov581
@@ -2710,28 +2718,56 @@ class MovimentacaoService:
                 _t.sleep(0.3)
             print(f'   ✅ Linha de cumprimento: Mandado (tipoCumprimento=4, '
                   f'subtipo={subtipo})')
-            # Seleciona o(s) destinatário(s) (as partes do polo) —
-            # best-effort: escolhe as opções existentes no grid.
+            # Seleciona o(s) destinatário(s) — #codigoDestinatario é SINGLE-SELECT.
+            # Padrão correto (igual ao _expedir_mandado): para CADA destinatário:
+            #   seleciona UM → clica btnAddCumprimento (um mandado por parte).
+            # 1º) Tenta casar parte_nome; se não achar → usa TODAS as opções.
             try:
                 sel_dest = page.locator(
                     '#codigoDestinatario, select[name="codigoDestinatario"]').first
-                if sel_dest.count():
-                    valores = [o.get_attribute('value') for o in
-                               sel_dest.locator('option').all()
-                               if (o.get_attribute('value') or '').strip()]
-                    if valores:
-                        try:
-                            page.select_option(
-                                '#codigoDestinatario', valores)
-                            print(f'   ✅ Destinatário(s) ({len(valores)}) selecionados')
-                        except Exception:
-                            page.select_option(
-                                '#codigoDestinatario', valores[0])
-            except Exception:
-                pass
-            page.click('#btnAddCumprimento')
-            _t.sleep(0.8)
-            print('   ✅ Cumprimento de mandado adicionado (mesma movimentação)')
+                if not sel_dest.count():
+                    print('   ⚠️ Select de destinatário não encontrado')
+                    return
+                opts = sel_dest.locator('option').all()
+                # Lista (texto, value) ignorando placeholders
+                alvos = []
+                for opt in opts:
+                    ot = (opt.inner_text() or '').strip()
+                    ov = opt.get_attribute('value') or ''
+                    if not ot or ot.lower().startswith('selecione'):
+                        continue
+                    if ot.lower().startswith('outro destinatar'):
+                        continue
+                    if ov and ov not in ('-1', '-2'):
+                        alvos.append((ot, ov))
+                # Filtra pelo nome específico se informado
+                if parte_nome and alvos:
+                    alvo = parte_nome.upper()
+                    filtrados = [(t, v) for t, v in alvos
+                                 if alvo in t.upper() or t.upper() in alvo]
+                    if filtrados:
+                        alvos = filtrados
+                        print(f'   ✅ Filtrando por nome: {parte_nome[:40]}')
+                    else:
+                        print(f'   ⚠️ "{parte_nome[:40]}" não achado → '
+                              f'fallback: todos do polo')
+                # Loop: seleciona UM + clica Add Cumprimento
+                adicionados = 0
+                for ot, ov in alvos:
+                    try:
+                        page.select_option('#codigoDestinatario', ov)
+                        _t.sleep(0.3)
+                        page.click('#btnAddCumprimento')
+                        _t.sleep(0.8)
+                        adicionados += 1
+                        print(f'   ✅ Mandado destinatário: {ot[:50]} ({ov})')
+                    except Exception as e:
+                        print(f'   ⚠️ Destinatário {ot[:40]}: {e}')
+                if not adicionados:
+                    print(f'   ❌ Nenhum destinatário selecionado — '
+                          f'mandado NÃO adicionado')
+            except Exception as e:
+                print(f'   ⚠️ Erro ao selecionar destinatário: {e}')
         except Exception as e:
             print(f'   ⚠️ Solicitação de mandado: {e}')
 

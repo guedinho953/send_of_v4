@@ -54,7 +54,7 @@ Pasta: `/home/ivan/PythonProjects/send_of_v4/BACKUP_ALTERACOES_2026-08-14/`
 Arquivo: `~/.hermes/config.yaml` (alterado via `hermes config set`, não por
 edição direta — o Hermes bloqueia escrita direta em config de segurança).
 
-- `model.default`: `deepseek-v4-flash-free`
+- `model.default`: `deepseek-v4-flash`
 - `model.provider`: `opencode-zen` (corrigido de `opencode-go` — é o provedor
   que tem os modelos **free**)
 - `model.base_url`: `https://opencode.ai/zen/v1`
@@ -201,7 +201,7 @@ python manage.py check                 # 1 warning irrelevante (static)
 
 # 4. Trocar modelo do Hermes DENTRO da conversa (aliases free):
 #    /glm  /kimi  /qwen  /minimax  /nemotron  /mimo  /hy3  /ling
-#    /padrao (volta p/ deepseek-v4-flash-free)   /pago (glm-5.1)   /visual (gpt-5-nano)
+#    /padrao (volta p/ deepseek-v4-flash)   /pago (glm-5.1)   /visual (gpt-5-nano)
 ```
 
 ---

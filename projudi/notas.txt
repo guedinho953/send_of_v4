@@ -1,6 +1,56 @@
- 
-    - Email: admin@example.com - admin@admin.com
-    - Senha: admin123
+    💡 Exemplo JSON final (máximo controle):
+    
+    json
+    {
+      "tipo": "intimacao_completa",
+      "fluxo": "analisar",
+      "fluxo_fallback": true,
+      
+    Intimação
+      "descricao_mov": "Intimação",
+      "observacao": "Intime-se a vítima (parte autora) para ciência",
+      "motivo_intimacao": "3",
+      "prazo_intimacao": "3",
+      "expedir_ar": true,
+      "assinar_ar": false,
+      
+    Vistas ao MP
+      "envia_mp": true,
+      "cod_nucleo_mp": "31",
+      "tipo_parecer_mp": "6",
+      "prazo_mp": "5",
+      "promotor_mp": "SOSTENYS MARINHO BARRETO",
+      
+    Ofício CIAP
+      "solicitar_oficio": true,
+      "oficio_template_id": 5,
+      
+    Mandado (solicitação de expedição)
+      "solicitar_mandado": true,
+      "mandado_polo": "autor_especifico",
+      "mandado_subtipo": "11",
+      
+    Localizador
+      "executar_localizador": true,
+      "tipo_localizador": "22614",
+      
+    Certidão de prazo (via RAG)
+      "observacao_prazo": true,  # Configurado na RAGExample
+      
+    Modo
+      "nao_concluir": false
+    }
+
+/melhor → deepseek-v4-flash
+/mim → mimo-v2.5-free
+/qwen → qwen3.6-plus-free
+/north → north-mini-code-free
+/minimax → minimax-m3-free
+/nemotron → nemotron-3.5-lightning-free
+/nemotron3 → nemotron-3-ultra-free
+/hy3 → hy3-free
+/laguna → laguna-s-2.1-free
+/similar1–/similar6 → cadeia ordenada de fallback
 
 - powershell do windows
      No PowerShell ou CMD do Windows, digite:

@@ -1,4 +1,4 @@
-"""RAG Integration Router — Roteia matches RAG para o fluxo adequado.
+"""RAG Integration Router -- Roteia matches RAG para o fluxo adequado.
 
 Quando o RAG encontra um match, verifica primeiro se o RAGExample
 possui uma sequencia_cumprimento. Se sim, executa cada passo na ordem.
@@ -56,7 +56,7 @@ def rotear_match_rag(movimentacoes, session, cookies_dict, user, tipo=None):
                 continue
 
             if ignorar:
-                print(f'   ⏭️ RAGExample #{rag.id} matchou mas não tem ação — ignorado.')
+                print(f'   ⏭️ RAGExample #{rag.id} matchou mas não tem ação -- ignorado.')
                 continue
 
             # ─── PRIORIDADE: sequencia_cumprimento do RAGExample ───
@@ -295,8 +295,8 @@ def _melhor_match(texto, similares, templates_validos):
     Usa _palavras_para_match (sem stopwords/pontuação) e o texto COMPLETO
     da observação (despacho_observacao) como âncora, em vez do título curto
     (despacho_ato) com palavras cruas. Isso garante que o matching seja
-    robusto mesmo com variações de pontuação, hífens, superscript (¹) e
-    stopwords — essencial para decisões como "VALENDO COMO MANDADO" /
+    robusto mesmo com variações de pontuação, hífens, superscript () e
+    stopwords -- essencial para decisões como "VALENDO COMO MANDADO" /
     "COM FORÇA DE MANDADO" que têm redação variável mas mesmo comando.
 
     Retorna (similar_dict, template, rag_object, ignorar).

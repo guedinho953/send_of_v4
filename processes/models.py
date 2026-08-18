@@ -476,6 +476,23 @@ class RAGExample(TimeStampedModel):
     active = models.BooleanField('Ativo p/ RAG', default=True,
         help_text='Usar como exemplo nas buscas')
 
+    frases_bloqueio = models.JSONField(
+        'Frases Bloqueadoras', default=list, blank=True,
+        help_text=(
+            'Lista de FRASES determinísticas (substring) que, se presentes no '
+            'despacho, BLOQUEIAM a execução (NÃO FAZER / NÃO CUMPRIR). '
+            'Independente de contagem de palavras. Ex.: '
+            '["certifique-se sobre a tempestividade", "segredo de justiça"]. '
+            'Se "exigir_todas_frases" for True, TODAS devem aparecer; senão, '
+            'QUALQUER uma já bloqueia.'
+        )
+    )
+    exigir_todas_frases = models.BooleanField(
+        'Exigir todas as frases?', default=False,
+        help_text='True = todas as frases devem estar no despacho (AND). '
+                  'False = qualquer uma bloqueia (OR).'
+    )
+
     sequencia_cumprimento = models.JSONField(
         'Sequência de Execução', default=list, blank=True,
         help_text=(
@@ -521,6 +538,8 @@ class RAGExample(TimeStampedModel):
             self.documentos = []
         if self.sequencia_cumprimento is None:
             self.sequencia_cumprimento = []
+        if self.frases_bloqueio is None:
+            self.frases_bloqueio = []
         super().save(*args, **kwargs)
 
     def get_template_context(self, parte_id=None):
