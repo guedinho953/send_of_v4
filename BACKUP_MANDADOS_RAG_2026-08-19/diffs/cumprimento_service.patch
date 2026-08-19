@@ -1,0 +1,113 @@
+diff --git a/projudi/cumprimento_service.py b/projudi/cumprimento_service.py
+index 3ca08f9..224f81e 100644
+--- a/projudi/cumprimento_service.py
++++ b/projudi/cumprimento_service.py
+@@ -1223,15 +1223,52 @@ class CumprimentoService:
+         nome = (parte_nome or '').strip()
+         sufixo = f' {nome}' if nome else ''
+         if papel in ('autor', 'autora', 'promovente', 'requerente'):
+-            return f'à parte autora{sufixo}'
++            return f'promovente(s){sufixo}'
+         if papel in ('reu', 'reu_especifico', 'executado', 'requerido',
+                      'promovido'):
+-            return f'ao réu{sufixo}'
++            return f'promovido(a)(s){sufixo}'
+         if papel in ('ambos', 'todos', 'autores', 'res'):
+-            return 'aos autores e réus'
++            return 'promovente(s) e promovido(a)(s)'
+         # Sem papel definido: cai no genérico (mas tenta o nome se houver).
+         return f'à(s) parte(s){sufixo}' if nome else 'à(s) parte(s)'
+ 
++    @staticmethod
++    def _rotulo_meio(fluxo: str, djen: bool, modo: str) -> str:
++        """Meio curto da intimação p/ o texto da observação (DJEN / e-mail /
++        AR / advogado / edital / mandado / intimação)."""
++        if modo == 'decadencial':
++            return 'intimação'
++        if djen or fluxo == 'eletronico':
++            return 'DJEN'
++        return {
++            'ar': 'AR',
++            'email': 'e-mail',
++            'email_condicional': 'e-mail',
++            'advogado': 'advogado(a)',
++            'edital': 'edital',
++            'mandado': 'mandado',
++            'movimentacao_simples': 'intimação',
++        }.get(fluxo, 'intimação')
++
++    @staticmethod
++    def _capitalizar_nome_proprio(nome: str) -> str:
++        """Capitaliza o nome do servidor preservando preposições minúsculas.
++
++        'ivan guedes da silva'  -> 'Ivan Guedes da Silva'
++        'MARIA JOSE DE SOUZA'   -> 'Maria Jose de Souza'
++        """
++        if not nome:
++            return nome
++        prepos = {'de', 'da', 'do', 'das', 'dos', 'e'}
++        partes = []
++        for i, w in enumerate(str(nome).strip().split()):
++            lw = w.lower()
++            if i > 0 and lw in prepos:
++                partes.append(lw)
++            elif w:
++                partes.append(w[:1].upper() + w[1:].lower())
++        return ' '.join(partes)
++
+     @staticmethod
+     def _papel_resolvido(record: 'CumprimentoRecord') -> str:
+         """Papel final para a contagem de prazo.
+@@ -1271,31 +1308,21 @@ class CumprimentoService:
+         """
+         if modo == 'decadencial':
+             return (
+-                f'Prazo decadencial de {res.prazo_dias} dias. '
+-                f'Início em {res.data_inicio:%d/%m/%Y}, '
+-                f'término em {res.ultimo_dia:%d/%m/%Y} '
+-                f'(decorrido o prazo em {res.data_decurso:%d/%m/%Y}).'
++                f'Decorrido o prazo em {res.data_decurso:%d/%m/%Y}, prazo '
++                f'decadencial de {res.prazo_dias} dias, inicio do prazo em '
++                f'{res.data_inicio:%d/%m/%Y}, ultimo dia do prazo em '
++                f'{res.ultimo_dia:%d/%m/%Y}.'
+             )
+ 
+-        rotulo = CumprimentoService._rotulo_intimacao(
++        meio = CumprimentoService._rotulo_meio(
+             record.fluxo, res.djen, modo)
+-        papel = CumprimentoService._papel_resolvido(record)
+-        parte = CumprimentoService._rotulo_parte(papel, record.parte_nome)
+         inicio = res.dias_contados[0] if res.dias_contados else None
+ 
+-        if res.djen:
+-            regra_excl = ('; não contam a leitura nem o 1º dia útil '
+-                          'subsequente à leitura')
+-        else:
+-            regra_excl = '; o dia da leitura não conta'
+-
+         return (
+-            f'{rotulo} — Prazo de {res.prazo_dias} dias úteis '
+-            f'{parte}. '
+-            f'Leitura em {res.data_inicio:%d/%m/%Y}{regra_excl}; '
+-            f'início da contagem em {inicio:%d/%m/%Y}; '
+-            f'término em {res.ultimo_dia:%d/%m/%Y} '
+-            f'(decorrido o prazo em {res.data_decurso:%d/%m/%Y}).'
++            f'Decorrido o prazo em {res.data_decurso:%d/%m/%Y}, '
++            f'intimação lida ({meio}) em {res.data_inicio:%d/%m/%Y}, '
++            f'inicio do prazo {inicio:%d/%m/%Y}, '
++            f'ultimo dia do prazo {res.ultimo_dia:%d/%m/%Y}.'
+         )
+ 
+     def observacao_para_movimentacao(self, record: CumprimentoRecord) -> str:
+@@ -1384,8 +1411,9 @@ class CumprimentoService:
+                     self._papel_resolvido(record), record.parte_nome),
+                 'observacao_prazo': record.observacao_prazo or '',
+                 'data': _date.today().strftime('%d/%m/%Y'),
+-                'servidor': (getattr(self.user, 'full_name', '')
+-                             or getattr(self.user, 'first_name', '') or '...'),
++                'servidor': CumprimentoService._capitalizar_nome_proprio(
++                    getattr(self.user, 'full_name', '')
++                    or getattr(self.user, 'first_name', '') or '...'),
+             }
+             return tpl.render(ctx)
+         except Exception:

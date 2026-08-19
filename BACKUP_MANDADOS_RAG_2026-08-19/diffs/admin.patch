@@ -1,0 +1,53 @@
+diff --git a/processes/admin.py b/processes/admin.py
+index d4e2689..c6c2868 100644
+--- a/processes/admin.py
++++ b/processes/admin.py
+@@ -83,10 +83,31 @@ class ProcessSummaryAdmin(admin.ModelAdmin):
+     search_fields = ['process__number']
+ 
+ 
++class EhBloqueioFilter(admin.SimpleListFilter):
++    """Filtra RAGs de BLOQUEIO (frases_bloqueio preenchido) vs normais."""
++    title = 'É bloqueio?'
++    parameter_name = 'eh_bloqueio'
++
++    def lookups(self, request, model_admin):
++        return (
++            ('sim', '🔒 Bloqueio (NÃO CUMPRIR)'),
++            ('nao', 'RAG normal (cumpre)'),
++        )
++
++    def queryset(self, request, queryset):
++        if self.value() == 'sim':
++            # frases_bloqueio preenchido e não vazio
++            return queryset.exclude(frases_bloqueio=[]).exclude(frases_bloqueio=[None])
++        if self.value() == 'nao':
++            return queryset.filter(frases_bloqueio=[])
++        return queryset
++
++
+ @admin.register(RAGExample)
+ class RAGExampleAdmin(admin.ModelAdmin):
+-    list_display = ['process', 'evento_despacho', 'despacho_ato', 'active', 'resumo_sequencia']
+-    list_filter = ['active']
++    list_display = ['process', 'evento_despacho', 'despacho_ato', 'active',
++                    'resumo_bloqueio', 'resumo_sequencia']
++    list_filter = ['active', EhBloqueioFilter]
+     search_fields = ['process__number', 'despacho_ato']
+     filter_horizontal = ['suggested_templates']
+     fieldsets = [
+@@ -143,6 +164,14 @@ class RAGExampleAdmin(admin.ModelAdmin):
+         )
+     duplicar_rag.short_description = 'Duplicar RAG selecionada(s)'
+ 
++    def resumo_bloqueio(self, obj):
++        frases = obj.frases_bloqueio or []
++        if not frases:
++            return '— (RAG normal)'
++        modo = 'AND' if obj.exigir_todas_frases else 'OR'
++        return f'🔒 BLOQUEIO ({modo}: {len(frases)} frases)'
++    resumo_bloqueio.short_description = 'Bloqueio?'
++
+     def resumo_sequencia(self, obj):
+         seq = obj.sequencia_cumprimento or []
+         if not seq:

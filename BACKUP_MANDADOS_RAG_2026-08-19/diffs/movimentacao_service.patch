@@ -1,0 +1,133 @@
+diff --git a/projudi/movimentacao_service.py b/projudi/movimentacao_service.py
+index cda7bec..5b4cd27 100644
+--- a/projudi/movimentacao_service.py
++++ b/projudi/movimentacao_service.py
+@@ -1576,7 +1576,12 @@ class MovimentacaoService:
+         _time.sleep(1)
+         multipart = {}
+         for k, v in payload.items():
+-            val_bytes = str(v).encode('latin-1', errors='replace')
++            # A observação carrega acentos (ç, ã, é...). Envia em UTF-8 para
++            # o Projudi renderizar corretamente; demais campos seguem latin-1.
++            if k == 'observacao':
++                val_bytes = str(v).encode('utf-8', errors='replace')
++            else:
++                val_bytes = str(v).encode('latin-1', errors='replace')
+             multipart[k] = (None, val_bytes)
+ 
+         resp = session.post(post_url, files=multipart, timeout=15)
+@@ -1732,6 +1737,9 @@ class MovimentacaoService:
+         # Polo no painel de intimação: 'todos' (default, Autoras+Rés) |
+         # 'autores' (só aba Autoras, não clica Réus) | 'res' (só aba Rés).
+         polo_intimacao: str = 'todos',
++        # ── Localizador aplicado na MESMA movimentação da intimação ──
++        tipo_localizador: str = '',
++        localizador: str = '',
+     ) -> bool:
+         """Executa Mov581 + intimação no Projudi em um único Playwright.
+ 
+@@ -2313,6 +2321,9 @@ class MovimentacaoService:
+                         self._preencher_solicitar_mandado(
+                             page, mandado_subtipo, parte_nome)
+ 
++                    # ── Localizador na MESMA movimentação (se informado) ──
++                    self._preencher_localizador(page, tipo_localizador, localizador)
++
+                     time.sleep(2)
+ 
+                     if nao_concluir:
+@@ -2387,6 +2398,9 @@ class MovimentacaoService:
+                         self._preencher_solicitar_mandado(
+                             page, mandado_subtipo)
+ 
++                    # ── Localizador na MESMA movimentação (se informado) ──
++                    self._preencher_localizador(page, tipo_localizador, localizador)
++
+                     # Concluir movimentação
+                     if nao_concluir:
+                         print('   ⏸️ MODO TESTE (nao_concluir): tudo preenchido — '
+@@ -2690,6 +2704,84 @@ class MovimentacaoService:
+         except Exception as e:
+             print(f'   ⚠️ Solicitação de ofício: {e}')
+ 
++    def _preencher_localizador(
++            self, page, tipo_localizador: str = '', localizador: str = '') -> None:
++        """Aplica o localizador na MESMA movimentação (ANTES do Concluir).
++
++        Padrão que FUNCIONA (igual ao fluxo `localizar`): expande o painel
++        #imgBotao_panelLocalizador, seta o #codTipoLocalizador por JS com
++        dispatchEvent('change') e CLICA no botão "Adicionar"
++        (img[src*="bot-adicionar"]) para persistir na lista — só select_option
++        NÃO salva. Depois recolhe o painel.
++        """
++        if not tipo_localizador and not localizador:
++            return
++        import time as _t
++        # Expande painel de localizadores (via JS, mais robusto)
++        try:
++            page.evaluate('''() => {
++                var btn = document.getElementById('imgBotao_panelLocalizador');
++                if (btn) btn.click();
++            }''')
++            _t.sleep(0.5)
++            print('   📍 Painel localizador expandido')
++        except Exception:
++            pass
++
++        if tipo_localizador:
++            # Pre-check: só adiciona se NÃO tiver (linha da tabela por código)
++            ja_tem = False
++            try:
++                linha = page.locator(f'#trTbTipoLocalizador{tipo_localizador}')
++                ja_tem = linha.count() > 0
++            except Exception:
++                ja_tem = False
++            if ja_tem:
++                print(f'   ✅ Localizador {tipo_localizador} já está na lista — '
++                      'não duplica')
++            else:
++                try:
++                    page.evaluate(f'''() => {{
++                        var sel = document.getElementById('codTipoLocalizador');
++                        if (sel) {{ sel.value = '{tipo_localizador}';
++                            sel.dispatchEvent(new Event('change', {{bubbles:true}})); }}
++                    }}''')
++                    print(f'   📍 Tipo localizador selecionado: {tipo_localizador}')
++                    _t.sleep(0.3)
++                    # Clica botão "Adicionar" localizador (persiste na lista)
++                    try:
++                        btn_add = page.locator('img[src*="bot-adicionar"]')
++                        if btn_add.count():
++                            btn_add.click()
++                            print('   ✅ Localizador adicionado à lista')
++                            _t.sleep(0.5)
++                    except Exception:
++                        print('   ⚠️ Botão "Adicionar" localizador não encontrado')
++                except Exception as e:
++                    print(f'   ⚠️ Tipo localizador: {e}')
++
++        if localizador:
++            try:
++                page.evaluate(f'''() => {{
++                    var sel = document.getElementById('codLocalizador');
++                    if (sel) {{ sel.value = '{localizador}';
++                        sel.dispatchEvent(new Event('change', {{bubbles:true}})); }}
++                }}''')
++                print(f'   📍 Localizador: {localizador}')
++                _t.sleep(0.3)
++            except Exception:
++                pass
++
++        # Recolhe painel (se ainda estiver aberto)
++        try:
++            page.evaluate('''() => {
++                var btn = document.getElementById('imgBotao_panelLocalizador');
++                if (btn) btn.click();
++            }''')
++            _t.sleep(0.3)
++        except Exception:
++            pass
++
+     def _preencher_solicitar_mandado(
+             self, page, mandado_subtipo: str = '3', parte_nome: 'str | None' = '') -> None:
+         """Solicita a expedição do mandado na MESMA movimentação (ANTES do
