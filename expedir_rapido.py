@@ -1463,12 +1463,14 @@ _RE_TITULO_DESPACHO = re.compile(
 
 
 def _limpar_teor_para_mandado(texto: str) -> str:
-    """Remove o cabeçalho do tribunal do TEOR do mandado/ofício.
+    """Remove cabeçalho (PODER JUDICIÁRIO.../vara) e RODAPÉ (da cidade/data/
+    assinatura do juiz) do TEOR do mandado/ofício.
 
     O texto real da movimentação chega com 'PODER JUDICIÁRIO DO ESTADO DA
-    BAHIA ... 2ª Vara ...' antes do título. Esta função corta tudo até o
-    TÍTULO do documento (DESPACHO/DECISÃO/SENTENÇA/...), deixando o TEOR a
-    partir dali. Se não achar título, devolve o texto sem espaços em excesso.
+    BAHIA ... 2ª Vara ...' antes do título e 'Paulo Afonso-BA, ... MARTINHO
+    FERRAZ DA NÓBREGA JUNIOR JUIZ DE DIREITO' depois. Deixa o TEOR a partir do
+    TÍTULO (DESPACHO/DECISÃO/SENTENÇA/...) até antes de 'Paulo Afonso'.
+    Se não achar título, devolve o texto (ainda cortando o rodapé).
     """
     t = (texto or '').strip()
     if not t:
@@ -1476,6 +1478,10 @@ def _limpar_teor_para_mandado(texto: str) -> str:
     m = _RE_TITULO_DESPACHO.search(t)
     if m:
         t = t[m.start():]
+    # RODAPÉ: corta de 'Paulo Afonso' (cidade/data/juiz) em diante
+    m_foot = re.search(r'Paulo\s+Afonso', t, re.I)
+    if m_foot:
+        t = t[:m_foot.start()]
     t = re.sub(r'[ \t]+\n[ \t]*', '\n', t)          # remove espaços em linhas vazias
     t = re.sub(r'\n{3,}', '\n\n', t)                # colapsa quebras excessivas
     return t.strip()

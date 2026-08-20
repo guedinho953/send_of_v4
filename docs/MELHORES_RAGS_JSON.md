@@ -140,8 +140,10 @@ AR → expede AR **SEM assinar**; senão → solicita mandado (modelo #9 com TEO
 > **TEOR SEM CABEÇALHO (2026-08-20):** no modelo #9/`{{despacho_observacao}}`, o TEOR
 > usa o texto real da movimentação, e o novo helper `expedir_rapido._limpar_teor_para_mandado`
 > remove o cabeçalho "PODER JUDICIÁRIO.../vara", começando a partir do TÍTULO
-> (DESPACHO/DECISÃO/SENTENÇA/ACÓRDÃO/MANDADO/EDITAL/OFÍCIO ± ¹). Aplica-se a TODOS os
-> mandados/ofícios que injetam o teor real (ambos os ramos de `_executar_sequencia_rapido`).
+> (DESPACHO/DECISÃO/SENTENÇA/ACÓRDÃO/MANDADO/EDITAL/OFÍCIO ± ¹) **e o rodapé
+> "Paulo Afonso-BA.../JUIZ DE DIREITO" (corta de "Paulo Afonso" pra baixo)**.
+> Aplica-se a TODOS os mandados/ofícios que injetam o teor real (ambos os ramos de
+> `_executar_sequencia_rapido`).
 
 ## 4) MANDADO VIA OFICIAL DE JUSTIÇA com {{evento}} — TOGGLE #2555 (expedir) / #2556 (solicitar)
 **Uso:** "intime-se o autor do fato através de Oficial de Justiça para comparecer
