@@ -464,8 +464,18 @@ Todos: `polo reu_especifico`, `fluxo analisar` + `fluxo_fallback:true`.
   e mapeia pro código do painel via `prazo_dias_map` (1–30 diário + 35…180 dias),
   confirmado no dropdown `codPrazoAutor/codPrazoReu`. Sem prazo citado → sentença=10 (3) /
   despacho=5 (2).
-⚠️ **Sombreado pela antiga #2487 (desativada 2026-08-20)** — com ela ativa, `_melhor_match`
-por menor id fazia a #2487 vencer. Modelo "concedida" fica a cargo de #2452/#2529 (sem tocar).
+
+### Curaderia das famílias de liminar (2026-08-20) — quem é o dono de cada texto
+Desativadas as catch-alls antigas que produziam o mesmo comportamento pior
+(intimação pura) e sombreavam os trios: #2487, #2452, #2529, #2480, #2478,
+#2486, #2458, #2447, #2451, #2449, #2525. Mantidas:
+- **#2574** (trio, ativo) — INDEFIRO liminar art.300 com força de mandado.
+- **#2577** (trio, ativo) — CONCEDIDA liminar energia (mandado e ofício); prazo dinâmico.
+- **#2583** (trio, ativo) — DECISÃO INDEFIRO + inversão do ônus.
+- **#2568** (dona) — INTIME-SE a parte demandada sobre o pedido liminar (certidão→intimação, prazo 10 fixo, consistente).
+- Toggle: as trios #2574/#2577/#2583 têm os pares "solicitar"/"expedir mandado"
+  (#2575-2576, #2578-2579, #2584-2585) inativos — ativa conforme a necessidade.
+- #2580-2582 (trio "intime-se pedido liminar") desativados como redundantes.
 
 ## Códigos de localizador (2ª VSJ PA)
 | tipo_localizador | descrição |
