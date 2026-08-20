@@ -222,6 +222,12 @@ intimação parametrizada (de/para/texto_base).
   a intimação específica DA PENHORA (tracker com origem `'penhora'` — penhora pode estar
   só em PDF anexo), retorna `skip_penhora` e marca o registro como **`'dispensado'`** —
   **NÃO CUMPRE** (evita contar o prazo pela intimação genérica errada).
+- **DECRUSO (`decurso_prazo:true`):** a certidão/obs "Decorrido o prazo 00/00/00" só é
+  expedida se o prazo **DECORREU** (`res.vencido`). Se ainda não venceu → `decurso_pendente`
+  (status pendente), não expede. `executar_cumprimento` ABORTA (não roda a intimação)
+  quando `skip_penhora` ou `decurso_pendente`. Fluxo do Ivan: sem intimação da penhora /
+  sem prazo decorrido → não executa mais nada e sai; achou e decorreu → obs_decurso/
+  certidão + intimação se houver.
 
 ## 7) 2 PASSOS: LOCALIZAR (SNIPER) + INTIMAÇÃO — RAG #2542
 **Uso:** juntar resultado de busca SNIPER e depois intimar a parte exequente para

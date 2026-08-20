@@ -522,7 +522,19 @@ class CumprimentoService:
         if fluxo in ('eletronico', 'advogado', 'ar', 'email',
                      'email_condicional', 'movimentacao_simples'):
             try:
-                self.gerar_observacao_prazo(record)
+                prazo_out = self.gerar_observacao_prazo(record)
+                # ── ABORTE: sem intimação da penhora ou prazo ainda não
+                # decorrido → NÃO executa mais nada; sai do cumprimento
+                # (nem o passo de intimação roda). ──
+                if prazo_out and (prazo_out.get('skip_penhora')
+                                  or prazo_out.get('decurso_pendente')):
+                    self._log(
+                        record, 'decisao',
+                        'Cumprimento ENCERRADO sem execução: '
+                        f'{prazo_out.get("mensagem", "")}')
+                    return {'status': prazo_out.get('status', 'erro'),
+                            'abortado': True,
+                            'mensagem': prazo_out.get('mensagem', '')}
             except Exception as e:
                 self._log(record, 'erro',
                           f'Falha ao gerar análise de prazo: {e}')
@@ -961,6 +973,26 @@ class CumprimentoService:
         texto_despacho = self._texto_despacho_record(record)
         extr = self.extrair_prazo_do_despacho(texto_despacho)
 
+        # Config do RAG (flags de obs/certidão/polo/penhora/decurso) — lida cedo
+        # para a trava da penhora valer ANTES de qualquer erro de data/prazo.
+        cfg = self._config_prazo_do_rag(record)
+
+        # ── TRAVA PENHORA: se a RAG exige a intimação DA PENHORA e o tracker
+        # não achou uma específica (origem != 'penhora'), NÃO executa mais nada.
+        # A penhora pode estar só em PDF anexo — contar pelo fallback genérico
+        # seria errado. Aborta (dispensado) antes de qualquer erro de prazo.
+        if cfg['exigir_intimacao_penhora'] and origem_tracker != 'penhora':
+            self._log(
+                record, 'erro',
+                'SKIP: RAG exige intimação DA PENHORA, mas o tracker não achou '
+                f'ato específico (origem={origem_tracker!r}). Não cumpre.',
+                detalhes={'origem_tracker': origem_tracker,
+                          'data_tracker': str(data_tracker)})
+            record.status = 'dispensado'
+            record.save(update_fields=['status'])
+            return {'status': 'erro', 'skip_penhora': True,
+                    'mensagem': 'Sem intimação da penhora nos atos — cumprimento pulado.'}
+
         data_inicio = data_inicio or data_tracker or extr['data_inicio']
         prazo_dias = prazo_dias or extr['prazo_dias']
         modo = modo or extr['modo'] or 'uteis'
@@ -986,27 +1018,23 @@ class CumprimentoService:
         record.observacao_prazo = observacao
 
         # ── Decisão observação vs certidão ──
-        # Lê do RAGExample vinculado (sequencia_cumprimento): cada item
-        # pode trazer 'observacao_prazo' e 'expede_certidao_prazo'.
-        # Isso É a fonte autorizada (você configura na RAG).
-        cfg = self._config_prazo_do_rag(record)
+        # (cfg já foi lida acima para a trava da penhora.)
         observacao_prazo_flag = cfg['observacao_prazo']
         certidao_prazo_flag = cfg['expede_certidao_prazo']
 
-        # ── TRAVA: se a RAG exige a intimação DA PENHORA e o tracker não achou
-        # uma específica (origem != 'penhora'), NÃO cumpre/pula. A penhora pode
-        # estar só em PDF anexo — contar pelo fallback genérico seria errado.
-        if cfg['exigir_intimacao_penhora'] and origem_tracker != 'penhora':
-            self._log(
-                record, 'erro',
-                'SKIP: RAG exige intimação DA PENHORA, mas o tracker não achou '
-                f'ato específico (origem={origem_tracker!r}). Não cumpre.',
-                detalhes={'origem_tracker': origem_tracker,
-                          'data_tracker': str(data_tracker)})
-            record.status = 'dispensado'
+        # ── DECURSO: se a RAG só expede a certidão de prazo quando o prazo
+        # DECORREU ('decurso_prazo'=True) e o prazo ainda não venceu → NÃO expede.
+        if cfg['decurso_prazo'] and not getattr(res, 'vencido', False):
+            dec = getattr(res, 'data_decurso', None)
+            dec_txt = dec.strftime('%d/%m/%Y') if dec else '?'
+            self._log(record, 'decisao',
+                      f'Prazo ainda em andamento (decurso {dec_txt}) — certidão '
+                      'de decurso NÃO expedida.')
+            record.status = 'pendente'
             record.save(update_fields=['status'])
-            return {'status': 'erro', 'skip_penhora': True,
-                    'mensagem': 'Sem intimação da penhora nos atos — cumprimento pulado.'}
+            return {'status': 'pendente', 'decurso_pendente': True,
+                    'mensagem': f'Prazo ainda não decorreu (decurso {dec_txt}). '
+                                'Certidão de decurso não expedida.'}
 
         # Persiste as flags no prazo_info p/ consulta/debug.
         record.prazo_info['observacao_prazo'] = observacao_prazo_flag
@@ -1050,11 +1078,13 @@ class CumprimentoService:
         rag = getattr(record, 'rag_example', None)
         if not rag:
             return {'observacao_prazo': False, 'expede_certidao_prazo': False,
-                    'polo_prazo': None, 'exigir_intimacao_penhora': False}
+                    'polo_prazo': None, 'exigir_intimacao_penhora': False,
+                    'decurso_prazo': False}
         seq = getattr(rag, 'sequencia_cumprimento', None) or []
         if not seq:
             return {'observacao_prazo': False, 'expede_certidao_prazo': False,
-                    'polo_prazo': None, 'exigir_intimacao_penhora': False}
+                    'polo_prazo': None, 'exigir_intimacao_penhora': False,
+                    'decurso_prazo': False}
 
         tipo_rag = {
             'eletronico': 'movimentacao', 'advogado': 'movimentacao',
@@ -1079,7 +1109,8 @@ class CumprimentoService:
                         break
         if item is None:
             return {'observacao_prazo': False, 'expede_certidao_prazo': False,
-                    'polo_prazo': None, 'exigir_intimacao_penhora': False}
+                    'polo_prazo': None, 'exigir_intimacao_penhora': False,
+                    'decurso_prazo': False}
 
         # polo_prazo: para quem corre o prazo — 'autor' | 'reu' | 'ambos'.
         # Se omitido no JSON, infere pelo fluxo (eletronico/advogado/ar
@@ -1097,6 +1128,7 @@ class CumprimentoService:
             'polo_prazo': polo,
             'exigir_intimacao_penhora': bool(
                 item.get('exigir_intimacao_penhora', False)),
+            'decurso_prazo': bool(item.get('decurso_prazo', False)),
         }
 
     def _texto_despacho_record(self, record: CumprimentoRecord) -> str:
