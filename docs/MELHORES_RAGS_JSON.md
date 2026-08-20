@@ -449,6 +449,24 @@ excede o teto (art. 51, II, c/c art. 3º, I, Lei 9.099/95); sem custas/honorári
 - ✅ Validação: jaccard 0.89, vence, 1 passo; supera #2484 (incompetência
   absoluta — outra base, 0.62).
 
+## 13) INDEFIRO LIMINAR COM FORÇA DE MANDADO — 3 MODELOS TOGGLE — RAGs #2574/#2575/#2576
+**Uso:** "DECISÃO COM FORÇA DE MANDADO¹ ... INDEFIRO O PEDIDO LIMINAR ... FICA
+VALENDO A PRESENTE COMO MANDADO. Cumpra-se com urgência." Três modelos para
+escolher conforme a necessidade (alterna `active`), TODOS com base em
+`intimacao_eletronica` + `fallback_ar:true` + `assinar_ar:true`, mudando só o
+destino do mandado:
+- **#2574 (ativa)** — só a intimação eletrônica (sem mandado fallback).
+- **#2575 (inativa)** — intimação + `fallback:"solicitar_mandado"` (só solicita a expedição do mandado).
+- **#2576 (inativa)** — intimação + `fallback:"mandado"` + `fallback_template_id:9` (confecciona o mandado).
+Todos: `polo reu_especifico`, `fluxo analisar` + `fluxo_fallback:true`.
+- **PRAZO DINÂMICO (2026-08-20):** sem `prazo_intimacao` fixo, o executor extrai o
+  prazo da decisão (`extrair_prazo_dias`: "N dias" + horas→dias, mín 1 — ex.: 48h→"2")
+  e mapeia pro código do painel via `prazo_dias_map` (1–30 diário + 35…180 dias),
+  confirmado no dropdown `codPrazoAutor/codPrazoReu`. Sem prazo citado → sentença=10 (3) /
+  despacho=5 (2).
+⚠️ **Sombreado pela antiga #2487 (desativada 2026-08-20)** — com ela ativa, `_melhor_match`
+por menor id fazia a #2487 vencer. Modelo "concedida" fica a cargo de #2452/#2529 (sem tocar).
+
 ## Códigos de localizador (2ª VSJ PA)
 | tipo_localizador | descrição |
 |------------------|-----------|

@@ -234,11 +234,25 @@ def normalizar_nome(x: str) -> Optional[str]:
 
 
 def extrair_prazo_dias(texto: str) -> str:
-    """Extrai prazo em dias do texto do despacho.
-    Ex: '03 dias' → '03', '05 (cinco) dias' → '05'
+    """Extrai prazo EM DIAS do texto do despacho.
+
+    - 'N dias/dia' → N (mínimo 1). Ex: '03 dias' → '3', '1 dia' → '1'
+    - 'N horas/hora' → converte p/ dias (ceil, mínimo 1). Ex: '48 horas' → '2',
+      '24 horas' → '1', '8 horas' → '1'
+    - Sem prazo → '' (o chamador decide o default despacho/sentença).
     """
-    m = re.search(r'(\d+)\s*(?:\([^)]*\))?\s*(?:dias?|dia)', texto, re.I)
-    return m.group(1) if m else '03'
+    if not texto:
+        return ''
+    m_dias = re.search(r'(\d+)\s*(?:\([^)]*\))?\s*dias?', texto, re.I)
+    if m_dias:
+        return str(max(1, int(m_dias.group(1))))
+    m_h = re.search(r'(\d+)\s*horas?', texto, re.I)   # '48 horas'
+    if m_h:
+        return str(max(1, (int(m_h.group(1)) + 23) // 24))
+    m_h2 = re.search(r'(\d+)\s*h\b', texto, re.I)      # '48h'
+    if m_h2:
+        return str(max(1, (int(m_h2.group(1)) + 23) // 24))
+    return ''
 
 
 def extrair_valor_penhora(texto: str) -> str:

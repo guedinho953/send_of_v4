@@ -1831,12 +1831,20 @@ class MovimentacaoService:
         # o prazo literal do despacho — converte pro código do painel.
         # Quando vazio: extrai do texto da movimentação; sem prazo no texto,
         # segue a regra: despacho → 5 dias ('2'), sentença → 10 dias ('3'). ──
+        # Códigos reais do dropdown codPrazoAutor/codPrazoReu do Projudi
+        # (dias → código). O RAG pode escrever prazo_intimacao como o prazo
+        # literal; converte pro código do painel. Preenchido 2026-08-20.
         prazo_dias_map = {
-            '5': '2',   # 05 dias
-            '10': '3',  # 10 dias
-            '15': '4',  # 15 dias
-            '30': '7',  # 30 dias
-            '180': '29', '6': '29',  # 6 meses
+            '1': '10', '2': '1', '3': '11', '4': '47', '5': '2',
+            '6': '48', '7': '49', '8': '50', '9': '51', '10': '3',
+            '11': '52', '12': '53', '13': '54', '14': '55', '15': '4',
+            '16': '56', '17': '57', '18': '58', '19': '59', '20': '60',
+            '21': '61', '22': '62', '23': '63', '24': '64', '25': '65',
+            '26': '66', '27': '67', '28': '68', '29': '69', '30': '5',
+            '35': '70', '40': '6', '45': '71', '50': '7', '55': '16',
+            '60': '8', '65': '17', '70': '18', '75': '19', '80': '20',
+            '85': '21', '90': '22', '95': '23', '100': '24', '105': '25',
+            '110': '26', '115': '27', '120': '9', '180': '29',  # 6 meses
         }
         if not prazo_intimacao:
             # Extração do prazo do texto (ex "prazo de 15 dias")
