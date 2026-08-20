@@ -1344,11 +1344,25 @@ class CumprimentoService:
         if not tem_prazo:
             return ''
         cfg = self._config_prazo_do_rag(record)
+        decurso = str(record.observacao_prazo or '')
         if cfg['expede_certidao_prazo']:
-            # Mesmo expedindo certidão, a observação de prazo pode (ou não)
-            # ir para a movimentação se 'observacao_prazo'=True.
-            return record.observacao_prazo if cfg['observacao_prazo'] else ''
-        return record.observacao_prazo if cfg['observacao_prazo'] else ''
+            # Certidão vai como documento à parte. Se 'observacao_prazo'=True,
+            # a observação do Mov581 = {trecho da decisão/snippet} | {decurso
+            # do prazo}. Primeiro a observação ("Intimem-se as partes xxxxx"),
+            # depois o decurso do prazo (observacao_prazo). Trunca a ~500 chars.
+            if cfg['observacao_prazo']:
+                snippet = str(record.snippet or '').strip()
+                if snippet and decurso:
+                    combinado = f'{snippet} | {decurso}'
+                elif decurso:
+                    combinado = decurso
+                else:
+                    combinado = snippet
+                if len(combinado) > 500:
+                    combinado = combinado[:497] + '...'
+                return combinado
+            return ''
+        return decurso if cfg['observacao_prazo'] else ''
 
     def montar_json_envio(self, record: CumprimentoRecord) -> Dict:
         """JSON controlado que será enviado (observação do Mov581 / certidão).

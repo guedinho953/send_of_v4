@@ -136,7 +136,7 @@ class RAGExampleAdmin(admin.ModelAdmin):
               'qualquer uma bloqueia (OR).'},
         ),
     ]
-    actions = ['expedir_ciap', 'duplicar_rag']
+    actions = ['expedir_ciap', 'duplicar_rag', 'desativar_rag', 'ativar_rag']
 
     def duplicar_rag(self, request, queryset):
         """Cria uma cópia (ativa) de cada RAG selecionada, com sequência copiada."""
@@ -163,6 +163,22 @@ class RAGExampleAdmin(admin.ModelAdmin):
             f'{criadas} RAG(s) duplicada(s) — ajuste despacho_ato/observação e o processo na cópia.',
         )
     duplicar_rag.short_description = 'Duplicar RAG selecionada(s)'
+
+    def desativar_rag(self, request, queryset):
+        """Desativa (active=False) as RAGs selecionadas em lote.
+
+        Útil para alternar o toggle de pares complementares (ex: mandado ↔
+        solicitar_expedicao) diretamente no admin, sem editar cada uma.
+        """
+        n = queryset.update(active=False)
+        self.message_user(request, f'{n} RAG(s) DESATIVADA(s).')
+    desativar_rag.short_description = '⬜ Desativar RAG selecionada(s)'
+
+    def ativar_rag(self, request, queryset):
+        """Ativa (active=True) as RAGs selecionadas em lote (toggle de pares)."""
+        n = queryset.update(active=True)
+        self.message_user(request, f'{n} RAG(s) ATIVADA(s).')
+    ativar_rag.short_description = '✅ Ativar RAG selecionada(s)'
 
     def resumo_bloqueio(self, obj):
         frases = obj.frases_bloqueio or []

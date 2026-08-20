@@ -422,7 +422,7 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                 record = service.importar(
                     processo_numero=proc_num,
                     act_verb='movimentacao',
-                    observacao=obs or texto[:500],
+                    observacao=_preencher_observacao_eventos(obs or '', texto) or texto[:500],
                     categoria=_mapear_categoria_por_obs(obs or texto),
                     processo_cnj=proc_num,
                     url_processo=mov.get('link_processo', ''),
@@ -813,7 +813,7 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
 
                 ok = service.executar_com_intimacao(
                     processo_numero=proc_num,
-                    observacao=obs or texto[:500],
+                    observacao=_preencher_observacao_eventos(obs or '', texto) or texto[:500],
                     codigo_mov=str(passo.get('codigo_mov', '581')),
                     descricao_mov=passo.get('descricao_mov', 'Intimação'),
                     proc_projudi=proc_projudi,
@@ -902,7 +902,7 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
 
                 ok = service.executar_com_intimacao(
                     processo_numero=proc_num,
-                    observacao=obs or texto[:500],
+                    observacao=_preencher_observacao_eventos(obs or '', texto) or texto[:500],
                     codigo_mov=str(passo.get('codigo_mov', '581')),
                     descricao_mov=passo.get('descricao_mov', 'Intimação'),
                     proc_projudi=proc_projudi,
@@ -997,7 +997,7 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
 
                 ok = service.executar_com_intimacao_ar(
                     processo_numero=proc_num,
-                    observacao=obs or texto[:500],
+                    observacao=_preencher_observacao_eventos(obs or '', texto) or texto[:500],
                     codigo_mov=str(passo.get('codigo_mov', '581')),
                     descricao_mov=passo.get('descricao_mov', 'Intimação'),
                     proc_projudi=proc_projudi,
@@ -1179,7 +1179,7 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                     # (quando disponível), senão o texto-âncora da RAG.
                     teor_real = (texto or '').strip()
                     if len(teor_real) > 15:
-                        rag_ctx.despacho_observacao = teor_real
+                        rag_ctx.despacho_observacao = _limpar_teor_para_mandado(teor_real)
                     else:
                         rag_ctx.despacho_observacao = rag_ctx.despacho_observacao or ''
                     # Teor pode conter placeholders de evento (ex: {{evento}})
@@ -1203,7 +1203,7 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                         # TEOR DO DESPACHO = texto REAL da movimentação/processo
                         teor_real = (texto or '').strip()
                         if len(teor_real) > 15:
-                            rag_ctx.despacho_observacao = teor_real
+                            rag_ctx.despacho_observacao = _limpar_teor_para_mandado(teor_real)
                         else:
                             rag_ctx.despacho_observacao = rag_ctx.despacho_observacao or ''
                         rag_ctx.despacho_observacao = _preencher_observacao_eventos(
@@ -1452,6 +1452,33 @@ def _extrair_eventos_despacho(texto: str) -> list:
             if num not in eventos:
                 eventos.append(num)
     return eventos
+
+
+# TÍTULOS de documento que iniciam o conteúdo útil do despacho/decisão
+# (corta o cabeçalho do tribunal "PODER JUDICIÁRIO.../vara" que vem antes).
+_RE_TITULO_DESPACHO = re.compile(
+    r'(DESPACHO|DECIS[ÃA]O|SENTEN[ÇC][AÁ]|AC[ÓO]RD[ÃA]O|'
+    r'MANDADO|EDITAL|OF[ÍI]CIO)\s*[¹1²2³3]?',
+    re.IGNORECASE)
+
+
+def _limpar_teor_para_mandado(texto: str) -> str:
+    """Remove o cabeçalho do tribunal do TEOR do mandado/ofício.
+
+    O texto real da movimentação chega com 'PODER JUDICIÁRIO DO ESTADO DA
+    BAHIA ... 2ª Vara ...' antes do título. Esta função corta tudo até o
+    TÍTULO do documento (DESPACHO/DECISÃO/SENTENÇA/...), deixando o TEOR a
+    partir dali. Se não achar título, devolve o texto sem espaços em excesso.
+    """
+    t = (texto or '').strip()
+    if not t:
+        return t
+    m = _RE_TITULO_DESPACHO.search(t)
+    if m:
+        t = t[m.start():]
+    t = re.sub(r'[ \t]+\n[ \t]*', '\n', t)          # remove espaços em linhas vazias
+    t = re.sub(r'\n{3,}', '\n\n', t)                # colapsa quebras excessivas
+    return t.strip()
 
 
 def _preencher_observacao_eventos(obs: str, texto: str) -> str:
