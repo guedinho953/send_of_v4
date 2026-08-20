@@ -955,7 +955,8 @@ class CumprimentoService:
             raise ValueError('gerar_observacao_prazo exige tenant.')
 
         # ── Fonte 1: rastreamento de comunicações (data real da intimação) ──
-        data_tracker = self._data_intimacao_do_tracker(record)
+        data_tracker, origem_tracker = (
+            self._data_intimacao_do_tracker(record) or (None, None))
         # ── Fonte 2: atos do despacho / RAG (prazo em dias + modo) ──
         texto_despacho = self._texto_despacho_record(record)
         extr = self.extrair_prazo_do_despacho(texto_despacho)
@@ -970,7 +971,7 @@ class CumprimentoService:
                 'Não foi possível determinar data/prazo. Tracker='
                 f'{data_tracker}, despacho='
                 f'(início={extr["data_inicio"]}, dias={extr["prazo_dias"]}).',
-                detalhes={'tracker': data_tracker, 'despacho': extr},
+                detalhes={'tracker': str(data_tracker), 'despacho': extr},
             )
             return {'status': 'erro',
                     'mensagem': 'Data/prazo não determinados (tracker+despacho).'}
@@ -991,6 +992,21 @@ class CumprimentoService:
         cfg = self._config_prazo_do_rag(record)
         observacao_prazo_flag = cfg['observacao_prazo']
         certidao_prazo_flag = cfg['expede_certidao_prazo']
+
+        # ── TRAVA: se a RAG exige a intimação DA PENHORA e o tracker não achou
+        # uma específica (origem != 'penhora'), NÃO cumpre/pula. A penhora pode
+        # estar só em PDF anexo — contar pelo fallback genérico seria errado.
+        if cfg['exigir_intimacao_penhora'] and origem_tracker != 'penhora':
+            self._log(
+                record, 'erro',
+                'SKIP: RAG exige intimação DA PENHORA, mas o tracker não achou '
+                f'ato específico (origem={origem_tracker!r}). Não cumpre.',
+                detalhes={'origem_tracker': origem_tracker,
+                          'data_tracker': str(data_tracker)})
+            record.status = 'dispensado'
+            record.save(update_fields=['status'])
+            return {'status': 'erro', 'skip_penhora': True,
+                    'mensagem': 'Sem intimação da penhora nos atos — cumprimento pulado.'}
 
         # Persiste as flags no prazo_info p/ consulta/debug.
         record.prazo_info['observacao_prazo'] = observacao_prazo_flag
@@ -1034,11 +1050,11 @@ class CumprimentoService:
         rag = getattr(record, 'rag_example', None)
         if not rag:
             return {'observacao_prazo': False, 'expede_certidao_prazo': False,
-                    'polo_prazo': None}
+                    'polo_prazo': None, 'exigir_intimacao_penhora': False}
         seq = getattr(rag, 'sequencia_cumprimento', None) or []
         if not seq:
             return {'observacao_prazo': False, 'expede_certidao_prazo': False,
-                    'polo_prazo': None}
+                    'polo_prazo': None, 'exigir_intimacao_penhora': False}
 
         tipo_rag = {
             'eletronico': 'movimentacao', 'advogado': 'movimentacao',
@@ -1063,7 +1079,7 @@ class CumprimentoService:
                         break
         if item is None:
             return {'observacao_prazo': False, 'expede_certidao_prazo': False,
-                    'polo_prazo': None}
+                    'polo_prazo': None, 'exigir_intimacao_penhora': False}
 
         # polo_prazo: para quem corre o prazo — 'autor' | 'reu' | 'ambos'.
         # Se omitido no JSON, infere pelo fluxo (eletronico/advogado/ar
@@ -1079,6 +1095,8 @@ class CumprimentoService:
             'expede_certidao_prazo': bool(
                 item.get('expede_certidao_prazo', False)),
             'polo_prazo': polo,
+            'exigir_intimacao_penhora': bool(
+                item.get('exigir_intimacao_penhora', False)),
         }
 
     def _texto_despacho_record(self, record: CumprimentoRecord) -> str:
@@ -1135,12 +1153,12 @@ class CumprimentoService:
         """
         proc = self._processo_resolvido(record)
         if proc is None:
-            return None
+            return None, None
         from processes.models import Movement
         try:
             mvs = Movement.objects.filter(process=proc)
             if not mvs.exists():
-                return None
+                return None, None
             parte = (getattr(record, 'parte_nome', '') or '').strip()
             base = mvs
             if parte:
@@ -1155,45 +1173,45 @@ class CumprimentoService:
                 category='intimacao'
             ).order_by('-act_date').first()
             if penhora_intima and penhora_intima.act_date:
-                return penhora_intima.act_date
+                return penhora_intima.act_date, 'penhora'
             # Segundo: 'auto de penhora' ou 'penhora realizada'
             auto_penhora = base.filter(
                 act_description__icontains='penhora realizada'
             ).order_by('-act_date').first()
             if auto_penhora and auto_penhora.act_date:
-                return auto_penhora.act_date
+                return auto_penhora.act_date, 'penhora'
             # --- NOVO: Buscar intimação de SENTENÇA (pós-publicação) ---
             # Intimação após a publicação da sentença
             sentenca_intima = base.filter(
                 act_description__icontains='sentença'
             ).order_by('-act_date').first()
             if sentenca_intima and sentenca_intima.act_date:
-                return sentenca_intima.act_date
+                return sentenca_intima.act_date, 'sentenca'
             # --- FIM NOVO ---
             # 1) DJEN/eletrônica → data de disponibilização no DJEN
             if getattr(record, 'fluxo', '') in ('eletronico', 'advogado'):
                 djen = (base.filter(reference_date__isnull=False)
                         .order_by('-reference_date').first())
                 if djen and djen.reference_date:
-                    return djen.reference_date
+                    return djen.reference_date, 'djen'
             # 2) leitura real mais recente (intimação lida)
             lida = (base.exclude(reading_date__isnull=True)
                     .order_by('-reading_date').first())
             if lida and lida.reading_date:
-                return lida.reading_date
+                return lida.reading_date, 'leitura'
             # 3) qualquer intimação (data do ato)
             inta = base.filter(category='intimacao').order_by('-act_date').first()
             if inta and inta.act_date:
-                return inta.act_date
+                return inta.act_date, 'intimacao'
             # 4) última referência DJEN do processo todo (fora do filtro parte)
             ref = (Movement.objects.filter(process=proc,
                                            reference_date__isnull=False)
                    .order_by('-reference_date').first())
             if ref and ref.reference_date:
-                return ref.reference_date
-            return None
+                return ref.reference_date, 'referencia'
+            return None, None
         except Exception:
-            return None
+            return None, None
 
     @staticmethod
     def _rotulo_intimacao(fluxo: str, djen: bool, modo: str) -> str:

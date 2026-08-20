@@ -217,6 +217,11 @@ intimação parametrizada (de/para/texto_base).
   }
 ]
 ```
+- **TRAVA `exigir_intimacao_penhora` (2026-08-20):** marcada como `true` no passo
+  `movimentacao` da #2538. Se o `CumprimentoService.gerar_observacao_prazo` não achar
+  a intimação específica DA PENHORA (tracker com origem `'penhora'` — penhora pode estar
+  só em PDF anexo), retorna `skip_penhora` e marca o registro como **`'dispensado'`** —
+  **NÃO CUMPRE** (evita contar o prazo pela intimação genérica errada).
 
 ## 7) 2 PASSOS: LOCALIZAR (SNIPER) + INTIMAÇÃO — RAG #2542
 **Uso:** juntar resultado de busca SNIPER e depois intimar a parte exequente para

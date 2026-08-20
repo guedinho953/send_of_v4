@@ -10,8 +10,17 @@ Uso:
 Exemplo:
   python scripts/pegar_atos_processo.py --interno 41020263379522
 """
-import re, sys, json
+import re, sys, json, os
 from datetime import datetime
+
+# Bootstrap Django p/ rodar como script direto (python scripts/pegar_atos_processo.py)
+if os.environ.get('DJANGO_SETTINGS_MODULE') is None:
+    _BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if _BASE not in sys.path:
+        sys.path.insert(0, _BASE)
+    os.environ['DJANGO_SETTINGS_MODULE'] = 'core.settings'
+import django
+django.setup()
 
 def run(interno: str, salvar: bool = True):
     from django.conf import settings
