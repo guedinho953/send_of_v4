@@ -1,5 +1,8 @@
 # 📚 Melhores JSONs de RAG (sequencia_cumprimento) — curadoria 2026-08-20
 
+> **Backup de contexto da sessão:** `/home/ivan/PythonProjects/send_of_v4/docs/APRENDIZADOS_2026-08-20.md`
+> (resumo executivo + passos operacionais + pendências). Leia junto deste catálogo.
+
 Catálogo dos JSONs de `RAGExample.sequencia_cumprimento` mais **completos e
 validados em processo real** do Projudi (2ª VSJ Paulo Afonso). Copie, adapte o
 `despacho_ato`/`despacho_observacao` (texto de matching) e a `observacao`
