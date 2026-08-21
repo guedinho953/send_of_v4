@@ -1846,6 +1846,12 @@ class MovimentacaoService:
             '85': '21', '90': '22', '95': '23', '100': '24', '105': '25',
             '110': '26', '115': '27', '120': '9', '180': '29',  # 6 meses
         }
+        # Códigos VÁLIDOS do painel (docs/05-CONFIGURAR-RAGS.md): 2=5d,
+        # 3=10d (default), 4=15d, 7=30d, 29=6m. As RAGs gravam o CÓDIGO no
+        # JSON (ex '4' = 15 dias). Estes são TAMBÉM chaves-de-dias no mapa
+        # acima (2,3,4,7,...), então SEMPRE passar direto — senão '4' (15d)
+        # era reinterpretado como 4 dias (→ '47'), errando o prazo.
+        prazos_codigos_validos = {'2', '3', '4', '7', '29'}
         if not prazo_intimacao:
             # Extração do prazo do texto (ex "prazo de 15 dias")
             try:
@@ -1865,9 +1871,14 @@ class MovimentacaoService:
             except Exception as e:
                 prazo_intimacao = '2'  # padrão: despacho → 5 dias
                 print(f'   📅 Prazo default 5 dias (erro extração: {e})')
+        elif str(prazo_intimacao) in prazos_codigos_validos:
+            # Já é CÓDIGO do painel (2/3/4/7/29) — passa direto. Antes caía na
+            # conversão por chave-de-dias e errava (ex '4' → '47' = 4 dias).
+            print(f'   📅 prazo_intimacao já é código do painel: {prazo_intimacao}')
         elif str(prazo_intimacao) in prazo_dias_map:
+            _dias = prazo_intimacao
             prazo_intimacao = prazo_dias_map[str(prazo_intimacao)]
-            print(f'   📅 prazo_intimacao → código {prazo_intimacao}')
+            print(f'   📅 prazo de {_dias} dias (literal) → código {prazo_intimacao}')
 
         if not proc_projudi and not cod_analise:
             m = re.search(r'(\d{13,20})', processo_numero.replace('-', '').replace('.', ''))
@@ -2248,10 +2259,36 @@ class MovimentacaoService:
                 # FLUXO A: MovimentarAnalise → painel de intimação
                 # ═══════════════════════════════════════════════════
                 polo_norm = str(polo_intimacao or 'todos').lower()
-                marcar_autoras = polo_norm in ('todos', 'ambos', 'autores', 'autoras',
-                                               'autor', 'promovente', 'exequente')
-                marcar_res = polo_norm in ('todos', 'ambos', 'res', 'réus', 'reus',
-                                           'réu', 'reu', 'promovido', 'executado')
+                # Polos ESPECÍFICOS (*_especifico) mapeiam para a ABA do rol:
+                # reu_especifico/executado_especifico → aba Rés;
+                # autor_especifico/autora_especifica  → aba Autoras.
+                # O painel Autoras/Rés só reconhece o ROL — não filtra PARTE
+                # individual (a aba marca todas as partes daquele rol).
+                marcar_autoras = polo_norm in (
+                    'todos', 'ambos', 'todas', 'todas_as_partes',
+                    'autores_e_res', 'autoreseres',
+                    'autores', 'autoras', 'autor', 'autora', 'promovente',
+                    'exequente', 'promoventes', 'exequentes',
+                    'autor_especifico', 'autora_especifica', 'autora_especifico',
+                    'especifico_autor', 'especifica_autora', 'author', 'authors',
+                )
+                marcar_res = polo_norm in (
+                    'todos', 'ambos', 'todas', 'todas_as_partes',
+                    'autores_e_res', 'autoreseres',
+                    'res', 'réus', 'reus', 'réu', 'reu', 'promovido', 'executado',
+                    'promovidos', 'executados',
+                    'reu_especifico', 'reus_especificos', 'reu_especifica',
+                    'executado_especifico', 'promovido_especifico',
+                    'res_especifico', 'especifico_reu', 'especifico_executado',
+                )
+                # Polo desconhecido → default seguro: intimar TODAS as abas.
+                # Deixar o painel SEM aba bloqueia o Concluir (motivo/prazo
+                # nunca são preenchidos) e a mov não registra.
+                if not marcar_autoras and not marcar_res:
+                    print(f'   ⚠️ Polo "{polo_norm}" não reconhecido no painel — '
+                          'intimando TODAS as abas (Autoras+Rés).')
+                    marcar_autoras = True
+                    marcar_res = True
                 if cod_analise:
                     print('   🔔 Pipeline de intimação (painel)...')
 

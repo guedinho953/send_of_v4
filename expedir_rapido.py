@@ -343,9 +343,39 @@ def rastrear_e_expedir(tipo=None):
                         novas_partes = []
                         for nome_ata in nomes_ata[:5]:
                             nome_limpo = re.sub(r'\s+', ' ', nome_ata).strip()
+                            rg_ata = ''; cpf_ata = ''
+                            npai_ata = ''; nmae_ata = ''
+                            try:
+                                party_ata = Party.objects.filter(
+                                    process=proc, name__icontains=nome_limpo[:30]
+                                ).first()
+                                if party_ata:
+                                    rg_ata = party_ata.rg or ''
+                                    cpf_ata = party_ata.cpf_cnpj or ''
+                                    npai_ata = party_ata.nome_pai or ''
+                                    nmae_ata = party_ata.nome_mae or ''
+                            except Exception:
+                                pass
+                            # Fallback: RG/filiação/CPF faltantes → EVENTO Nº 1
+                            if not (rg_ata and cpf_ata and npai_ata and nmae_ata):
+                                try:
+                                    q = _extrair_qualificacao_evento1(
+                                        session, proc, nome_limpo)
+                                    if not rg_ata:
+                                        rg_ata = q.get('rg', '') or ''
+                                    if not cpf_ata:
+                                        cpf_ata = q.get('cpf', '') or ''
+                                    if not npai_ata:
+                                        npai_ata = q.get('nome_pai', '') or ''
+                                    if not nmae_ata:
+                                        nmae_ata = q.get('nome_mae', '') or ''
+                                except Exception:
+                                    pass
                             novas_partes.append(SimpleNamespace(
                                 name=nome_ata, address='', email='',
-                                phone='', cpf_cnpj=''))
+                                phone=(dados_ata or {}).get('telefone', ''),
+                                cpf_cnpj=cpf_ata, rg=rg_ata,
+                                nome_pai=npai_ata, nome_mae=nmae_ata))
                         if novas_partes:
                             print(f'   🆕 {len(novas_partes)} autor(es) do fato criados da ata')
                             partes = novas_partes
@@ -397,6 +427,166 @@ def rastrear_e_expedir(tipo=None):
     print(f'{"="*50}')
 
 
+def _rota_prazo_pre_activate(passo: dict, rag=None) -> bool:
+    """True se o passo 'movimentacao' deve rotear para a MESMA maquinaria
+    de CERTIDÃO DE PRAZO do dashboard (CumprimentoService), em vez de
+    apenas a Mov581 genérica.
+
+    Roteia quando a RAG (sequencia_cumprimento) marca flags de prazo no
+    passo, ex.: RAG #2538 — 'expede_certidao_prazo'/'observacao_prazo' /
+    'polo_prazo'/'decurso_prazo'/'exigir_intimacao_penhora'/'flag_certidao'.
+    """
+    if not rag:
+        return False
+    return any(passo.get(k) for k in (
+        'expede_certidao_prazo', 'observacao_prazo', 'polo_prazo',
+        'decurso_prazo', 'exigir_intimacao_penhora', 'flag_certidao'))
+
+
+def _executar_movimentacao_prazo(passo, mov, proc_num, texto, user, rag):
+    """Delega a movimentação com certidão de prazo ao CumprimentoService.
+
+    Constrói um CumprimentoRecord (fluxo='movimentacao_simples') e chama o
+    MESMO fluxo do dashboard (_executar_movimentacao_simples), que gera a
+    observação de prazo com a DATA REAL da intimação (rastreamento de
+    comunicações) e a certidão de prazo (HTML, template 'Certidão de Prazo'),
+    executando a Mov581 com certidao_html via executar_requests.
+
+    Retorna dict com 'fez', 'status' e 'prazo' (prazo_info + observacao_prazo
+    + polo) para preencher eventuais placeholders de passos seguintes.
+    """
+    from projudi.cumprimento_service import CumprimentoService
+    from projudi.models import CumprimentoRecord
+
+    polo = str(passo.get('polo_prazo') or 'ambos')
+    print(f'  ▶️ Certidão de prazo (CumprimentoService, polo={polo})...')
+
+    svc = CumprimentoService(user)
+    record = CumprimentoRecord.objects.create(
+        processo=(proc_num or '')[:30],
+        numero_processo_cnj=proc_num or '',
+        fluxo='movimentacao_simples',
+        snippet=(texto or '')[:4000],
+        rag_example=rag,
+        parte_nome='',
+        parte_papel=polo,
+        url_processo=((mov or {}).get('link_processo', '') or ''),
+        user=user,
+        status='pendente',
+        prazo_info={},
+        observacao_prazo='',
+    )
+
+    def _prazo():
+        return {'observacao_prazo': record.observacao_prazo,
+                'prazo_info': record.prazo_info or {}}
+
+    # Guard de prazo (skip_penhora / decurso_pendente) igual ao dashboard:
+    # SEM a intimação da penhora exigida, ou prazo ainda NÃO decorrido,
+    # encerra o passo sem executar (nada de Mov581 nem certidão).
+    try:
+        prazo_out = svc.gerar_observacao_prazo(record)
+    except Exception as e:
+        print(f'   ⚠️ Falha ao gerar análise de prazo: {e}')
+        return {'fez': True, 'status': 'falha', 'erro': str(e),
+                'prazo': _prazo()}
+    if prazo_out and prazo_out.get('skip_penhora'):
+        print(f'   ⏭️ {prazo_out.get("mensagem", "")}')
+        return {'fez': True, 'status': prazo_out.get('status', 'erro'),
+                'abortado': True, 'mensagem': prazo_out.get('mensagem', ''),
+                'prazo': _prazo()}
+    if prazo_out and prazo_out.get('decurso_pendente'):
+        if prazo_out.get('registrar_obs') and record.observacao_prazo:
+            # Prazo ainda NÃO decorreu mas a data da intimação da penhora está
+            # CERTA → registra a OBSERVAÇÃO (diz quando o prazo termina) num
+            # Mov581, SEM emitir a certidão de decurso (ainda em curso).
+            from projudi.movimentacao_service import MovimentacaoService
+            service = MovimentacaoService(user)
+            mr = service.importar(
+                processo_numero=proc_num,
+                act_verb='registre-se',
+                observacao=record.observacao_prazo,
+                categoria='registro',
+                processo_cnj=proc_num,
+                url_processo=(mov or {}).get('link_processo', ''),
+                codigo_movimentacao='581',
+                descricao_movimentacao='Cumprimento de Decisão',
+            )
+            ok = service.executar(mr)
+            print(f'   📝 Prazo em curso — observação registrada (prazo '
+                  f'termina em): {"✅" if ok else "⚠️"} {record.observacao_prazo[:90]}')
+            return {'fez': True, 'status': 'pendente',
+                    'obs_registrada': bool(ok),
+                    'mensagem': prazo_out.get('mensagem', ''),
+                    'prazo': _prazo()}
+        print(f'   ⏭️ {prazo_out.get("mensagem", "")} (sem data certa da intimação)')
+        return {'fez': True, 'status': prazo_out.get('status', 'erro'),
+                'abortado': True, 'mensagem': prazo_out.get('mensagem', ''),
+                'prazo': _prazo()}
+
+    resultado = svc._executar_movimentacao_simples(record)
+    print(f"   {'✅' if resultado.get('status') == 'cumprido' else '⚠️'} "
+          f"certidão={resultado.get('certidao')}, "
+          f"obs_prazo={resultado.get('observacao')}, "
+          f"polo={resultado.get('polo')}")
+    return {
+        'fez': True,
+        'status': resultado.get('status', 'falha'),
+        'certidao': resultado.get('certidao'),
+        'observacao': resultado.get('observacao'),
+        'prazo': {**_prazo(), 'polo': resultado.get('polo') or polo},
+    }
+
+
+def _fmt_data_prazo(d) -> str:
+    """Formata data em dd/mm/aaaa (aceita date/datetime/str), p/ placeholders."""
+    from datetime import datetime
+    if hasattr(d, 'strftime'):
+        return d.strftime('%d/%m/%Y')
+    if isinstance(d, str):
+        try:
+            return datetime.strptime(d, '%Y-%m-%d').strftime('%d/%m/%Y')
+        except ValueError:
+            return d or ''
+    return str(d or '')
+
+
+def _preencher_obs_prazo(obs, ctx) -> str:
+    """Preenche os placeholders CRUS de prazo numa observação de passo
+    seguinte (ex.: '00/00/00' e 'reu/autor/ambos especifico') usando os
+    dados REAIS calculados no passo 'movimentacao' com certidão de prazo.
+
+    ctx: dict com 'polo' e 'prazo_info' (data_inicio/data_decurso/
+    ultimo_dia/dias_contados).
+    """
+    if not obs or not ctx:
+        return obs
+    pi = ctx.get('prazo_info') or {}
+    polo = (ctx.get('polo') or '').lower()
+    dias = pi.get('dias_contados') or []
+    ini = _fmt_data_prazo(pi.get('data_inicio'))
+    dec = _fmt_data_prazo(pi.get('data_decurso'))
+    ult = _fmt_data_prazo(pi.get('ultimo_dia'))
+    p_inicio = _fmt_data_prazo(dias[0]) if dias else ini
+    polo_txt = {'autor': 'aos autores', 'reu': 'ao réu/ré',
+                'ambos': 'aos autores e réus'}.get(polo, polo or 'à parte')
+    # 1) Rótulo do polo (placeholders da RAG).
+    obs = re.sub(
+        r'reu/autor/ambos especifico|autores e reus especifico|'
+        r'ati/autor/ambos especifico',
+        polo_txt, obs, flags=re.IGNORECASE)
+    obs = re.sub(r'autor especifico|autores especificos|reu especifico|'
+                 r'reus especificos|ambos especifico',
+                 polo_txt, obs, flags=re.IGNORECASE)
+    # 2) Datas '00/00/00' em ordem: decurso, intimação, início, último dia.
+    datas = [d for d in (dec, ini, p_inicio, ult) if d]
+    def _sub(_m):
+        return datas.pop(0) if datas else '00/00/00'
+    obs = re.sub(r'00/00/00', _sub, obs)
+    obs = re.sub(r'\s{2,}', ' ', obs).strip()
+    return obs
+
+
 def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                                 session, cookies_dict, user, rag=None):
     """Executa cada passo da sequencia_cumprimento."""
@@ -406,6 +596,10 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
     from types import SimpleNamespace
 
     print(f'   📋 Sequência de {len(sequencia)} passo(s):')
+
+    # Contexto de prazo calculado no passo 'movimentacao' (certidão de prazo),
+    # compartilhado para preencher placeholders de passos seguintes.
+    ctx_prazo = {}
 
     for i, passo in enumerate(sequencia, 1):
         tipo = passo.get('tipo', '')
@@ -417,6 +611,25 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
 
         try:
             if tipo == 'movimentacao':
+                # ── CERTIDÃO DE PRAZO (RAG #2538 etc.): passo 'movimentacao'
+                # com flags de prazo roteia para a MESMA maquinaria do
+                # dashboard (CumprimentoService), gerando a certidão de
+                # prazo (HTML) + observação com a data REAL da intimação.
+                if _rota_prazo_pre_activate(passo, rag):
+                    res_prazo = _executar_movimentacao_prazo(
+                        passo, mov, proc_num, texto, user, rag)
+                    # Expoe o prazo calculado p/ preencher placeholders do
+                    # passo seguinte (ex.: obs da intimacao_eletronica com
+                    # '00/00/00' / 'reu/autor/ambos especifico').
+                    ctx_prazo['calculado'] = True
+                    ctx_prazo.update(res_prazo.get('prazo') or {})
+                    if res_prazo.get('abortado'):
+                        print('   ⏭️ Certidão de prazo abortada (sem intimação da penhora '
+                              'ou prazo não decorrido) — ABORTANDO a sequência: nada a executar.')
+                        break  # não roda o passo seguinte (ex.: intimação)
+                    continue
+
+                # ── Mov581 GENÉRICA (passo 'movimentacao' normal, sem flags) ──
                 service = MovimentacaoService(user)
                 desc_mov = passo.get('descricao_mov', 'Cumprimento de Decisão')
                 record = service.importar(
@@ -813,7 +1026,8 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
 
                 ok = service.executar_com_intimacao(
                     processo_numero=proc_num,
-                    observacao=_preencher_observacao_eventos(obs or '', texto) or texto[:500],
+                    observacao=_preencher_observacao_eventos(
+                        _preencher_obs_prazo(obs, ctx_prazo) or '', texto) or texto[:500],
                     codigo_mov=str(passo.get('codigo_mov', '581')),
                     descricao_mov=passo.get('descricao_mov', 'Intimação'),
                     proc_projudi=proc_projudi,
@@ -902,7 +1116,8 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
 
                 ok = service.executar_com_intimacao(
                     processo_numero=proc_num,
-                    observacao=_preencher_observacao_eventos(obs or '', texto) or texto[:500],
+                    observacao=_preencher_observacao_eventos(
+                        _preencher_obs_prazo(obs, ctx_prazo) or '', texto) or texto[:500],
                     codigo_mov=str(passo.get('codigo_mov', '581')),
                     descricao_mov=passo.get('descricao_mov', 'Intimação'),
                     proc_projudi=proc_projudi,
@@ -1107,20 +1322,43 @@ def _executar_sequencia_rapido(sequencia, mov, proc_num, texto,
                             novas_partes = []
                             for nome_ata in nomes_ata[:5]:
                                 nome_limpo = re.sub(r'\s+', ' ', nome_ata).strip()
-                                # Tenta encontrar RG no Party existente
-                                rg_parte = ''
+                                # Tenta encontrar RG/CPF/filiação/telefone no Party existente
+                                rg_parte = ''; cpf_parte = ''
+                                npai_parte = ''; nmae_parte = ''; phone_parte = ''
                                 try:
                                     party_existente = Party.objects.filter(
                                         process=proc, name__icontains=nome_limpo[:30]
                                     ).first()
                                     if party_existente:
                                         rg_parte = party_existente.rg or ''
+                                        cpf_parte = party_existente.cpf_cnpj or ''
+                                        npai_parte = party_existente.nome_pai or ''
+                                        nmae_parte = party_existente.nome_mae or ''
+                                        phone_parte = party_existente.phone or ''
                                 except Exception:
                                     pass
+                                # Fallback: RG/filiação/CPF faltantes → busca no
+                                # EVENTO Nº 1 (qualificação da parte, ex.: TCO).
+                                if not (rg_parte and npai_parte and nmae_parte):
+                                    try:
+                                        q = _extrair_qualificacao_evento1(
+                                            session, proc, nome_limpo)
+                                        if not rg_parte:
+                                            rg_parte = q.get('rg', '') or ''
+                                        if not npai_parte:
+                                            npai_parte = q.get('nome_pai', '') or ''
+                                        if not nmae_parte:
+                                            nmae_parte = q.get('nome_mae', '') or ''
+                                        if not cpf_parte:
+                                            cpf_parte = q.get('cpf', '') or ''
+                                    except Exception:
+                                        pass
                                 novas_partes.append(SimpleNamespace(
                                     name=nome_ata, address='', email='',
-                                    phone='', cpf_cnpj='', rg=rg_parte,
-                                    nome_pai='', nome_mae=''))
+                                    phone=phone_parte
+                                          or (dados_ata or {}).get('telefone', ''),
+                                    cpf_cnpj=cpf_parte, rg=rg_parte,
+                                    nome_pai=npai_parte, nome_mae=nmae_parte))
                             if novas_partes:
                                 print(f'   🆕 {len(novas_partes)} autor(es) do fato da ata')
                                 partes = novas_partes
@@ -1599,6 +1837,82 @@ def _gerar_certidao_negativa(proc_num, autores, vitima, servidor, data):
         return None, None
 
 
+def _extrair_qualificacao_evento1(session, proc, nome):
+    """Busca a QUALIFICAÇÃO (filiação/RG/CPF) de uma parte no EVENTO Nº 1
+    (junção inicial — geralmente o TCO/boletim com a qualificação completa).
+
+    Retorna dict {'nome_pai','nome_mae','rg','cpf','nascimento'} — os campos
+    preenchidos no documento do evento 1; os que faltarem ficam vazios.
+
+    Usado p/ completar o Ofício CIAP quando a Party do autor do fato não têm
+    filiação/RG (Ivan 2026-08-21).
+    """
+    import re as _re
+    from bs4 import BeautifulSoup
+    out = {'nome_pai': '', 'nome_mae': '', 'rg': '', 'cpf': ''}
+    try:
+        url_proc = getattr(proc, 'projudi_url', None) or ''
+        m_url = _re.search(r'numeroProcesso=(\d+)', url_proc)
+        if not m_url:
+            return out
+        interno = m_url.group(1)
+        r = session.get(
+            'https://projudi.tjba.jus.br/projudi/listagens/'
+            'DadosProcesso?numeroProcesso=' + interno, timeout=30)
+        if r.status_code != 200 or len(r.text) < 500:
+            return out
+        from projudiProcessNavigator import ProcessoParser
+        parser = ProcessoParser(r.text)
+        movs, _ = parser.extrair_movimentacoes()
+        eh1 = next((m for m in movs if str(m.get('evento', '')) == '1'), None)
+        if not eh1 or not eh1.get('documentos'):
+            return out
+        # baixa o documento do evento 1
+        texto = ''
+        import fitz
+        for d in eh1['documentos'][:3]:
+            u = (d.get('url') or '').replace('/downloadarquivo?', '/DownloadArquivo?')
+            rr = session.get(u, timeout=40)
+            if rr.status_code != 200 or not rr.content:
+                continue
+            if rr.content.lstrip().startswith(b'%PDF'):
+                try:
+                    texto = ' '.join(p.get_text() for p in
+                                     fitz.open(stream=rr.content, filetype='pdf'))
+                except Exception:
+                    continue
+            else:
+                texto = BeautifulSoup(rr.text, 'html.parser').get_text(' ', strip=True)
+            if texto:
+                break
+        if not texto:
+            return out
+        # segmenta em blocos de qualificação "Nome Civil: <NOME> ..."
+        alvo = _re.escape(nome.upper().strip())
+        ini = _re.search(r'Nome Civil\s*:\s*' + alvo, texto, _re.I)
+        if not ini:
+            return out
+        bloco = texto[ini.start():]
+        prox = _re.search(r'Nome Civil\s*:', bloco[1:], _re.I)
+        if prox:
+            bloco = bloco[:prox.start() + 1]
+        f1 = _re.search(r'Filia[çc][ãa]o\s*1\s*:\s*([A-ZÀ-Ú][^\n;]{2,60})', bloco, _re.I)
+        f2 = _re.search(r'Filia[çc][ãa]o\s*2\s*:\s*([A-ZÀ-Ú][^\n;]{2,60})', bloco, _re.I)
+        rg = _re.search(r'\bRG\s*:\s*([A-Z0-9.-]{4,20})', bloco, _re.I)
+        cpf = _re.search(r'\bCPF\s*:\s*([\d./-]{8,20})', bloco, _re.I)
+        if f1:
+            out['nome_pai'] = _re.sub(r'\s+', ' ', f1.group(1)).strip()
+        if f2:
+            out['nome_mae'] = _re.sub(r'\s+', ' ', f2.group(1)).strip()
+        if rg:
+            out['rg'] = rg.group(1).strip()
+        if cpf:
+            out['cpf'] = cpf.group(1).strip()
+        return out
+    except Exception:
+        return out
+
+
 def _extrair_dados_ata(session, proc, mov=None):
     """Extrai dados da ata de audiência (autores do fato, prestação, parcelas).
 
@@ -1618,6 +1932,7 @@ def _extrair_dados_ata(session, proc, mov=None):
         'prestacao_descricao': '',
         'autores_do_fato': [],  # nomes extraídos da ata
         'vitima': '',           # nome da vítima extraído da ata
+        'telefone': '',         # telefone do autor do fato (p/ ofício CIAP)
         'ata_encontrada': False,
     }
 
@@ -1884,29 +2199,75 @@ def _extrair_dados_ata(session, proc, mov=None):
                         if dados.get('vitima'):
                             print(f'   👤 Vítima: {dados["vitima"][:60]}')
 
-                    # ── 5. Extrai tipo de prestação ──
-                    if 'pecuniária' in texto_lower or 'pecuniaria' in texto_lower:
-                        dados['prestacao_tipo'] = 'PECUNIÁRIA'
-                    elif any(x in texto_lower for x in
-                             ['serviço', 'servico', 'comunitário', 'comunitario']):
-                        dados['prestacao_tipo'] = 'SERVIÇO COMUNITÁRIO'
-
-                    val_match = re.search(r'R\$\s*([\d.,]+)', texto_limpo)
-                    if val_match:
-                        dados['prestacao_valor'] = val_match.group(1)
-
-                    parc_match = re.search(r'(\d+)\s*parcelas?', texto_lower)
-                    if not parc_match:
-                        # Tenta "em até X vezes", "X vezes", "parcelada em X vezes"
-                        parc_match = re.search(r'(?:em\s+at[eé]\s+)?(\d+)\s*vezes', texto_lower)
-                    if parc_match:
-                        dados['prestacao_parcelas'] = parc_match.group(1)
-
-                    desc_match = re.search(
-                        r'prestação\s*(.{100,500}?)(?:\.\s+[A-Z]|$)',
+                    # ── 5. Extrai tipo e descrição da prestação ──
+                    # A ata lista as PROPOSTAS do MP (1ª pecuniária, 2ª serviço
+                    # comunitário etc.); o que vale p/ o CIAP é a que o AUTOR
+                    # ACEITOU ("confirma que aceita a SEGUNDA proposta ofertada,
+                    # qual seja, ..."). Pega o trecho da ACEITAÇÃO, não a 1ª.
+                    m_aceita = re.search(
+                        r'aceita\s+a\s+([a-zçãéúû]+)\s+proposta.{0,80}?'
+                        r'qual\s+seja\s*[,:]?\s*(.*?)(?=Ademais|$)',
                         texto_limpo, re.I | re.DOTALL)
-                    if desc_match:
-                        dados['prestacao_descricao'] = desc_match.group(1).strip()
+                    if m_aceita and m_aceita.group(2).strip():
+                        aceitou = m_aceita.group(2).strip()
+                        dados['prestacao_descricao'] = aceitou
+                        # tipo derivado do que foi aceito (não da lista)
+                        if any(x in aceitou.lower() for x in (
+                                'pecuniária', 'pecuniaria', 'dinheiro',
+                                'em espécie', 'especie', 'pagamento',
+                                'valor de r$', 'cestas')):
+                            dados['prestacao_tipo'] = 'PECUNIÁRIA'
+                        elif any(x in aceitou.lower() for x in (
+                                'serviço', 'servico', 'comunidade',
+                                'comunitário', 'comunitario')):
+                            dados['prestacao_tipo'] = 'SERVIÇO COMUNITÁRIO'
+                        else:
+                            dados['prestacao_tipo'] = 'SERVIÇO COMUNITÁRIO'
+                        vm = re.search(r'R\$\s*([\d.,]+)', aceitou)
+                        if vm:
+                            dados['prestacao_valor'] = vm.group(1)
+                        pm = re.search(r'(\d+)\s*parcelas?', aceitou.lower())
+                        if not pm:
+                            pm = re.search(
+                                r'(?:em\s+at[eé]\s+)?(\d+)\s*vezes',
+                                aceitou.lower())
+                        if pm:
+                            dados['prestacao_parcelas'] = pm.group(1)
+                    else:
+                        # fallback: comportamento antigo (sem aceitação explícita)
+                        if 'pecuniária' in texto_lower or 'pecuniaria' in texto_lower:
+                            dados['prestacao_tipo'] = 'PECUNIÁRIA'
+                        elif any(x in texto_lower for x in
+                                 ['serviço', 'servico', 'comunitário', 'comunitario']):
+                            dados['prestacao_tipo'] = 'SERVIÇO COMUNITÁRIO'
+                        val_match = re.search(r'R\$\s*([\d.,]+)', texto_limpo)
+                        if val_match:
+                            dados['prestacao_valor'] = val_match.group(1)
+                        parc_match = re.search(r'(\d+)\s*parcelas?', texto_lower)
+                        if not parc_match:
+                            parc_match = re.search(
+                                r'(?:em\s+at[eé]\s+)?(\d+)\s*vezes', texto_lower)
+                        if parc_match:
+                            dados['prestacao_parcelas'] = parc_match.group(1)
+                        desc_match = re.search(
+                            r'prestação\s*(.{100,500}?)(?:\.\s+[A-Z]|$)',
+                            texto_limpo, re.I | re.DOTALL)
+                        if desc_match:
+                            dados['prestacao_descricao'] = desc_match.group(1).strip()
+
+                    # ── Telefone do autor do fato (p/ o ofício CIAP) ──
+                    # Prefere o telefone que o autor "informa"; senão o 1º
+                    # "telefone:". "(75) 3281-8372" é "Tel.:"/do tribunal, não casa
+                    # (busca a palavra "telefone", não "Tel.:").
+                    mt = re.search(
+                        r'informa[^\n]{0,40}?telefone\s*:?\s*'
+                        r'([0-9][\d\s().-]{6,20})', texto_limpo, re.I)
+                    if not mt:
+                        mt = re.search(r'telefone\s*:?\s*([0-9][\d\s().-]{6,20})',
+                                       texto_limpo, re.I)
+                    if mt:
+                        dados['telefone'] = re.sub(
+                            r'[\s().-]', '', mt.group(1))
 
                     tipo = dados.get('prestacao_tipo') or 'tipo nao identificado'
                     valor = dados.get('prestacao_valor', '')

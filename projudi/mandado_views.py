@@ -278,6 +278,7 @@ class MandadoRastrearView(LoginRequiredMixin, View):
         return HttpResponseRedirect(reverse('projudi:mandado_dashboard'))
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class RastrearExpedirView(LoginRequiredMixin, View):
     """
     POST /projudi/rastrear-expedir/
@@ -323,6 +324,7 @@ class RastrearExpedirView(LoginRequiredMixin, View):
         return HttpResponseRedirect(reverse('projudi:cumprimento_dashboard'))
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class RastrearMovimentacoesView(LoginRequiredMixin, View):
     """
     POST /projudi/rastrear-movimentacoes/
@@ -372,6 +374,7 @@ class OficioRastrearView(LoginRequiredMixin, View):
         return HttpResponseRedirect(reverse('projudi:oficio_dashboard'))
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class AutoRastrearToggleView(LoginRequiredMixin, View):
     """
     POST /projudi/auto-rastrear/toggle/

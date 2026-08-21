@@ -523,14 +523,35 @@ class CumprimentoService:
                      'email_condicional', 'movimentacao_simples'):
             try:
                 prazo_out = self.gerar_observacao_prazo(record)
-                # ── ABORTE: sem intimação da penhora ou prazo ainda não
-                # decorrido → NÃO executa mais nada; sai do cumprimento
-                # (nem o passo de intimação roda). ──
-                if prazo_out and (prazo_out.get('skip_penhora')
-                                  or prazo_out.get('decurso_pendente')):
+                # ── ABORTE (sem data): sem intimação da penhora exigida →
+                # NÃO executa nada; sai do cumprimento. ──
+                if prazo_out and prazo_out.get('skip_penhora'):
                     self._log(
                         record, 'decisao',
                         'Cumprimento ENCERRADO sem execução: '
+                        f'{prazo_out.get("mensagem", "")}')
+                    return {'status': prazo_out.get('status', 'erro'),
+                            'abortado': True,
+                            'mensagem': prazo_out.get('mensagem', '')}
+                # ── Prazo AINDA NÃO decorrido: se a data está CERTA
+                # (registrar_obs), registra a OBSERVAÇÃO (quando termina) num
+                # Mov581, SEM emitir a certidão; senão aborta (nada). ──
+                if prazo_out and prazo_out.get('decurso_pendente'):
+                    if (prazo_out.get('registrar_obs')
+                            and getattr(record, 'observacao_prazo', '')):
+                        ok = self._registrar_obs_prazo(record)
+                        self._log(
+                            record, 'decisao',
+                            'Prazo ainda não decorreu — observação de prazo '
+                            f'registrada: {prazo_out.get("mensagem", "")}')
+                        return {'status': 'pendente',
+                                'obs_registrada': bool(ok),
+                                'abortado': False,
+                                'mensagem': prazo_out.get('mensagem', '')}
+                    self._log(
+                        record, 'decisao',
+                        'Cumprimento ENCERRADO sem execução (prazo não '
+                        f'decorrido, sem data certa): '
                         f'{prazo_out.get("mensagem", "")}')
                     return {'status': prazo_out.get('status', 'erro'),
                             'abortado': True,
@@ -929,6 +950,49 @@ class CumprimentoService:
             resultado['data_inicio'] and resultado['prazo_dias'])
         return resultado
 
+    def _registrar_obs_prazo(self, record) -> bool:
+        """Registra a OBSERVAÇÃO de prazo em curso (Mov581) SEM emitir a certidão.
+
+        Usado quando o prazo ainda NÃO decorreu mas a data da intimação da
+        penhora está CERTA: registra um Mov581 com a observação (que indica
+        quando o prazo termina = data_decurso), sem gerar a certidão de decurso.
+        """
+        try:
+            from projudi.models import MovimentacaoRecord
+            from projudi.movimentacao_service import MovimentacaoService
+            mov, _ = MovimentacaoRecord.objects.get_or_create(
+                processo=record.processo,
+                numero_processo_cnj=record.numero_processo_cnj or '',
+                act_verb='registre-se',
+                defaults={
+                    'categoria': 'registro',
+                    'observacao': record.observacao_prazo or '',
+                    'codigo_movimentacao': '581',
+                    'descricao_movimentacao': 'Cumprimento de Decisão',
+                    'parte_nome': getattr(record, 'parte_nome', '') or '',
+                    'parte_papel': getattr(record, 'parte_papel', '') or '',
+                    'url_processo': getattr(record, 'url_processo', '') or '',
+                    'user': self.user,
+                    'rag_example': getattr(record, 'rag_example', None),
+                    'status': 'pendente',
+                },
+            )
+            record.status = 'processando'
+            record.save(update_fields=['status'])
+            mv_svc = MovimentacaoService(self.user)
+            ok = bool(mv_svc.executar(mov))
+            record.status = 'cumprido' if ok else 'falha'
+            record.save(update_fields=['status'])
+            return ok
+        except Exception as e:
+            try:
+                record.status = 'falha'
+                record.save(update_fields=['status'])
+            except Exception:
+                pass
+            self._log(record, 'erro', f'Erro ao registrar observação de prazo: {e}')
+            return False
+
     def gerar_observacao_prazo(self, record: CumprimentoRecord,
                                tenant=None, court=None, vara=None,
                                data_inicio=None, prazo_dias=None,
@@ -981,7 +1045,8 @@ class CumprimentoService:
         # não achou uma específica (origem != 'penhora'), NÃO executa mais nada.
         # A penhora pode estar só em PDF anexo — contar pelo fallback genérico
         # seria errado. Aborta (dispensado) antes de qualquer erro de prazo.
-        if cfg['exigir_intimacao_penhora'] and origem_tracker != 'penhora':
+        if cfg['exigir_intimacao_penhora'] and origem_tracker not in (
+                'penhora', 'precatoria'):
             self._log(
                 record, 'erro',
                 'SKIP: RAG exige intimação DA PENHORA, mas o tracker não achou '
@@ -1023,13 +1088,37 @@ class CumprimentoService:
         certidao_prazo_flag = cfg['expede_certidao_prazo']
 
         # ── DECURSO: se a RAG só expede a certidão de prazo quando o prazo
-        # DECORREU ('decurso_prazo'=True) e o prazo ainda não venceu → NÃO expede.
+        # DECORREU ('decurso_prazo'=True) e o prazo ainda não venceu → a
+        # certidão NÃO é expedida AINDA. Mas se a data da intimação está CERTA
+        # (data_tracker presente — p/ RAG com exigir_intimacao_penhora já
+        # garantida como 'penhora'), registra uma OBSERVAÇÃO (quando o prazo
+        # termina = data_decurso) num Mov581, em vez de não fazer nada.
         if cfg['decurso_prazo'] and not getattr(res, 'vencido', False):
             dec = getattr(res, 'data_decurso', None)
             dec_txt = dec.strftime('%d/%m/%Y') if dec else '?'
+            if data_tracker is not None:
+                # DATA CERTA → observação de prazo em curso (sem certidão).
+                observacao = self._texto_observacao_prazo(record, res, modo)
+                record.prazo_info = res.to_dict()
+                record.prazo_info['expede_certidao_prazo'] = False
+                record.prazo_info['observacao_prazo'] = cfg['observacao_prazo']
+                record.prazo_info['decurso_pendente'] = True
+                record.observacao_prazo = observacao
+                record.status = 'pendente'
+                record.save(update_fields=['prazo_info', 'observacao_prazo',
+                                           'status'])
+                self._log(record, 'decisao',
+                          f'Prazo ainda em andamento (decurso {dec_txt}) — '
+                          'certidão de decurso NÃO expedida; observação de '
+                          'prazo em curso registrada.')
+                return {'status': 'pendente', 'decurso_pendente': True,
+                        'registrar_obs': True,
+                        'observacao': observacao,
+                        'mensagem': f'Prazo não decorreu (decurso {dec_txt}). '
+                                    'Observação de prazo registrada.'}
             self._log(record, 'decisao',
                       f'Prazo ainda em andamento (decurso {dec_txt}) — certidão '
-                      'de decurso NÃO expedida.')
+                      'de decurso NÃO expedida (sem data certa da intimação).')
             record.status = 'pendente'
             record.save(update_fields=['status'])
             return {'status': 'pendente', 'decurso_pendente': True,
@@ -1171,9 +1260,170 @@ class CumprimentoService:
                         number_normalized__icontains=inter).first())
         return None
 
+    def _data_intimacao_via_precatoria(self, record):
+        """Baixa a carta precatória juntada (DadosProcesso) e OCR a página da
+        CERTIDÃO do Oficial de Justiça para extrair a data da penhora/intimação
+        (ex.: 'Resumo dos atos/diligências · 23/07/2026 16:00').
+
+        A data que está na certidão do Juízo deprecado (dentro do PDF escaneado)
+        é mais precisa do que a data genérica da movimentação de juntada.
+        Requer sessão Projudi + `rapidocr_onnxruntime` (OCR). Se não conseguir
+        ler, devolve (None, None) para o tracker cair no fallback (act_date).
+
+        Devolve (datetime.date, 'precatoria') ou (None, None).
+        """
+        import re as _re
+        from datetime import datetime as _dt
+        proc = self._processo_resolvido(record)
+        if proc is None:
+            return None, None
+        interno = str(getattr(record, 'processo', '') or '')
+        if not interno:
+            return None, None
+        try:
+            ss = self.projudi_service._get_session_from_cookies()
+            sess = ss[0] if isinstance(ss, (tuple, list)) else ss
+            if sess is None:
+                return None, None
+            url_proc = ('https://projudi.tjba.jus.br/projudi/listagens/'
+                        'DadosProcesso?numeroProcesso=' + interno)
+            r = sess.get(url_proc, timeout=25)
+            if r.status_code != 200 or len(r.text) < 500:
+                return None, None
+            from projudiProcessNavigator import ProcessoParser
+            parser = ProcessoParser(r.text)
+            movs, _ = parser.extrair_movimentacoes()
+            docs = []
+            for m in movs:
+                ato = str(m.get('ato', '') or '').lower()
+                if 'precat' in ato and (
+                        'juntada' in ato or 'cumprid' in ato
+                        or 'devolu' in ato or 'retorn' in ato):
+                    for d in (m.get('documentos') or []):
+                        u = (d.get('url') or '')
+                        nm = (d.get('nome') or '').lower()
+                        if u and (nm.endswith('.pdf') or '5002749' in nm
+                                  or 'despadec' in nm):
+                            docs.append((u, nm))
+            if not docs:
+                return None, None
+            # Prioriza o PDF da precatória DEVOLVIDA (menciona o nº da CP ou
+            # devolução) — é onde está a CERTIDÃO do Oficial de Justiça.
+            def _prio(item):
+                nm = item[1]
+                if '5002749' in nm or 'devolu' in nm:
+                    return 0
+                if 'despadec' in nm or 'eproc' in nm:
+                    return 1
+                return 2
+            docs.sort(key=_prio)
+            import fitz
+            if getattr(self, '_ocr_engine', None) is None:
+                from rapidocr_onnxruntime import RapidOCR
+                self._ocr_engine = RapidOCR()
+            engine = self._ocr_engine
+            for u, _nm in docs:
+                try:
+                    rr = sess.get(
+                        u.replace('/downloadarquivo?', '/DownloadArquivo?'),
+                        timeout=45)
+                    if rr.status_code != 200 or not rr.content:
+                        continue
+                    if not rr.content.lstrip().startswith(b'%PDF'):
+                        continue
+                    pdf = fitz.open(stream=rr.content, filetype='pdf')
+                except Exception:
+                    continue
+                try:
+                    for page in pdf:
+                        stext = page.get_text()
+                        low = stext.lower()
+
+                        def _encontrar_data(fonte):
+                            """Data do ato na certidão: prefere a que segue
+                            'Resumo dos atos/diligências', depois linhas de
+                            'compareci/penhora de bens/intimação', senão a 1ª
+                            data dd/mm/aaaa da página."""
+                            linhas = fonte.splitlines()
+                            idx_dilig = next(
+                                (i for i, ln in enumerate(linhas)
+                                 if any(k in ln.lower()
+                                        for k in ('resumo', 'diligenci'))),
+                                None)
+                            if idx_dilig is not None:
+                                for ln in linhas[idx_dilig:idx_dilig + 4]:
+                                    dm = _re.search(r'\d{2}/\d{2}/\d{4}', ln)
+                                    if dm:
+                                        try:
+                                            return _dt.strptime(
+                                                dm.group(0), '%d/%m/%Y').date()
+                                        except ValueError:
+                                            pass
+                            for ln in linhas:
+                                ll = ln.lower()
+                                if any(k in ll for k in (
+                                        'compareci', 'penhora de bens',
+                                        'intimacao de', 'procedi', 'intimado')):
+                                    dm = _re.search(r'\d{2}/\d{2}/\d{4}', ln)
+                                    if dm:
+                                        try:
+                                            return _dt.strptime(
+                                                dm.group(0), '%d/%m/%Y').date()
+                                        except ValueError:
+                                            pass
+                            dm = _re.search(r'\d{2}/\d{2}/\d{4}', fonte)
+                            if dm:
+                                try:
+                                    return _dt.strptime(
+                                        dm.group(0), '%d/%m/%Y').date()
+                                except ValueError:
+                                    pass
+                            return None
+
+                        def _eh_certidao(corpus):
+                            c = corpus.lower()
+                            # marcador forTe de certidão do Oficial de Justiça
+                            # (resumo dos atos / compareci) + ato de diligência.
+                            return (('resumo' in c or 'diligenci' in c
+                                     or 'compareci' in c)
+                                    and ('penhora' in c or 'intimac' in c
+                                         or 'dilig' in c or 'citac' in c))
+
+                        # 1) texto selecionável (PDF não escaneado)
+                        if _eh_certidao(stext):
+                            d = _encontrar_data(stext)
+                            if d:
+                                return d, 'precatoria'
+                        # 2) OCR (página escaneada/imagem — certidão real).
+                        #    Roda SEMPRE (o texto selecionável de página
+                        #    escaneada é só a assinatura eletrônica — não tem
+                        #    o marcador, mas a imagem pode ter a certidão).
+                        try:
+                            pix = page.get_pixmap(matrix=fitz.Matrix(2.5, 2.5))
+                            tmp = '/tmp/_prec_ocr_%d.png' % (page.number + 1)
+                            pix.save(tmp)
+                            res, _ = engine(tmp)
+                        except Exception:
+                            res = None
+                        if res:
+                            text = '\n'.join(
+                                [ln[1] for ln in res if isinstance(
+                                    ln, (list, tuple)) and len(ln) > 1])
+                            if _eh_certidao(text):
+                                d = _encontrar_data(text)
+                                if d:
+                                    return d, 'precatoria'
+                finally:
+                    try:
+                        pdf.close()
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+        return None, None
+
     def _data_intimacao_do_tracker(self, record: CumprimentoRecord):
         """Data REAL de início da intimação da parte, via rastreamento.
-
         Resolve o Process do cumprimento, lê as Movement do processo e
         escolhe a data de início do prazo:
           - fluxo eletronico/DJEN (e advogado): usa a DATA DE DISPONIBILIZAÇÃO
@@ -1212,7 +1462,31 @@ class CumprimentoService:
             ).order_by('-act_date').first()
             if auto_penhora and auto_penhora.act_date:
                 return auto_penhora.act_date, 'penhora'
-            # --- NOVO: Buscar intimação de SENTENÇA (pós-publicação) ---
+            # --- CARTA PRECATÓRIA: penhora do executado fora da comarca se
+            # concretiza por precatória. A JUNTADA/CUMPRIMENTO/DEVOLUÇÃO da
+            # precatória = retorno da diligência → base p/ contar o prazo.
+            # Origem 'precatoria' (aceita em RAGs com exigir_intimacao_penhora).
+            # Vem ANTES da sentença (é a penhora real via precatória).
+            # PRIORIDADE: lê a CERTIDÃO do Oficial de Justiça no PDF escaneado
+            # (data real da penhora/intimação, ex.: '23/07/2026'); só cai no
+            # act_date da movimentação se o OCR não conseguir.
+            precatorias = list(base.filter(
+                act_description__icontains='precat'   # pega 'precatória' (ó) e 'precatoria'
+            ).order_by('-act_date'))
+            if precatorias:
+                d_doc, _ = self._data_intimacao_via_precatoria(record)
+                if d_doc:
+                    return d_doc, 'precatoria'
+                for m in precatorias:
+                    d = (m.act_description or '').lower()
+                    if any(k in d for k in ('juntada', 'cumprid',
+                                            'devolu', 'retorn')):
+                        if m.act_date:
+                            return m.act_date, 'precatoria'
+                # sem sinal claro de retorno: usa a precatória mais recente
+                if precatorias[0].act_date:
+                    return precatorias[0].act_date, 'precatoria'
+            # --- SENTENÇA (pós-publicação) ---
             # Intimação após a publicação da sentença
             sentenca_intima = base.filter(
                 act_description__icontains='sentença'
