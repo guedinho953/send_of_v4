@@ -60,7 +60,8 @@
         </div>
     </div>
 
-    <form action="{% url 'projudi:sync' %}" method="get">
+    <form action="{% url 'projudi:sync' %}" method="post">
+        {% csrf_token %}
         <button type="submit" class="btn">Sincronizar Sessão com Firefox</button>
     </form>
 

@@ -32,7 +32,7 @@ def get_cookies_from_browser(domain='projudi.tjba.jus.br', browser='auto', profi
         return None
 
     if profile_path:
-        result = _try_sqlite_extract(profile_path, '(path: {profile_path})')
+        result = _try_sqlite_extract(profile_path, f'(path: {profile_path})')
         if result:
             return result
 

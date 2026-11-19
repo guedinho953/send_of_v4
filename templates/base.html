@@ -11,6 +11,9 @@
         header h1 { font-size: 20px; font-weight: 600; }
         header nav a { color: #cbd5e1; text-decoration: none; margin-left: 20px; font-size: 14px; }
         header nav a:hover { color: #fff; }
+        header nav form { display: inline; margin-left: 20px; }
+        header nav .nav-sync-btn { background: #ea580c; color: #fff; border: 0; border-radius: 6px; padding: 7px 12px; font-size: 13px; font-weight: 600; cursor: pointer; }
+        header nav .nav-sync-btn:hover { background: #c2410c; }
         .container { max-width: 1200px; margin: 24px auto; padding: 0 16px; }
         .card { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
@@ -43,6 +46,14 @@
         <nav>
             <a href="{% url 'landing' %}">Inicio</a>
             <a href="{% url 'dashboard' %}">Dashboard</a>
+            {% if request.user.is_authenticated %}
+                <form method="post" action="{% url 'projudi:sync' %}">
+                    {% csrf_token %}
+                    <button type="submit" class="nav-sync-btn" title="Captura os cookies do Firefox e sincroniza a sessão do Projudi">
+                        🔄 Sincronizar Projudi
+                    </button>
+                </form>
+            {% endif %}
             <a href="{% url 'projudi:oficio_dashboard' %}">Oficios</a>
             <a href="{% url 'projudi:retorno_dashboard' %}">Retornos</a>
             {% if request.user.is_authenticated %}

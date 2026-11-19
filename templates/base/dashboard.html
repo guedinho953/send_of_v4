@@ -9,8 +9,14 @@
         header h1 { font-size: 20px; font-weight: 600; margin: 0; }
         header nav a { color: #cbd5e1; text-decoration: none; margin-left: 20px; font-size: 14px; }
         header nav a:hover { color: #fff; }
+        header nav form { display: inline; margin-left: 20px; }
+        header nav .nav-sync-btn { background: #ea580c; color: #fff; border: 0; border-radius: 6px; padding: 7px 12px; font-size: 13px; font-weight: 600; cursor: pointer; }
+        header nav .nav-sync-btn:hover { background: #c2410c; }
         .container { max-width: 1200px; margin: 24px auto; padding: 0 16px; }
         .alert { background: #eff6ff; border-left: 4px solid #2563eb; padding: 12px 16px; border-radius: 6px; margin-bottom: 20px; }
+        .alert-success { background: #dcfce7; border-left-color: #22c55e; }
+        .alert-error { background: #fee2e2; border-left-color: #ef4444; }
+        .alert-warning { background: #fef3c7; border-left-color: #f59e0b; }
         .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 20px; }
         .card { background: #fff; border-radius: 8px; padding: 20px; border-left: 4px solid #2563eb; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
         .card h3 { margin-top: 0; color: #374151; font-size: 16px; }
@@ -36,12 +42,24 @@
     <nav>
         <a href="{% url 'landing' %}">Inicio</a>
         <a href="{% url 'dashboard' %}">Dashboard</a>
+        <form method="post" action="{% url 'projudi:sync' %}">
+            {% csrf_token %}
+            <button type="submit" class="nav-sync-btn" title="Captura os cookies do Firefox e sincroniza a sessão do Projudi">
+                🔄 Sincronizar Projudi
+            </button>
+        </form>
         <a href="{% url 'admin:index' %}">Admin</a>
         <a href="{% url 'accounts:logout' %}">Sair</a>
     </nav>
 </header>
 
 <div class="container">
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+
     <div class="alert">
         Bem-vindo, <strong>{{ request.user.full_name|default:request.user.email|default:"Visitante" }}</strong>!
         Voce esta no painel principal do sistema.
@@ -66,11 +84,15 @@
         <div class="card" style="border-left-color: #d97706;">
             <h3>Projudi</h3>
             <p>
-                <span class="status-dot status-inactive"></span>
-                Sessao: Nao sincronizada
+                <span class="status-dot {% if projudi_session_active %}status-active{% else %}status-inactive{% endif %}"></span>
+                Sessao: {% if projudi_session_active %}Ativa{% else %}Nao sincronizada{% endif %}
             </p>
             <p>Sessao, movimentacoes e integracao com o Projudi.</p>
-            <a href="{% url 'projudi:sync_session' %}" class="btn btn-orange">Sincronizar Sessao</a>
+            <form method="post" action="{% url 'projudi:sync' %}" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-orange">🔄 Sincronizar Sessao</button>
+            </form>
+            <a href="{% url 'projudi:sync_session' %}" class="btn btn-outline">Detalhes</a>
             <a href="{% url 'projudi:movimentacoes' %}" class="btn">Movimentacoes</a>
         </div>
 

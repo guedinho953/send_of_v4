@@ -12,43 +12,51 @@ from .services import ProjudiService
 
 class SyncSessionView(LoginRequiredMixin, View):
     """
-    Sincroniza cookies do Firefox com o Django.
-    O usuario deve estar logado no Projudi no Firefox antes de clicar.
+    Captura os cookies do Firefox (ou do JSON já capturado) e sincroniza
+    a sessão do Projudi no banco do Django.
+
+    Aceita GET (link antigo) e POST (botão com CSRF).
     """
     def get(self, request):
+        return self._sincronizar(request)
+
+    def post(self, request):
+        return self._sincronizar(request)
+
+    def _sincronizar(self, request):
         service = ProjudiService(request.user)
         try:
-            bot = service.get_bot()
-            bot.criar_sessao()
-            
-            if not bot.testar_login():
-                messages.error(request, 
-                    "Nao foi possivel capturar a sessao. "
-                    "Certifique-se de estar logado no Projudi no Firefox."
+            # Lê o cookies.json, tenta o PowerShell/Firefox e valida a
+            # sessão no Projudi. O método já atualiza o ProjudiSession.
+            resultado = service._get_session_from_cookies()
+
+            if not resultado:
+                messages.error(
+                    request,
+                    "Nao foi possivel capturar a sessao. Abra o Firefox, "
+                    "faca login no Projudi e clique em Sincronizar novamente."
                 )
                 return HttpResponseRedirect(reverse('projudi:sync_session'))
-            
-            # Salva/Atualiza sessao no banco
-            cookies = bot.exportar_cookies()
-            session, created = ProjudiSession.objects.update_or_create(
+
+            sessao, cookies = resultado
+            ProjudiSession.objects.update_or_create(
                 user=request.user,
                 defaults={
                     'cookies': cookies,
                     'status': 'active',
-                    'tenant': request.user.tenant,
-                    'session_data': {'user_agent': bot.session.headers.get('User-Agent')},
+                    'tenant': getattr(request.user, 'tenant', None),
                 }
             )
-            
-            # Inicia keep-alive
-            bot.iniciar_keep_alive()
-            
-            msg = "Sessao sincronizada com sucesso!" if created else "Sessao atualizada!"
-            messages.success(request, msg)
-            
+
+            messages.success(
+                request,
+                "Sessao do Projudi sincronizada com sucesso! "
+                f"{len(cookies)} cookies capturados."
+            )
+
         except Exception as e:
             messages.error(request, f"Erro ao sincronizar: {str(e)}")
-        
+
         return HttpResponseRedirect(reverse('projudi:sync_session'))
 
 
