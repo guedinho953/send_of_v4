@@ -98,6 +98,12 @@
         <div class="info-label">Status Retorno</div>
         <div class="info-value">{{ oficio.get_status_retorno_display }}</div>
     </div>
+    <div class="info-card">
+        <div class="info-label">Baixado em</div>
+        <div class="info-value">
+            {% if oficio.baixado_em %}{{ oficio.baixado_em|date:"d/m/Y H:i" }}{% else %}Nao baixado{% endif %}
+        </div>
+    </div>
 </div>
 
 <!-- URLs -->

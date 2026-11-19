@@ -35,6 +35,7 @@ class OficioDashboardView(LoginRequiredMixin, TemplateView):
         context['enviados_para_juntar'] = qs.filter(status='enviado').count()
         context['enviados'] = qs.filter(status__in=['enviado', 'juntado']).count()
         context['juntados'] = qs.filter(status='juntado').count()
+        context['baixados'] = qs.filter(baixado_em__isnull=False).count()
         context['falhas'] = qs.filter(status__in=['falhou_email', 'falhou_juntada']).count()
         context['dispensados'] = qs.filter(status='dispensado').count()
         context['juntados_para_dispensar'] = qs.filter(status='juntado').count()
@@ -50,6 +51,10 @@ class OficioDashboardView(LoginRequiredMixin, TemplateView):
         status_filter = self.request.GET.get('status', '')
         if status_filter == 'expedido':
             qs = qs.filter(status__in=['enviado', 'juntado'])
+        elif status_filter == 'baixado':
+            qs = qs.filter(baixado_em__isnull=False)
+        elif status_filter == 'falhas':
+            qs = qs.filter(status__in=['falhou_email', 'falhou_juntada'])
         elif status_filter and status_filter in dict(OficioRecord.STATUS_CHOICES):
             qs = qs.filter(status=status_filter)
 
@@ -78,11 +83,22 @@ class OficioListView(LoginRequiredMixin, ListView):
     paginate_by = 20
 
     def get_queryset(self):
-        return OficioRecord.objects.filter(user=self.request.user).order_by('-created_at')
+        qs = OficioRecord.objects.filter(user=self.request.user)
+        status_filter = self.request.GET.get('status', '')
+        if status_filter == 'expedido':
+            qs = qs.filter(status__in=['enviado', 'juntado'])
+        elif status_filter == 'baixado':
+            qs = qs.filter(baixado_em__isnull=False)
+        elif status_filter == 'falhas':
+            qs = qs.filter(status__in=['falhou_email', 'falhou_juntada'])
+        elif status_filter and status_filter in dict(OficioRecord.STATUS_CHOICES):
+            qs = qs.filter(status=status_filter)
+        return qs.order_by('-created_at')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['session_active'] = self._session_ativa()
+        context['status_atual'] = self.request.GET.get('status', '')
         return context
 
     def _session_ativa(self):

@@ -38,6 +38,7 @@
     .tag-falhou_juntada { background: #fce7f3; color: #9d174d; }
     .tag-ignorado { background: #e5e7eb; color: #374151; }
     .tag-dispensado { background: #f3e8ff; color: #6b21a8; }
+    .tag-baixado { background: #fee2e2; color: #991b1b; }
     .oficio-actions { display: flex; gap: 6px; margin-top: 10px; }
     .btn-sm { padding: 5px 12px; font-size: 12px; border-radius: 5px; }
     .bulk-bar { background: #f3f4f6; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; display: flex; gap: 10px; align-items: center; }
@@ -82,6 +83,10 @@
     <div class="stat-card juntados">
         <h4>{{ juntados }}</h4>
         <p>Juntados</p>
+    </div>
+    <div class="stat-card" style="border-left-color: #dc2626;">
+        <h4>{{ baixados }}</h4>
+        <p>Baixados</p>
     </div>
     <div class="stat-card falhas">
         <h4>{{ falhas }}</h4>
@@ -191,7 +196,7 @@
             🔍 Rastrear & Expedir Ofícios (RAG)
         </button>
     </form>
-    <a href="{% url 'projudi:oficio_list' %}" class="btn btn-outline">📋 Ver Lista Completa</a>
+    <a href="{% url 'projudi:oficio_list' %}{% if request.GET.status %}?status={{ request.GET.status }}{% endif %}" class="btn btn-outline">📋 Ver Lista Completa</a>
 </div>
 
 <!-- Filtros -->
@@ -201,7 +206,8 @@
     <a href="?status=expedido" class="filtro-btn {% if request.GET.status == 'expedido' %}active{% endif %}">Expedidos</a>
     <a href="?status=enviado" class="filtro-btn {% if request.GET.status == 'enviado' %}active{% endif %}">Enviados</a>
     <a href="?status=juntado" class="filtro-btn {% if request.GET.status == 'juntado' %}active{% endif %}">Juntados</a>
-    <a href="?status=falhou_email" class="filtro-btn {% if request.GET.status == 'falhou_email' %}active{% endif %}">Falhas</a>
+    <a href="?status=baixado" class="filtro-btn {% if request.GET.status == 'baixado' %}active{% endif %}">Baixados</a>
+    <a href="?status=falhas" class="filtro-btn {% if request.GET.status == 'falhas' %}active{% endif %}">Falhas</a>
     <a href="?status=dispensado" class="filtro-btn {% if request.GET.status == 'dispensado' %}active{% endif %}">Dispensados</a>
 </div>
 
@@ -212,7 +218,8 @@
         {% elif request.GET.status == 'expedido' %}📤 Expedidos
         {% elif request.GET.status == 'enviado' %}📤 Enviados
         {% elif request.GET.status == 'juntado' %}✅ Juntados
-        {% elif request.GET.status == 'falhou_email' %}❌ Falhas
+        {% elif request.GET.status == 'baixado' %}✅ Baixados
+        {% elif request.GET.status == 'falhas' %}❌ Falhas
         {% elif request.GET.status == 'dispensado' %}🚫 Dispensados
         {% else %}📋 Todos os Oficios
         {% endif %}
@@ -242,6 +249,7 @@
                     </div>
                 </div>
                 <span class="tag-status tag-{{ o.status }}">{{ o.get_status_display }}</span>
+                {% if o.baixado_em %}<span class="tag-status tag-baixado">Baixado</span>{% endif %}
             </div>
             <div class="oficio-destino">
                 Para: {{ o.email_destino|default:"E-mail nao definido" }}
@@ -258,6 +266,9 @@
                     <span style="color:#dc2626;">&#9888; Falha no envio de e-mail</span>
                 {% elif o.status == 'falhou_juntada' %}
                     <span style="color:#9d174d;">&#9888; Enviado mas nao juntado</span>
+                {% endif %}
+                {% if o.baixado_em %}
+                    <br><span style="color:#dc2626;">&#9989; Baixado em {{ o.baixado_em|date:"d/m/Y H:i" }}</span>
                 {% endif %}
                 {% if o.msg_id %}<br><small>ID: {{ o.msg_id|slice:":30" }}</small>{% endif %}
             </div>

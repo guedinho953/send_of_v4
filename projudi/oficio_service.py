@@ -1111,7 +1111,8 @@ class OficioService:
 
         # Sucesso
         record.status_retorno = 'processado'
-        record.save(update_fields=['status_retorno'])
+        record.baixado_em = timezone.now()
+        record.save(update_fields=['status_retorno', 'baixado_em'])
 
         self._log(record, 'info',
             f"Baixa realizada em {hoje} via MarcaRecebimento.",

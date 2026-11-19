@@ -11,6 +11,7 @@
     .tag-falhou_email { background: #fee2e2; color: #991b1b; }
     .tag-falhou_juntada { background: #fce7f3; color: #9d174d; }
     .tag-ignorado { background: #e5e7eb; color: #374151; }
+    .tag-baixado { background: #fee2e2; color: #991b1b; }
     .oficio-row:hover { background: #f9fafb; }
     .btn-green { background: #059669; }
     .btn-green:hover { background: #047857; }
@@ -21,12 +22,26 @@
     .paginacao a { background: #2563eb; color: #fff; }
     .paginacao a:hover { background: #1d4ed8; }
     .paginacao .atual { background: #e5e7eb; color: #374151; }
+    .filtro-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .filtro-btn { padding: 6px 14px; border-radius: 20px; font-size: 13px; border: 1px solid #e5e7eb; background: #fff; color: #374151; cursor: pointer; text-decoration: none; }
+    .filtro-btn.active { background: #2563eb; color: white; border-color: #2563eb; }
+    .filtro-btn:hover:not(.active) { background: #f9fafb; }
 </style>
 {% endblock %}
 
 {% block content %}
 
-<h1 class="section-title">Todos os Oficios</h1>
+<h1 class="section-title">
+    {% if status_atual == 'pendente' %}⏳ Pendentes
+    {% elif status_atual == 'expedido' %}📤 Expedidos
+    {% elif status_atual == 'enviado' %}📤 Enviados
+    {% elif status_atual == 'juntado' %}✅ Juntados
+    {% elif status_atual == 'baixado' %}✅ Baixados
+    {% elif status_atual == 'falhas' %}❌ Falhas
+    {% elif status_atual == 'dispensado' %}🚫 Dispensados
+    {% else %}📋 Todos os Oficios
+    {% endif %}
+</h1>
 
 <div style="margin-bottom:16px;">
     <a href="{% url 'projudi:oficio_dashboard' %}" class="btn btn-outline">&larr; Voltar ao Dashboard</a>
@@ -34,6 +49,17 @@
         {% csrf_token %}
         <button type="submit" class="btn btn-orange">Sincronizar</button>
     </form>
+</div>
+
+<div class="filtro-bar">
+    <a href="?status=" class="filtro-btn {% if not status_atual %}active{% endif %}">Todos</a>
+    <a href="?status=pendente" class="filtro-btn {% if status_atual == 'pendente' %}active{% endif %}">Pendentes</a>
+    <a href="?status=expedido" class="filtro-btn {% if status_atual == 'expedido' %}active{% endif %}">Expedidos</a>
+    <a href="?status=enviado" class="filtro-btn {% if status_atual == 'enviado' %}active{% endif %}">Enviados</a>
+    <a href="?status=juntado" class="filtro-btn {% if status_atual == 'juntado' %}active{% endif %}">Juntados</a>
+    <a href="?status=baixado" class="filtro-btn {% if status_atual == 'baixado' %}active{% endif %}">Baixados</a>
+    <a href="?status=falhas" class="filtro-btn {% if status_atual == 'falhas' %}active{% endif %}">Falhas</a>
+    <a href="?status=dispensado" class="filtro-btn {% if status_atual == 'dispensado' %}active{% endif %}">Dispensados</a>
 </div>
 
 <div class="card">
@@ -44,6 +70,7 @@
                 <th>Processo</th>
                 <th>Destino</th>
                 <th>Status</th>
+                <th>Baixado em</th>
                 <th>Data Importacao</th>
                 <th>Acao</th>
             </tr>
@@ -62,7 +89,9 @@
                 <td>{{ o.email_destino|default:"N/D" }}</td>
                 <td>
                     <span class="tag-status tag-{{ o.status }}">{{ o.get_status_display }}</span>
+                    {% if o.baixado_em %}<span class="tag-status tag-baixado">Baixado</span>{% endif %}
                 </td>
+                <td>{{ o.baixado_em|date:"d/m/Y H:i"|default:"-" }}</td>
                 <td>{{ o.created_at|date:"d/m/Y H:i" }}</td>
                 <td>
                     <a href="{% url 'projudi:oficio_detail' o.pk %}" class="btn btn-sm btn-outline">Abrir</a>
@@ -76,7 +105,7 @@
             </tr>
             {% empty %}
             <tr>
-                <td colspan="6" style="text-align:center; color:#6b7280; padding:30px;">
+                <td colspan="7" style="text-align:center; color:#6b7280; padding:30px;">
                     Nenhum oficio encontrado.
                 </td>
             </tr>
@@ -88,13 +117,13 @@
 {% if is_paginated %}
 <div class="paginacao">
     {% if page_obj.has_previous %}
-        <a href="?page=1">Primeira</a>
-        <a href="?page={{ page_obj.previous_page_number }}">Anterior</a>
+        <a href="?page=1{% if status_atual %}&status={{ status_atual }}{% endif %}">Primeira</a>
+        <a href="?page={{ page_obj.previous_page_number }}{% if status_atual %}&status={{ status_atual }}{% endif %}">Anterior</a>
     {% endif %}
     <span class="atual">Pagina {{ page_obj.number }} de {{ paginator.num_pages }}</span>
     {% if page_obj.has_next %}
-        <a href="?page={{ page_obj.next_page_number }}">Proxima</a>
-        <a href="?page={{ paginator.num_pages }}">Ultima</a>
+        <a href="?page={{ page_obj.next_page_number }}{% if status_atual %}&status={{ status_atual }}{% endif %}">Proxima</a>
+        <a href="?page={{ paginator.num_pages }}{% if status_atual %}&status={{ status_atual }}{% endif %}">Ultima</a>
     {% endif %}
 </div>
 {% endif %}

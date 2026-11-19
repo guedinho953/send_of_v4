@@ -42,8 +42,8 @@ class JudgeAdmin(admin.ModelAdmin):
 @admin.register(OficioRecord)
 class OficioRecordAdmin(admin.ModelAdmin):
     list_display = ['numero_oficio', 'processo', 'email_destino', 'status',
-                    'status_retorno', 'data_envio', 'data_retorno', 'created_at']
-    list_filter = ['status', 'status_retorno', 'data_envio', 'created_at']
+                    'status_retorno', 'baixado_em', 'data_envio', 'data_retorno', 'created_at']
+    list_filter = ['status', 'status_retorno', 'baixado_em', 'data_envio', 'created_at']
     search_fields = ['numero_oficio', 'processo', 'email_destino', 'assunto_retorno']
     readonly_fields = ['created_at', 'updated_at']
 

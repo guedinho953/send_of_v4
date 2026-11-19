@@ -122,6 +122,7 @@ class OficioRecord(TimeStampedModel):
     email_destino = models.EmailField('E-mail Destino', blank=True)
     assunto = models.CharField('Assunto', max_length=300, blank=True)
     status = models.CharField('Status', max_length=20, choices=STATUS_CHOICES, default='pendente')
+    baixado_em = models.DateTimeField('Baixado em', null=True, blank=True)
 
     # URLs Projudi
     url_oficio = models.URLField('URL Ofício', blank=True)
@@ -184,6 +185,10 @@ class OficioRecord(TimeStampedModel):
     @property
     def dispensado(self):
         return self.status == 'dispensado'
+
+    @property
+    def baixado(self):
+        return self.baixado_em is not None
 
     @property
     def tem_retorno(self):
