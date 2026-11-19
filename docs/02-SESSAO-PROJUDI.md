@@ -91,12 +91,27 @@ Só funciona no Windows nativo. No WSL não acha JSESSIONID.
 
 ### Funcionamento
 
+O script lê o `cookies.sqlite` do Firefox **junto com os arquivos
+`cookies.sqlite-wal` e `cookies.sqlite-shm`**. Isso é essencial quando o
+Firefox está aberto: os cookies recém-criados podem estar apenas no WAL e
+o `browser_cookie3` sozinho não os enxerga.
+
+Pode rodar no Windows nativo ou no WSL. No WSL, além do perfil Linux, ele
+procura os perfis do Firefox do Windows em
+`/mnt/c/Users/*/AppData/Roaming/Mozilla/Firefox/Profiles/*/cookies.sqlite`
+e grava em `/mnt/d/Projudi/cookies.json`.
+
 ```python
 DOMAIN = 'projudi.tjba.jus.br'
 OUTPUT_FILE = Path("D:/Projudi/cookies.json")
 
-cj = browser_cookie3.firefox(domain_name=DOMAIN)
-cookies = {c.name: c.value for c in cj}
+# Copia cookies.sqlite + -wal + -shm para uma pasta temporária
+# e consulta a tabela moz_cookies.
+cookies = _extract_firefox_sqlite()
+
+# Fallback para cookies de sessão no sessionstore e outros navegadores.
+if 'JSESSIONID' not in cookies:
+    cookies.update(browser_cookie3.firefox(domain_name=DOMAIN))
 ```
 
 ### Modos de execução
@@ -104,9 +119,25 @@ cookies = {c.name: c.value for c in cj}
 | Modo | Comando | Comportamento |
 |------|---------|---------------|
 | Interativo | `python capture_cookies_windows.py` | Mostra output + keep-alive a cada 60s |
-| Silencioso | `python capture_cookies_windows.py --quiet` | Captura e sai (usado pelo Django) |
+| Silencioso | `python capture_cookies_windows.py --quiet` | Captura e sai (usado pelo Django e pelo `.bat`) |
 
-### BUG CORRIGIDO
+O `.bat` usa `%~dp0` e chama o `.py` com `--quiet`, então funciona mesmo
+quando o cmd abre em outro diretório.
+
+### BUG CORRIGIDO — cookies no WAL do Firefox
+
+**Sintoma:** Firefox aberto e logado no Projudi, mas o script capturava
+`0 cookies`; o `D:\Projudi\cookies.json` não era atualizado.
+
+**Causa:** o `browser_cookie3` copia apenas o `cookies.sqlite` principal.
+Com o Firefox aberto, o `JSESSIONID` recém-criado pode estar somente em
+`cookies.sqlite-wal`. O banco principal fica sem nenhum cookie do Projudi.
+
+**Correção:** o script agora copia `cookies.sqlite`, `-wal` e `-shm` antes
+de consultar. Também exige `JSESSIONID` para gravar o JSON e retorna erro
+se a sessão não estiver disponível.
+
+### BUG CORRIGIDO — modo `--quiet`
 
 **Problema:** Versão anterior entrava em `while True` mesmo com `--quiet`,
 fazendo o subprocess.run timeout após 30s.
@@ -174,8 +205,14 @@ O sistema automaticamente:
 3. **JSESSIONID expira rápido**: Se ficar muito tempo sem acessar o Projudi,
    expira no servidor. Precisa re-capturar com Firefox aberto.
 
-4. **Script no lugar errado**: O `capture_cookies_windows.py` precisa estar em
-   `D:\Projudi\` (não dentro do WSL). Sempre copiar após modificar.
+4. **Rodar com o Firefox errado**: o Firefox logado no Projudi é o do
+   Windows. O script procura esse perfil em `/mnt/c` quando roda no WSL.
+   O `.bat` do projeto usa `%~dp0`, então funciona mesmo quando o cmd abre
+   em outro diretório.
+
+5. **Cópia em `D:\Projudi`**: o `powershell.exe` automático do
+   `projudi/services.py` chama `D:\Projudi\capture_cookies_windows.py`.
+   Mantenha essa cópia igual à de `scripts/` após alterar o script.
 
 ---
 

@@ -144,14 +144,30 @@ class ProjudiBot:
 
     #  valida login REAL (não só texto login)
     def testar_login(self):
+        r = self.session.get(self.BASE_URL, allow_redirects=True)
+        url = r.url.lower()
+        texto = r.text.lower()
 
-        r = self.session.get(self.BASE_URL)
-
-        if "login" in r.url.lower():
+        if "login" in url:
             print(" Não autenticado")
             return False
 
-        if "login" in r.text.lower():
+        # A página autenticada pode conter a palavra "login" em links,
+        # scripts ou menus. Só trate como login se houver os campos do
+        # formulário de autenticação.
+        campos_login = (
+            'name="login"', "name='login'",
+            'name="senha"', "name='senha'",
+        )
+        if any(campo in texto for campo in campos_login):
+            print(" Possível sessão inválida")
+            return False
+
+        if "expirou" in texto[:800]:
+            print(" Sessão expirada")
+            return False
+
+        if len(r.text) < 500:
             print(" Possível sessão inválida")
             return False
 
