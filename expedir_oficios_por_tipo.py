@@ -105,6 +105,7 @@ BPM20 = {
     'email': 'bpm20.cmd@pm.ba.gov.br',
     'email_copia': 'anilton.estevam@pm.ba.gov.br',
     'link_audiencia': 'https://audinplay.tjba.jus.br/',
+    'finalidade': 'participar',
 }
 
 MESES_PT = {
@@ -713,6 +714,7 @@ def _gerar_conteudo_20bpm(item, user, http_session,
         'policiais': policiais_texto,
         'data_audiencia': data_audiencia,
         'link_audiencia': BPM20['link_audiencia'],
+        'finalidade': BPM20['finalidade'],
         'juiz': juiz,
         'assinante_nome': assinante_nome or 'IVAN GUEDES DA SILVA',
         'assinante_cargo': assinante_cargo or 'SECRETÁRIO(SUBSTITUTO)',

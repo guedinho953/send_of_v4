@@ -161,6 +161,10 @@ Para um novo tipo de ofício:
   - junta todos os policiais encontrados em um único ofício;
   - se o despacho pedir **apenas uma testemunha específica** (ex.: “ouça-se
     apenas a testemunha FULANO”), gera o ofício somente com essa pessoa.
+- Corpo do ofício:
+  - após o link da audiência, pula um parágrafo;
+  - usa `FINALIDADE: {{ finalidade }} da Audiência...`;
+  - `finalidade` padrão: `participar` (pode ser alterada no futuro).
 - Destinatário fixo:
   - `Ten Cel PM EMÍLIA SILVA COSTA NETA`;
   - `Comandante do 20º BPM`;
