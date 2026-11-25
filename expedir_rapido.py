@@ -1913,6 +1913,57 @@ def _extrair_qualificacao_evento1(session, proc, nome):
         return out
 
 
+def _formatar_telefone(telefone):
+    """Formata telefone no padrão (75) 98898 - 5497."""
+    if not telefone:
+        return ''
+
+    original = str(telefone).strip()
+    digitos = re.sub(r'\D', '', original)
+    if not digitos:
+        return original
+
+    # Remove código do país (55) quando vier junto.
+    if digitos.startswith('55') and len(digitos) > 11:
+        digitos = digitos[2:]
+
+    if len(digitos) == 11:      # celular com DDD
+        return f'({digitos[:2]}) {digitos[2:7]} - {digitos[7:]}'
+    if len(digitos) == 10:      # fixo com DDD
+        return f'({digitos[:2]}) {digitos[2:6]} - {digitos[6:]}'
+    if len(digitos) == 9:       # celular sem DDD
+        return f'{digitos[:5]} - {digitos[5:]}'
+    if len(digitos) == 8:       # fixo sem DDD
+        return f'{digitos[:4]} - {digitos[4:]}'
+
+    return original
+
+
+def _limpar_descricao_ata(texto):
+    """Corta o texto da ata no ponto em que começa o que não é a obrigação.
+
+    Ex.: "Faço constar o requerimento da vítima..." e as assinaturas/
+    validações eletrônicas não devem entrar no corpo do ofício.
+    """
+    if not texto:
+        return ''
+
+    padroes = (
+        r'fa[cç]o\s+constar',
+        r'documento\s+assinado\s+eletronicamente',
+        r'assinado\s+eletronicamente\s+por',
+        r'c[óo]digo\s+de\s+valida[cç][ãa]o',
+        r'p[áa]gina\s+\d+',
+    )
+    fim = len(texto)
+    for padrao in padroes:
+        m = re.search(padrao, texto, re.I)
+        if m:
+            fim = min(fim, m.start())
+
+    return texto[:fim].strip(' \n\t.;,')
+
+
 def _extrair_dados_ata(session, proc, mov=None):
     """Extrai dados da ata de audiência (autores do fato, prestação, parcelas).
 
@@ -1961,7 +2012,7 @@ def _extrair_dados_ata(session, proc, mov=None):
             texto_evento = tds[1].get_text(' ', strip=True).lower()
             if not any(x in texto_evento for x in
                        ['audiência', 'audiencia', 'termo de audiência',
-                        'termo de audiencia', 'junta', 'termo']):
+                        'termo de audiencia', 'audin', 'junta', 'termo']):
                 continue
 
             id_mov = None
@@ -1981,9 +2032,12 @@ def _extrair_dados_ata(session, proc, mov=None):
                 # Se o evento já é de audiência, processa TODOS os documentos
                 # Senão, só processa se o nome conter "ata" ou "audiência"
                 evento_eh_audiencia = any(x in texto_evento for x in
-                    ['audiência', 'audiencia', 'termo de audiência', 'termo de audiencia'])
+                    ['audiência', 'audiencia', 'termo de audiência',
+                     'termo de audiencia', 'audin'])
+                # Alguns cartórios nomeiam a ata como "audin..." (abreviação
+                # de audiência). Inclui esse padrão para não pular a ata.
                 if not evento_eh_audiencia and not any(x in nome_doc for x in
-                    ['ata', 'audiência', 'audiencia']):
+                    ['ata', 'audiência', 'audiencia', 'audin']):
                     continue
 
                 href = a['href']
@@ -2255,6 +2309,13 @@ def _extrair_dados_ata(session, proc, mov=None):
                         if desc_match:
                             dados['prestacao_descricao'] = desc_match.group(1).strip()
 
+                    # Remove "Faço constar o requerimento da vítima...",
+                    # assinaturas e dados de validação do corpo do ofício.
+                    if dados.get('prestacao_descricao'):
+                        dados['prestacao_descricao'] = _limpar_descricao_ata(
+                            dados['prestacao_descricao']
+                        )
+
                     # ── Telefone do autor do fato (p/ o ofício CIAP) ──
                     # Prefere o telefone que o autor "informa"; senão o 1º
                     # "telefone:". "(75) 3281-8372" é "Tel.:"/do tribunal, não casa
@@ -2266,8 +2327,7 @@ def _extrair_dados_ata(session, proc, mov=None):
                         mt = re.search(r'telefone\s*:?\s*([0-9][\d\s().-]{6,20})',
                                        texto_limpo, re.I)
                     if mt:
-                        dados['telefone'] = re.sub(
-                            r'[\s().-]', '', mt.group(1))
+                        dados['telefone'] = _formatar_telefone(mt.group(1))
 
                     tipo = dados.get('prestacao_tipo') or 'tipo nao identificado'
                     valor = dados.get('prestacao_valor', '')
@@ -2327,8 +2387,52 @@ def _limpar_endereco(endereco: str) -> str:
     return txt
 
 
+def _remover_rpa_numero(html):
+    """Remove o sufixo SEC/RPA da numeração do ofício.
+
+    O documento não deve deixar transparecer que foi produzido por
+    automação. Mantém apenas "SEC" no final.
+    """
+    if not html:
+        return html
+    return re.sub(r'\bSEC\s*/\s*RPA\b', 'SEC', html, flags=re.I)
+
+
+def _aplicar_assinatura(html, nome=None, cargo=None):
+    """Troca a assinatura do modelo do ofício pelo assinante selecionado.
+
+    O template CIAP antigo tem o nome/cargo fixos no HTML. Este pós-processamento
+    mantém compatibilidade com modelos já cadastrados e também aceita os
+    placeholders {{ assinante_nome }} / {{ assinante_cargo }} em modelos novos.
+    """
+    if not html:
+        return html
+
+    nome = nome or 'MAURO EMILIO VIANA DA SILVA MOREIRA'
+    cargo = cargo or 'SECRETÁRIO'
+
+    # Nome fixo do modelo CIAP (com ou sem acento em Emílio).
+    html = re.sub(
+        r'MAURO\s+EM[IÍ]LIO\s+VIANA\s+DA\s+SILVA\s+MOREIRA',
+        nome,
+        html,
+        flags=re.I,
+    )
+
+    # Cargo na linha da assinatura (evita trocar "secretário" no corpo).
+    html = re.sub(
+        r'(<strong>)\s*SECRET[ÁA]RIO\s*(</strong>)',
+        rf'\1{cargo}\2',
+        html,
+        count=1,
+        flags=re.I,
+    )
+    return html
+
+
 def _gerar_html(proc, part, rag, template, dados_ata=None, prazo_dias=None,
-                servidor=None):
+                servidor=None, assinante_nome=None, assinante_cargo=None,
+                numero_documento=None):
     """Gera o HTML do documento com os dados corretos."""
     ctx = {
         'processo': proc.number,
@@ -2337,21 +2441,25 @@ def _gerar_html(proc, part, rag, template, dados_ata=None, prazo_dias=None,
         'despacho_data': rag.despacho_data,
         'despacho_autor': rag.despacho_autor or 'MARTINHO FERRAZ DA NOBREGA JUNIOR',
         'servidor': servidor or 'MAURO EMILIO VIANA DA SILVA MOREIRA',  # Secretário Judicial (placeholder p/ mandado)
+        'assinante_nome': assinante_nome or 'MAURO EMILIO VIANA DA SILVA MOREIRA',
+        'assinante_cargo': assinante_cargo or 'SECRETÁRIO',
         'parte': {
             'nome': part.name, 'endereco': _limpar_endereco(part.address or ''),
-            'email': part.email or '', 'telefone': part.phone or '',
+            'email': part.email or '', 'telefone': _formatar_telefone(part.phone),
             'cpf_cnpj': part.cpf_cnpj or '', 'rg': part.rg or '',
             'nome_pai': part.nome_pai or '', 'nome_mae': part.nome_mae or '',
         },
         'partes': [{
             'nome': part.name, 'endereco': _limpar_endereco(part.address or ''),
-            'email': part.email or '', 'telefone': part.phone or '',
+            'email': part.email or '', 'telefone': _formatar_telefone(part.phone),
             'cpf_cnpj': part.cpf_cnpj or '', 'rg': part.rg or '',
         }],
         'prazo_dias': prazo_dias or '', 'data': date.today().strftime('%d/%m/%Y'),
     }
 
-    if template.template_type == 'mandado':
+    if numero_documento:
+        num_doc = str(numero_documento)
+    elif template.template_type == 'mandado':
         num_doc = f'MAN-{proc.id:03d}/{date.today().year}'
     else:
         last = GeneratedDocument.objects.filter(process=proc).aggregate(Max('sequential_number'))
@@ -2412,7 +2520,8 @@ def _gerar_html(proc, part, rag, template, dados_ata=None, prazo_dias=None,
 
     try:
         html = Template(template.html_template).render(Context(ctx))
-        return html
+        html = _aplicar_assinatura(html, assinante_nome, assinante_cargo)
+        return _remover_rpa_numero(html)
     except Exception as e:
         print(f'   ❌ Erro renderizando template: {e}')
         return None

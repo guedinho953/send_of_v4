@@ -29,6 +29,7 @@ urlpatterns = [
     path('oficios/<int:pk>/logs/json/', oficio_views.OficioLogsJsonView.as_view(), name='oficio_logs_json'),
     path('oficios/<int:pk>/baixar/', oficio_views.OficioBaixarView.as_view(), name='oficio_baixar'),
     path('oficios/baixar-recebidos/', oficio_views.OficioBulkBaixarView.as_view(), name='oficio_bulk_baixar'),
+    path('oficios/expedir-por-tipo/', oficio_views.OficioExpedirPorTipoView.as_view(), name='oficio_expedir_por_tipo'),
     path('oficios/expedir-ciap/', oficio_views.OficioExpedirCiapView.as_view(), name='oficio_expedir_ciap'),
     path('oficios/rastrear-ciap/', oficio_views.OficioRastrearCiapView.as_view(), name='oficio_rastrear_ciap'),
     path('oficios/expedir-ciap-proc/', oficio_views.OficioExpedirCiapProcessoView.as_view(), name='oficio_expedir_ciap_processo'),

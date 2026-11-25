@@ -181,6 +181,16 @@ def expedir_processo(proc, session, cookies_dict):
     }
     template_obj = DocumentTemplate.objects.get(id=TEMPLATE_ID)
     html_full = Template(template_obj.html_template).render(Context(ctx))
+    try:
+        from expedir_rapido import _aplicar_assinatura, _remover_rpa_numero
+        html_full = _aplicar_assinatura(
+            html_full,
+            'IVAN GUEDES DA SILVA',
+            'SECRETÁRIO EM SUBSTITUIÇÃO',
+        )
+        html_full = _remover_rpa_numero(html_full)
+    except Exception:
+        pass
     
     # Modelo RPA já tem brasão no topo. Nosso template nao tem brasao.
     # Colamos o HTML completo do nosso template (com nosso cabecalho simples).

@@ -61,6 +61,25 @@ class OficioDashboardView(LoginRequiredMixin, TemplateView):
         # Oficios (ultimos 50 para melhor visualizacao)
         context['oficios'] = qs.order_by('-created_at')[:50]
 
+        # Modelos de ofício disponíveis (para o seletor "Expedir por tipo")
+        try:
+            from processes.models import DocumentTemplate
+            context['tipos_oficio'] = list(
+                DocumentTemplate.objects
+                .filter(template_type='oficio', active=True)
+                .order_by('name')
+                .values_list('name', flat=True)
+            )
+        except Exception:
+            context['tipos_oficio'] = []
+
+        # Planilha Google configurada?
+        try:
+            from .oficio_planilha_service import OficioPlanilhaService
+            context['planilha_configurada'] = OficioPlanilhaService().configurado
+        except Exception:
+            context['planilha_configurada'] = False
+
         # Sessao ativa?
         context['session_active'] = self._session_ativa(user)
         return context
@@ -737,6 +756,105 @@ class OficioExpedirCiapView(LoginRequiredMixin, View):
             messages.error(request, f'❌ Erro: {str(e)[:200]}')
 
         return HttpResponseRedirect(reverse('projudi:oficio_dashboard'))
+
+
+class OficioExpedirPorTipoView(LoginRequiredMixin, View):
+    """
+    POST /projudi/oficios/expedir-por-tipo/
+    Percorre CumprimentoCartorio?tipo=oficio&acao=expedir e expede apenas
+    os ofícios cujo modelo/tipo corresponda ao selecionado
+    (CIAP, RPV, Ofício comum etc.).
+    """
+    def post(self, request):
+        import subprocess, os, sys
+
+        tipo = (request.POST.get('tipo_outro') or '').strip()
+        if not tipo:
+            tipo = (request.POST.get('tipo') or '').strip()
+
+        try:
+            limite = int(request.POST.get('limite') or 20)
+        except (TypeError, ValueError):
+            limite = 20
+        limite = max(1, min(limite, 100))
+
+        assinante = (request.POST.get('assinante') or 'ivan').strip().lower()
+        if assinante not in ('ivan', 'mauro'):
+            assinante = 'ivan'
+
+        usar_planilha = request.POST.get('planilha') == '1'
+
+        script_path = os.path.join(settings.BASE_DIR, 'expedir_oficios_por_tipo.py')
+        env = {**os.environ, 'DJANGO_ALLOW_ASYNC_UNSAFE': 'true'}
+        cmd = [
+            sys.executable or 'python3', script_path,
+            '--user-id', str(request.user.id),
+            '--limite', str(limite),
+            '--assinante', assinante,
+        ]
+        if tipo:
+            cmd += ['--tipo', tipo]
+        if usar_planilha:
+            cmd += ['--planilha']
+
+        try:
+            result = subprocess.run(
+                cmd,
+                cwd=settings.BASE_DIR, env=env,
+                capture_output=True, text=True,
+                timeout=900,
+            )
+
+            output = (result.stdout or '') + (result.stderr or '')
+            linhas_uteis = [
+                l.strip() for l in output.split('\n')
+                if l.strip() and not l.startswith('[INFO]') and not l.startswith('[WARN]')
+            ]
+
+            if 'SESSAO_EXPIRADA' in output:
+                messages.error(
+                    request,
+                    '🔒 Sessão do Projudi expirada. Sincronize a sessão e tente novamente.'
+                )
+            elif 'NENHUM_OFICIO_PENDENTE' in output:
+                messages.info(request, '📭 Nenhum ofício pendente para expedir.')
+            elif 'NENHUM_OFICIO_DO_TIPO' in output:
+                messages.warning(
+                    request,
+                    f'⚠️ Nenhum ofício pendente do tipo "{tipo}" foi encontrado.'
+                )
+            elif result.returncode == 0:
+                signatario = (
+                    'Ivan Guedes da Silva (Secretário em Substituição)'
+                    if assinante == 'ivan'
+                    else 'Mauro Emílio (Secretário)'
+                )
+                messages.success(
+                    request,
+                    f'✅ Expedição por tipo concluída'
+                    f'{" (" + tipo + ")" if tipo else " (todos)"} — '
+                    f'assinatura: {signatario}.'
+                )
+            else:
+                messages.warning(
+                    request,
+                    f'⚠️ Código {result.returncode}. Verifique o log abaixo.'
+                )
+
+            for linha in linhas_uteis[-20:]:
+                if any(kw in linha.lower() for kw in [
+                    'exped', 'ofício', 'oficio', 'registr', 'submet',
+                    'modelo', 'tipo', 'processo', '✅', '❌', '⚠️', 'ℹ️',
+                ]):
+                    messages.info(request, linha[:300])
+
+        except subprocess.TimeoutExpired:
+            messages.error(request, '⏱️ Expedição excedeu 15 minutos. Tente novamente.')
+        except Exception as e:
+            messages.error(request, f'❌ Erro: {str(e)[:200]}')
+
+        return HttpResponseRedirect(reverse('projudi:oficio_dashboard'))
+
 
 class OficioProcessarPendentesView(LoginRequiredMixin, View):
     def post(self, request):

@@ -141,6 +141,14 @@ OPENAI_API_KEY = env('OPENAI_API_KEY', default='')
 QWEN_MODEL_PATH = env('QWEN_MODEL_PATH', default='')
 QWEN_SERVER_URL = env('QWEN_SERVER_URL', default='http://localhost:8080')
 
+# Planilha/tabela de ofícios no Google Docs (conta de serviço)
+GOOGLE_SERVICE_ACCOUNT_FILE = env('GOOGLE_SERVICE_ACCOUNT_FILE', default='')
+GOOGLE_OFICIOS_DOC_ID = env(
+    'GOOGLE_OFICIOS_DOC_ID',
+    default='1dY6yODJF0CFdbWZ2tH2f-cfvfyqq6RuKUo92NJE7JrY',
+)
+GOOGLE_OFICIOS_TABLE_INDEX = env.int('GOOGLE_OFICIOS_TABLE_INDEX', default=0)
+
 
 LOGGING = {
     'version': 1,

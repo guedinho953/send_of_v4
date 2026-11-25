@@ -1,0 +1,94 @@
+{
+  "nome": "oficio_base_ciap",
+  "versao": 1,
+  "descricao": "Fluxo base aprovado para confecção e expedição de ofícios. Variações mudam apenas o tipo/modelo, aliases, template, ata, destinatário e numeração.",
+  "lista_pendentes": {
+    "url": "https://projudi.tjba.jus.br/projudi/listagens/CumprimentoCartorio?tipo=oficio&acao=expedir",
+    "form_prefix": "formCumprimento",
+    "campos": ["name", "codCumprimento", "procHref", "procText", "rowText", "selected", "options"]
+  },
+  "filtro_linha": {
+    "fonte_principal": "rowText_sem_selects",
+    "fonte_secundaria": "codModelo_selected",
+    "nao_usar": "options_do_codModelo_para_filtrar",
+    "aliases_ciap": ["CIAP", "CENTRAL INTEGRADA", "ALTERNATIVAS PENAIS"],
+    "aliases_rpv": ["RPV", "REQUISICAO DE PEQUENO VALOR"],
+    "aliases_generico": ["RPA", "OFICIO", "COMUM"]
+  },
+  "ata_audiencia": {
+    "fonte": "DadosProcesso?numeroProcesso=...",
+    "documentos_aceitos": ["ata", "audiencia", "audiência", "audin"],
+    "confirmar_numero_processo": true,
+    "campos_extraidos": [
+      "autores_do_fato",
+      "vitima",
+      "telefone",
+      "prestacao_tipo",
+      "prestacao_valor",
+      "prestacao_parcelas",
+      "prestacao_descricao"
+    ],
+    "cortes_descricao": [
+      "Faço constar",
+      "Documento assinado eletronicamente",
+      "Assinado eletronicamente por",
+      "Código de validação",
+      "Página N"
+    ],
+    "funcao": "expedir_rapido._extrair_dados_ata"
+  },
+  "modelo": {
+    "tipo": "CIAP",
+    "template_id": 5,
+    "variantes": {
+      "servico": {
+        "match": ["SERVICO", "COMUNIDADE"],
+        "codModelo_texto": "2. CIAP(ANTIGO CEAPA) TRANSAÇÃO PENAL PRESTAÇÃO DE SERVIÇOS A COMUNIDADE"
+      },
+      "pecuniaria": {
+        "match": ["PECUNIARIA"],
+        "codModelo_texto": "1. CIAP(ANTIGO CEAPA) TRANSAÇÃO PENAL PRESTAÇÃO PECUNIARIA"
+      }
+    }
+  },
+  "assinatura": {
+    "padrao": "ivan",
+    "assinantes": {
+      "ivan": {"nome": "IVAN GUEDES DA SILVA", "cargo": "SECRETÁRIO EM SUBSTITUIÇÃO"},
+      "mauro": {"nome": "MAURO EMILIO VIANA DA SILVA MOREIRA", "cargo": "SECRETÁRIO"}
+    },
+    "aplicar_em": "html_renderizado"
+  },
+  "numeracao": {
+    "fonte_principal": "google_docs",
+    "regra": "ultimo_numero + 1",
+    "formato": "NNN/AAAA",
+    "fallback": "GeneratedDocument.proximo_numero",
+    "usar_antes_da_expedicao": true,
+    "gravar_planilha_apos_registrar": true
+  },
+  "destinatario": {
+    "ciap": "CENTRAL INTEGRADA DE ALTERNATIVAS PENAIS PAULO AFONSO",
+    "outros": "extrair de rowText removendo CNJ, juiz, movimentação e links"
+  },
+  "expedicao": {
+    "passos": [
+      "selecionar_codModelo",
+      "clicar_Redigir_sem_AR",
+      "colar_html_no_FCKeditor",
+      "submeter",
+      "registrar"
+    ],
+    "link_texto": "Redigir sem AR",
+    "url_editor": "ExpedirCumprimentoCartorio?codCumprimento=..."
+  },
+  "planilha_google": {
+    "driver": "google_docs",
+    "autenticacao": "service_account",
+    "doc_id": "1dY6yODJF0CFdbWZ2tH2f-cfvfyqq6RuKUo92NJE7JrY",
+    "colunas": ["numero", "data", "processo", "destinatario"],
+    "data_formato": "dd/mm/aaaa",
+    "inserir_abaixo_da_ultima_linha": true,
+    "servico": "projudi.oficio_planilha_service.OficioPlanilhaService"
+  }
+}

@@ -16,6 +16,11 @@ browser-cookie3>=0.19
 # ── Processamento de dados ──
 pandas>=2.1
 
+# ── Google Docs (planilha de ofícios) ──
+google-api-python-client>=2.100
+google-auth>=2.23
+google-auth-httplib2>=0.1
+
 # ── Celery / background tasks ──
 celery>=5.3
 
