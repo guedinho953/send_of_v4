@@ -177,7 +177,8 @@ Para um novo tipo de ofício:
 - Destinatário fixo:
   - `Ten Cel PM EMÍLIA SILVA COSTA NETA`;
   - `Comandante do 20º BPM`;
-  - `bpm20.cmd@pm.ba.gov.br`.
+  - `bpm20.cmd@pm.ba.gov.br`;
+  - endereço: `Rua da Providência, S/N, Perpétuo Socorro, Paulo Afonso - Bahia`.
 - Cópia de e-mail:
   - `anilton.estevam@pm.ba.gov.br`.
 - O envio de e-mail agora aceita vários destinatários separados por

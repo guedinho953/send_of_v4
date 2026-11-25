@@ -101,7 +101,7 @@ ASSINANTE_PADRAO = 'ivan'
 BPM20 = {
     'nome': 'Ten Cel PM EMÍLIA SILVA COSTA NETA',
     'cargo': 'Comandante do 20º BPM',
-    'endereco': 'Av. da Providência, S/N, Perpétuo Socorro, Paulo Afonso - Bahia.',
+    'endereco': 'Rua da Providência, S/N, Perpétuo Socorro, Paulo Afonso - Bahia.',
     'email': 'bpm20.cmd@pm.ba.gov.br',
     'email_copia': 'anilton.estevam@pm.ba.gov.br',
     'link_audiencia': 'https://audinplay.tjba.jus.br/',

@@ -98,6 +98,7 @@
       "regra_policiais": "somente terceiros/testemunhas (nunca autor do fato, vitima, reu ou executado); incluir se nome/patente for PM (SD, SGT, SUBTEN, TEN, CAP, MAJ, CEL, CMT/CMDT, ALF, SOLDADO, CABO) ou endereco for 20 BPM; juntar todos no mesmo oficio; se o despacho pedir testemunha especifica, usar somente ela",
       "corpo": "apos o link, pular paragrafo e usar FINALIDADE: {{ finalidade }}; padrao participar",
       "destinatario": "20 BPM",
+      "endereco": "Rua da Providência, S/N, Perpétuo Socorro, Paulo Afonso - Bahia",
       "emails": ["bpm20.cmd@pm.ba.gov.br", "anilton.estevam@pm.ba.gov.br"]
     }
   },
