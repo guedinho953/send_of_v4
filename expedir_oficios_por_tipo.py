@@ -622,6 +622,17 @@ def _data_audiencia_recente_20bpm(movs):
     return ''
 
 
+def _tem_patente_pm(nome):
+    """Reconhece patentes/abreviações de policial militar."""
+    alvo = _normalizar(nome)
+    padrao = (
+        r'\b(?:SD|SGT|SUB\s*TEN|SUBTEN|TEN|TENENTE|CAP|CAPITAO|'
+        r'MAJ|MAJOR|CEL|CORONEL|CMT|CMDT|COMANDANTE|ALF|ALFERES|'
+        r'SOLDADO|CABO|POLICIAL|PM|1O\s*SGT|2O\s*SGT|3O\s*SGT)\b'
+    )
+    return bool(re.search(padrao, alvo))
+
+
 def _endereco_20bpm(party):
     endereco = _normalizar(getattr(party, 'address', '') or '')
     return any(k in endereco for k in (
@@ -660,18 +671,14 @@ def _policiais_20bpm(proc, texto):
             continue
 
         up = _normalizar(party.name)
-        sinais_pm = any(k in up for k in (
-            'PM', 'BPM', 'POLICIAL', 'SARGENTO', 'CABO',
-            'SOLDADO', 'TENENTE', 'CAPITAO', 'ALFERES',
-        ))
+        sinais_pm = _tem_patente_pm(party.name)
 
         # Inclui quem tem nome/patente de PM ou endereço no 20º BPM.
         if not sinais_pm and not _endereco_20bpm(party):
             continue
         if any(k in up for k in (
-                'COMANDANTE', '20 BPM', 'POLICIA', 'MILITAR',
-                'BATALHAO', 'LOTADO', 'VITIMA', 'AUTOR',
-                'REU', 'EXECUTADO')):
+                '20 BPM', 'POLICIA', 'MILITAR', 'BATALHAO', 'LOTADO',
+                'VITIMA', 'AUTOR', 'REU', 'EXECUTADO')):
             continue
 
         nome = party.name.strip()

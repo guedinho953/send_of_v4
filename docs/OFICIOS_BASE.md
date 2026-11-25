@@ -159,7 +159,9 @@ Para um novo tipo de ofício:
 - Regra dos policiais/testemunhas:
   - usa apenas partes com papel **terceiro/testemunha**;
   - **não** usa autor do fato, vítima, réu ou executado;
-  - inclui a parte quando o nome/patente indica PM ou o endereço é do 20º BPM;
+  - inclui a parte quando o nome/patente indica PM (SD, SGT, SUBTEN, TEN,
+    CAP, MAJ, CEL, CMT/CMDT, ALF, SOLDADO, CABO etc.) ou o endereço é do
+    20º BPM;
   - junta todos os policiais encontrados em um único ofício;
   - se o despacho pedir **apenas uma testemunha específica** (ex.: “ouça-se
     apenas a testemunha FULANO”), gera o ofício somente com essa pessoa.
