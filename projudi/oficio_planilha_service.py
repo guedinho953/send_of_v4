@@ -275,3 +275,20 @@ class OficioPlanilhaService:
                 ) from exc2
 
         return valores
+
+
+def obter_servico_planilha():
+    """Retorna o serviço configurado ou None.
+
+    Prioridade:
+      1. Web App do Apps Script (Gmail/conta já com acesso ao documento);
+      2. Conta de serviço do Google Docs.
+    """
+    if getattr(settings, 'GOOGLE_OFICIOS_WEBHOOK_URL', ''):
+        from .oficio_planilha_webhook_service import (
+            OficioPlanilhaWebhookService,
+        )
+        return OficioPlanilhaWebhookService()
+
+    servico = OficioPlanilhaService()
+    return servico if servico.configurado else None

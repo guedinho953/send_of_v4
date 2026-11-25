@@ -84,7 +84,8 @@
   },
   "planilha_google": {
     "driver": "google_docs",
-    "autenticacao": "service_account",
+    "autenticacao": "apps_script_webhook (Gmail) ou service_account",
+    "autenticacao_prioridade": ["google_oficios_webhook_url", "google_service_account_file"],
     "doc_id": "1dY6yODJF0CFdbWZ2tH2f-cfvfyqq6RuKUo92NJE7JrY",
     "colunas": ["numero", "data", "processo", "destinatario"],
     "data_formato": "dd/mm/aaaa",

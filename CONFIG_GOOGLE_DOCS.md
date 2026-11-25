@@ -8,6 +8,38 @@ somar 1 e inserir uma nova linha com:
 - número do processo;
 - órgão de destino.
 
+> A senha de app do Gmail usada para enviar e-mails **não** dá acesso à
+> API do Google Docs. Para usar o Gmail, use a opção do Apps Script abaixo.
+
+## Opção recomendada: Apps Script com o Gmail que já tem acesso
+
+1. Abra o documento com a conta Google que pode editá-lo.
+2. Vá em **Extensões → Apps Script**.
+3. Cole o conteúdo de `docs/apps_script_planilha_oficios.gs`.
+4. Troque `TOKEN` por uma senha longa.
+5. **Implantar → Nova implantação → App da Web**:
+   - Executar como: **Eu**
+   - Quem tem acesso: **Qualquer pessoa**
+6. Copie a URL do App da Web.
+7. Configure no `.env`:
+
+```env
+GOOGLE_OFICIOS_WEBHOOK_URL=https://script.google.com/macros/s/.../exec
+GOOGLE_OFICIOS_WEBHOOK_TOKEN=o-mesmo-token-do-script
+```
+
+8. Teste:
+
+```bash
+source .venv/bin/activate
+python manage.py testar_planilha_oficios
+```
+
+Essa opção usa a própria conta Gmail que já tem acesso ao documento e não
+precisa de conta de serviço nem chave JSON.
+
+## Opção alternativa: conta de serviço
+
 ## 1. Criar a conta de serviço
 
 1. Acesse o Google Cloud Console.

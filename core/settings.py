@@ -149,6 +149,12 @@ GOOGLE_OFICIOS_DOC_ID = env(
 )
 GOOGLE_OFICIOS_TABLE_INDEX = env.int('GOOGLE_OFICIOS_TABLE_INDEX', default=0)
 
+# Alternativa sem conta de serviço: Web App do Apps Script (roda com o Gmail
+# que tem acesso ao documento). Se a URL estiver preenchida, ela tem
+# prioridade sobre a conta de serviço.
+GOOGLE_OFICIOS_WEBHOOK_URL = env('GOOGLE_OFICIOS_WEBHOOK_URL', default='')
+GOOGLE_OFICIOS_WEBHOOK_TOKEN = env('GOOGLE_OFICIOS_WEBHOOK_TOKEN', default='')
+
 
 LOGGING = {
     'version': 1,

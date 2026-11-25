@@ -81,6 +81,11 @@ tratados como o mesmo tipo.
 
 Fonte principal: **planilha/tabela do Google Docs**.
 
+Prioridade de integração:
+1. Web App do Apps Script (`GOOGLE_OFICIOS_WEBHOOK_URL`) — usa o Gmail/conta
+   que já tem acesso ao documento;
+2. conta de serviço (`GOOGLE_SERVICE_ACCOUNT_FILE`).
+
 Regra:
 
 ```text

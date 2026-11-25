@@ -75,8 +75,8 @@ class OficioDashboardView(LoginRequiredMixin, TemplateView):
 
         # Planilha Google configurada?
         try:
-            from .oficio_planilha_service import OficioPlanilhaService
-            context['planilha_configurada'] = OficioPlanilhaService().configurado
+            from .oficio_planilha_service import obter_servico_planilha
+            context['planilha_configurada'] = bool(obter_servico_planilha())
         except Exception:
             context['planilha_configurada'] = False
 

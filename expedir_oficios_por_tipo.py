@@ -942,17 +942,17 @@ def main():
     planilha = None
     if args.planilha:
         try:
-            from projudi.oficio_planilha_service import OficioPlanilhaService
-            planilha = OficioPlanilhaService()
-            if planilha.configurado:
-                print(f'Planilha Google configurada: {planilha.doc_id}')
+            from projudi.oficio_planilha_service import obter_servico_planilha
+            planilha = obter_servico_planilha()
+            if planilha:
+                tipo_servico = type(planilha).__name__
+                print(f'Planilha Google configurada ({tipo_servico}).')
             else:
                 print(
-                    '⚠️ Planilha Google solicitada, mas falta configurar '
-                    'GOOGLE_SERVICE_ACCOUNT_FILE ou o arquivo não existe. '
-                    'Seguindo sem planilha.'
+                    '⚠️ Planilha Google solicitada, mas não configurada. '
+                    'Defina GOOGLE_OFICIOS_WEBHOOK_URL (Apps Script) ou '
+                    'GOOGLE_SERVICE_ACCOUNT_FILE. Seguindo sem planilha.'
                 )
-                planilha = None
         except Exception as e:
             print(f'⚠️ Planilha Google indisponível: {e}')
             planilha = None
