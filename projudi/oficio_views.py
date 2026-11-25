@@ -771,6 +771,8 @@ class OficioExpedirPorTipoView(LoginRequiredMixin, View):
         tipo = (request.POST.get('tipo_outro') or '').strip()
         if not tipo:
             tipo = (request.POST.get('tipo') or '').strip()
+        if request.POST.get('oficio_20bpm') == '1':
+            tipo = '20BPM'
 
         try:
             limite = int(request.POST.get('limite') or 20)

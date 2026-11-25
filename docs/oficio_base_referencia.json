@@ -82,6 +82,23 @@
     "link_texto": "Redigir sem AR",
     "url_editor": "ExpedirCumprimentoCartorio?codCumprimento=..."
   },
+  "variacoes": {
+    "ciap": {
+      "filtro_linha": ["CIAP", "CENTRAL INTEGRADA", "ALTERNATIVAS PENAIS"],
+      "template_id": 5
+    },
+    "rpv": {
+      "filtro_linha": ["RPV", "REQUISICAO DE PEQUENO VALOR"],
+      "template_id": 7
+    },
+    "bpm_20_apresentacao": {
+      "filtro_linha": ["20 BPM", "20º BPM"],
+      "template": "Ofício 20º BPM — Apresentação de Policiais",
+      "dados": ["ultimo_despacho", "audiencia_data_hora", "policiais_terceiros"],
+      "destinatario": "20 BPM",
+      "emails": ["bpm20.cmd@pm.ba.gov.br", "anilton.estevam@pm.ba.gov.br"]
+    }
+  },
   "planilha_google": {
     "driver": "google_docs",
     "autenticacao": "apps_script_webhook (Gmail) ou service_account",

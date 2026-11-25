@@ -49,6 +49,7 @@ import re
 import sys
 import time
 import unicodedata
+from datetime import date
 from types import SimpleNamespace
 
 import requests
@@ -96,6 +97,23 @@ ASSINANTES = {
 }
 ASSINANTE_PADRAO = 'ivan'
 
+# Dados fixos do 20º BPM usados no ofício de apresentação de policiais.
+BPM20 = {
+    'nome': 'Ten Cel PM EMÍLIA SILVA COSTA NETA',
+    'cargo': 'Comandante do 20º BPM',
+    'endereco': 'Av. da Providência, S/N, Perpétuo Socorro, Paulo Afonso - Bahia.',
+    'email': 'bpm20.cmd@pm.ba.gov.br',
+    'email_copia': 'anilton.estevam@pm.ba.gov.br',
+    'link_audiencia': 'https://audinplay.tjba.jus.br/',
+}
+
+MESES_PT = {
+    'janeiro': 'Janeiro', 'fevereiro': 'Fevereiro', 'marco': 'Março',
+    'março': 'Março', 'abril': 'Abril', 'maio': 'Maio', 'junho': 'Junho',
+    'julho': 'Julho', 'agosto': 'Agosto', 'setembro': 'Setembro',
+    'outubro': 'Outubro', 'novembro': 'Novembro', 'dezembro': 'Dezembro',
+}
+
 
 def _normalizar(texto):
     """Maiúsculas, sem acentos e com espaços normalizados (para comparar tipos)."""
@@ -119,6 +137,13 @@ def _eh_rpv(texto):
     return any(_normalizar(alias) in alvo for alias in RPV_ALIASES)
 
 
+def _eh_20bpm(texto):
+    alvo = _normalizar(texto)
+    return any(x in alvo for x in (
+        '20BPM', '20 BPM', '20O BPM', '20° BPM',
+    ))
+
+
 def _termos_busca(tipo):
     """Termos que identificam o tipo no Projudi.
 
@@ -131,6 +156,8 @@ def _termos_busca(tipo):
     if not alvo:
         return []
 
+    if _eh_20bpm(alvo):
+        return ['20BPM', '20 BPM', '20O BPM', '20° BPM']
     if _eh_ciap(alvo):
         return [_normalizar(alias) for alias in CIAP_ALIASES]
     if _eh_rpv(alvo):
@@ -140,6 +167,15 @@ def _termos_busca(tipo):
         return ['RPA', 'OFICIO', 'COMUM']
 
     return [alvo]
+
+
+def _termos_modelo(tipo):
+    """Termos usados para escolher o modelo no select codModelo do Projudi."""
+    if _eh_20bpm(tipo):
+        # O Projudi pode não ter um modelo específico de 20 BPM; nesse caso
+        # usa o ofício RPA/genérico e cola o HTML confeccionado.
+        return ['20 BPM', '20º BPM', '20O BPM', 'RPA', 'OFICIO', 'COMUM']
+    return _termos_busca(tipo)
 
 
 def _selecionado_placeholder(item):
@@ -154,6 +190,8 @@ def _selecionado_placeholder(item):
 def _termos_por_texto(texto):
     """Infere o tipo a partir do texto, sem confundir com o 'Ofício' genérico."""
     alvo = _normalizar(texto)
+    if _eh_20bpm(alvo):
+        return ['20BPM', '20 BPM', '20O BPM', '20° BPM']
     if _eh_ciap(alvo):
         return [_normalizar(alias) for alias in CIAP_ALIASES]
     if _eh_rpv(alvo):
@@ -290,6 +328,8 @@ def _tipo_efetivo(item, tipo):
         return selecionado
 
     texto = item.get('rowText') or ''
+    if _eh_20bpm(texto):
+        return '20BPM'
     if _eh_ciap(texto):
         return 'CIAP'
     if _eh_rpv(texto):
@@ -304,6 +344,8 @@ def _destinatario_item(item, tipo_efetivo):
     """Órgão/pessoa de destino para gravar na planilha."""
     if _eh_ciap(tipo_efetivo):
         return 'CENTRAL INTEGRADA DE ALTERNATIVAS PENAIS PAULO AFONSO'
+    if _eh_20bpm(tipo_efetivo):
+        return '20 BPM'
 
     texto = item.get('rowText') or ''
     texto = re.sub(
@@ -380,7 +422,12 @@ def _resolver_template(tipo):
 
     # Aliases conhecidos do projeto:
     #   5 = Ofício CIAP | 7 = Ofício RPV | 3 = Ofício comum (com numeração)
-    if _eh_ciap(alvo):
+    if _eh_20bpm(alvo):
+        template = (
+            qs.filter(name__icontains='20º BPM').first()
+            or qs.filter(name__icontains='20 BPM').first()
+        )
+    elif _eh_ciap(alvo):
         template = qs.filter(pk=5).first() or qs.filter(name__icontains='ciap').first()
     elif _eh_rpv(alvo):
         template = qs.filter(pk=7).first() or qs.filter(name__icontains='rpv').first()
@@ -450,10 +497,209 @@ def _obter_processo(item, user, http_session):
         return None
 
 
+def _texto_movimentos_20bpm(proc, item=None, http_session=None):
+    from processes.models import Movement, RAGExample
+
+    partes = []
+    for mov in Movement.objects.filter(process=proc).order_by('-id')[:30]:
+        partes.extend([
+            mov.act_description or '',
+            mov.observation or '',
+            mov.act_normalized or '',
+        ])
+    for rag in RAGExample.objects.filter(
+            process=proc, active=True).order_by('-id')[:5]:
+        partes.extend([
+            rag.despacho_ato or '',
+            rag.despacho_observacao or '',
+        ])
+
+    # Se o processo ainda não tem movimentações no banco, busca no Projudi.
+    if item and http_session and item.get('procHref'):
+        try:
+            resposta = http_session.get(item['procHref'], timeout=30)
+            if resposta.status_code == 200 and 'expirou' not in resposta.text.lower():
+                from projudiProcessNavigator import ProcessoParser
+                parser = ProcessoParser(resposta.text)
+                movs, _ = parser.extrair_movimentacoes()
+                for mov in movs:
+                    partes.extend([
+                        mov.get('ato', '') or '',
+                        mov.get('observacao', '') or '',
+                        mov.get('ato_normalizado', '') or '',
+                    ])
+        except Exception as e:
+            print(f'   ⚠️ Não foi possível ler as movimentações no Projudi: {e}')
+
+    return '\n'.join(p for p in partes if p)
+
+
+def _policiais_20bpm(proc, texto):
+    from processes.models import Party
+
+    nomes = []
+    for party in Party.objects.filter(process=proc):
+        up = _normalizar(party.name)
+        if (party.role == 'terceiro'
+                or any(k in up for k in (
+                    'PM', 'BPM', 'POLICIAL', 'SARGENTO', 'CABO',
+                    'SOLDADO', 'TENENTE', 'CAPITAO', 'ALFERES'))):
+            if not any(k in up for k in (
+                    'COMANDANTE', '20 BPM', 'POLICIA', 'MILITAR',
+                    'BATALHAO', 'LOTADO')):
+                nomes.append(party.name.strip())
+
+    # Fallback: nomes citados após "testemunhas"/"arrolamento" no despacho.
+    if not nomes:
+        m = re.search(
+            r'(?:testemunhas?|arrolamento)[^:\n]{0,120}:\s*(.+)',
+            texto, re.I,
+        )
+        trecho = m.group(1) if m else ''
+        for pedaco in re.split(r'[;,]|\s+e\s+', trecho):
+            nome = re.sub(r'\s+', ' ', pedaco).strip(' .')
+            palavras = nome.split()
+            up = _normalizar(nome)
+            if (2 <= len(palavras) <= 8
+                    and re.search(r'[A-ZÀ-Ú]{2,}', nome)
+                    and not any(k in up for k in (
+                        'POLICIA', 'MILITAR', 'BPM', 'LOTADO',
+                        'TESTEMUNHA', 'ARROLAMENTO', 'COMANDANTE'))):
+                nomes.append(nome.upper())
+
+    # Deduplica preservando a ordem.
+    return list(dict.fromkeys(n for n in nomes if n))
+
+
+def _data_audiencia_20bpm(texto):
+    meses = {
+        'janeiro': 1, 'fevereiro': 2, 'marco': 3, 'março': 3,
+        'abril': 4, 'maio': 5, 'junho': 6, 'julho': 7, 'agosto': 8,
+        'setembro': 9, 'outubro': 10, 'novembro': 11, 'dezembro': 12,
+    }
+
+    candidatos = []
+
+    for m in re.finditer(
+            r'(\d{1,2})\s+de\s+([a-zçãéíóú]+)\s+de\s+(\d{4})'
+            r'\s*(?:às|as|a partir das)\s*(\d{1,2})[:h](\d{2})',
+            texto, re.I):
+        mes = meses.get(m.group(2).lower())
+        if mes:
+            candidatos.append((
+                int(m.group(3)), mes, int(m.group(1)),
+                int(m.group(4)), int(m.group(5)),
+            ))
+
+    for m in re.finditer(
+            r'(\d{1,2})/(\d{1,2})/(\d{4})'
+            r'\s*(?:às|as|a partir das)\s*(\d{1,2})[:h](\d{2})',
+            texto, re.I):
+        candidatos.append((
+            int(m.group(3)), int(m.group(2)), int(m.group(1)),
+            int(m.group(4)), int(m.group(5)),
+        ))
+
+    if not candidatos:
+        return ''
+
+    ano, mes, dia, hora, minuto = candidatos[-1]
+    nome_mes = next(
+        (nome for nome, num in MESES_PT.items() if num == mes),
+        str(mes),
+    )
+    # Corrige a chave sem acento para o nome exibido.
+    nome_mes = {
+        1: 'Janeiro', 2: 'Fevereiro', 3: 'Março', 4: 'Abril',
+        5: 'Maio', 6: 'Junho', 7: 'Julho', 8: 'Agosto',
+        9: 'Setembro', 10: 'Outubro', 11: 'Novembro', 12: 'Dezembro',
+    }.get(mes, nome_mes)
+    return f'{dia:02d} de {nome_mes} de {ano} às {hora:02d}:{minuto:02d}'
+
+
+def _gerar_conteudo_20bpm(item, user, http_session,
+                          assinante_nome=None, assinante_cargo=None,
+                          numero_documento=None):
+    from django.template import Context, Template
+    from processes.models import GeneratedDocument, RAGExample
+    from expedir_rapido import _aplicar_assinatura, _remover_rpa_numero
+
+    proc = _obter_processo(item, user, http_session)
+    if not proc:
+        return '', None, None, {}, ''
+
+    template = _resolver_template('20BPM')
+    if not template:
+        print('   ⚠️ Template "Ofício 20º BPM" não encontrado.')
+        return '', None, proc, {}, ''
+
+    texto = _texto_movimentos_20bpm(proc, item=item, http_session=http_session)
+    policiais = _policiais_20bpm(proc, texto)
+    data_audiencia = _data_audiencia_20bpm(texto)
+
+    if not policiais:
+        print('   ⚠️ Não encontrei os policiais/testemunhas do 20º BPM.')
+        return '', template, proc, {}, ''
+    if not data_audiencia:
+        print('   ⚠️ Não encontrei a data/hora da audiência no último despacho.')
+        return '', template, proc, {}, ''
+
+    if len(policiais) == 1:
+        policiais_texto = policiais[0]
+    else:
+        policiais_texto = ', '.join(policiais[:-1]) + ' e ' + policiais[-1]
+
+    rag = RAGExample.objects.filter(
+        process=proc, active=True).order_by('-id').first()
+    juiz = (
+        (rag.despacho_autor if rag else '')
+        or 'MARTINHO FERRAZ DA NOBREGA JUNIOR'
+    )
+
+    numero = numero_documento
+    if not numero:
+        seq = GeneratedDocument.proximo_numero(template)
+        numero = f'{seq:03d}/{date.today().year}'
+
+    ctx = {
+        'numero_documento': numero,
+        'processo': proc.number,
+        'destinatario_nome': BPM20['nome'],
+        'destinatario_cargo': BPM20['cargo'],
+        'destinatario_endereco': BPM20['endereco'],
+        'destinatario_email': BPM20['email'],
+        'email_copia': BPM20['email_copia'],
+        'policiais': policiais_texto,
+        'data_audiencia': data_audiencia,
+        'link_audiencia': BPM20['link_audiencia'],
+        'juiz': juiz,
+        'assinante_nome': assinante_nome or 'IVAN GUEDES DA SILVA',
+        'assinante_cargo': assinante_cargo or 'SECRETÁRIO(SUBSTITUTO)',
+    }
+
+    try:
+        html = Template(template.html_template).render(Context(ctx))
+        html = _aplicar_assinatura(html, assinante_nome, assinante_cargo)
+        html = _remover_rpa_numero(html)
+    except Exception as e:
+        print(f'   ⚠️ Erro ao gerar ofício 20º BPM: {e}')
+        return '', template, proc, {}, ''
+
+    return html, template, proc, {}, policiais_texto
+
+
 def _gerar_conteudo(item, tipo_efetivo, user, http_session,
                     assinante_nome=None, assinante_cargo=None,
                     numero_documento=None):
     """Lê a ata e monta o HTML do ofício (pessoa + prestação)."""
+    if _eh_20bpm(tipo_efetivo):
+        return _gerar_conteudo_20bpm(
+            item, user, http_session,
+            assinante_nome=assinante_nome,
+            assinante_cargo=assinante_cargo,
+            numero_documento=numero_documento,
+        )
+
     from expedir_rapido import _extrair_dados_ata, _gerar_html
     from processes.models import Party, RAGExample
 
@@ -768,7 +1014,7 @@ def _processar_item(page, item, tipo, user, http_session,
         return False
 
     tipo_efetivo = _tipo_efetivo(item, tipo)
-    termos = _termos_busca(tipo_efetivo) if tipo_efetivo else _termos_do_item(item)
+    termos = _termos_modelo(tipo_efetivo) if tipo_efetivo else _termos_do_item(item)
     preferir = []
 
     html_gerado = ''
@@ -807,6 +1053,10 @@ def _processar_item(page, item, tipo, user, http_session,
                   'pulando.')
             return False
 
+    if _eh_20bpm(tipo_efetivo) and not html_gerado:
+        print('   ⏭️ Não foi possível montar o ofício 20º BPM — pulando.')
+        return False
+
     if not proc:
         proc = _resolver_processo(item)
     html_doc, doc = _html_do_processo(proc, tipo_efetivo)
@@ -823,6 +1073,8 @@ def _processar_item(page, item, tipo, user, http_session,
             f'   📋 Ata: {dados_ata.get("prestacao_tipo") or "tipo não lido"} '
             f'| pessoa: {nome_parte or "(não identificada)"}'
         )
+    elif _eh_20bpm(tipo_efetivo) and nome_parte:
+        print(f'   👮 Policiais: {nome_parte}')
 
     selecao = page.evaluate(
         JS_SELECIONAR_TIPO,

@@ -85,6 +85,16 @@ class EmailSender:
     
     def __init__(self, config: EmailConfig):
         self.config = config
+
+    @staticmethod
+    def separar_emails(valor: str) -> List[str]:
+        """Aceita um ou vários e-mails separados por vírgula ou ponto e vírgula."""
+        if not valor:
+            return []
+        partes = re.split(r'[;,]+', valor)
+        return list(dict.fromkeys(
+            p.strip() for p in partes if p and p.strip()
+        ))
     
     def enviar_oficio(self, oficio: OficioData) -> Tuple[bool, str]:
         """
@@ -124,10 +134,14 @@ class EmailSender:
         protocolo = agora.strftime("%d/%m/%Y as %H:%M")
         html = self._gerar_html(oficio.texto_html, logo_cid, protocolo, oficio.email_destino, oficio.url_oficio)
         
+        destinatarios = self.separar_emails(oficio.email_destino)
+        if not destinatarios:
+            raise ValueError('Nenhum e-mail de destino informado.')
+
         msg = MIMEMultipart("related")
         msg["Subject"] = subject
         msg["From"] = self.config.remetente
-        msg["To"] = oficio.email_destino
+        msg["To"] = ', '.join(destinatarios)
         msg["Message-ID"] = msg_id
         msg.add_header('Return-Receipt-To', self.config.remetente)
         
@@ -597,10 +611,11 @@ class OficioExtractor:
         # Extrai email destinatário
         emails = self.PADRAO_EMAIL.findall(texto)
         emails_validos = [
-            e for e in emails 
+            e for e in emails
             if not self.EMAILS_INTERNOS.search(e)
         ]
-        email_destino = emails_validos[0] if emails_validos else ""
+        # Guarda todos os destinatários (o envio suporta múltiplos).
+        email_destino = ', '.join(dict.fromkeys(emails_validos))
         
         if not email_destino:
             print(f"⚠️ Email destinatário não encontrado para {processo}")

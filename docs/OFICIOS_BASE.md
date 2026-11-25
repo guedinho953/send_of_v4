@@ -147,6 +147,26 @@ Para um novo tipo de ofício:
 6. manter o mesmo fluxo `Redigir sem AR → FCKeditor → Submeter → Registrar`;
 7. manter a numeração pela planilha quando o ofício entrar na mesma sequência.
 
+## 8.1 Variação aprovada: 20º BPM — Apresentação de Policiais
+
+- Filtro da linha: destinatário/texto contendo `20 BPM` ou `20º BPM`.
+- Template: `Ofício 20º BPM — Apresentação de Policiais` (template novo).
+- Fonte dos dados:
+  - último despacho/movimentações do processo;
+  - data e hora da audiência;
+  - testemunhas/policiais militares cadastrados como terceiros ou citados
+    no despacho.
+- Destinatário fixo:
+  - `Ten Cel PM EMÍLIA SILVA COSTA NETA`;
+  - `Comandante do 20º BPM`;
+  - `bpm20.cmd@pm.ba.gov.br`.
+- Cópia de e-mail:
+  - `anilton.estevam@pm.ba.gov.br`.
+- O envio de e-mail agora aceita vários destinatários separados por
+  vírgula ou ponto e vírgula.
+- Se a data da audiência ou os policiais não forem encontrados, o item é
+  pulado em vez de gerar um ofício incompleto.
+
 ## 9. Checklist de teste
 
 - [ ] A linha correta foi encontrada (não todas).
