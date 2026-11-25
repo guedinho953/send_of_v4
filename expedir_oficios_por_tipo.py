@@ -654,6 +654,11 @@ def _policiais_20bpm(proc, texto):
     nomes = []
 
     for party in Party.objects.filter(process=proc):
+        # O ofício do 20º BPM é para testemunhas/terceiros, não para o
+        # autor do fato, vítima, réu ou executado.
+        if party.role != 'terceiro':
+            continue
+
         up = _normalizar(party.name)
         sinais_pm = any(k in up for k in (
             'PM', 'BPM', 'POLICIAL', 'SARGENTO', 'CABO',
@@ -665,7 +670,8 @@ def _policiais_20bpm(proc, texto):
             continue
         if any(k in up for k in (
                 'COMANDANTE', '20 BPM', 'POLICIA', 'MILITAR',
-                'BATALHAO', 'LOTADO')):
+                'BATALHAO', 'LOTADO', 'VITIMA', 'AUTOR',
+                'REU', 'EXECUTADO')):
             continue
 
         nome = party.name.strip()
@@ -688,7 +694,8 @@ def _policiais_20bpm(proc, texto):
                     and re.search(r'[A-ZÀ-Ú]{2,}', nome)
                     and not any(k in up for k in (
                         'POLICIA', 'MILITAR', 'BPM', 'LOTADO',
-                        'TESTEMUNHA', 'ARROLAMENTO', 'COMANDANTE'))):
+                        'TESTEMUNHA', 'ARROLAMENTO', 'COMANDANTE',
+                        'VITIMA', 'AUTOR', 'REU', 'EXECUTADO'))):
                 if especifica and especifica not in up and up not in especifica:
                     continue
                 nomes.append(nome.upper())

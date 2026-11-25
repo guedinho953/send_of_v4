@@ -157,6 +157,8 @@ Para um novo tipo de ofício:
   - testemunhas/policiais militares cadastrados como terceiros ou citados
     no despacho.
 - Regra dos policiais/testemunhas:
+  - usa apenas partes com papel **terceiro/testemunha**;
+  - **não** usa autor do fato, vítima, réu ou executado;
   - inclui a parte quando o nome/patente indica PM ou o endereço é do 20º BPM;
   - junta todos os policiais encontrados em um único ofício;
   - se o despacho pedir **apenas uma testemunha específica** (ex.: “ouça-se
