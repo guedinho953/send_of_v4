@@ -161,6 +161,11 @@ Para um novo tipo de ofício:
   - junta todos os policiais encontrados em um único ofício;
   - se o despacho pedir **apenas uma testemunha específica** (ex.: “ouça-se
     apenas a testemunha FULANO”), gera o ofício somente com essa pessoa.
+- Data da audiência:
+  - prioriza as **últimas movimentações** (de baixo para cima);
+  - procura primeiro movimentação que **designa** audiência de instrução;
+  - ignora audiências já **realizadas/certificadas**;
+  - a RAG não é usada para escolher a data.
 - Corpo do ofício:
   - após o link da audiência, pula um parágrafo;
   - usa `FINALIDADE: {{ finalidade }} da Audiência...`;

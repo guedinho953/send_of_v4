@@ -498,22 +498,46 @@ def _obter_processo(item, user, http_session):
         return None
 
 
-def _texto_movimentos_20bpm(proc, item=None, http_session=None):
-    from processes.models import Movement, RAGExample
+def _parse_data_br(texto):
+    if not texto:
+        return None
+    m = re.search(r'(\d{1,2})/(\d{1,2})/(\d{2,4})', texto)
+    if not m:
+        return None
+    dia, mes, ano = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    if ano < 100:
+        ano += 2000
+    try:
+        return date(ano, mes, dia)
+    except ValueError:
+        return None
 
-    partes = []
-    for mov in Movement.objects.filter(process=proc).order_by('-id')[:30]:
-        partes.extend([
+
+def _movimentos_20bpm(proc, item=None, http_session=None):
+    """Movimentações em ordem cronológica (a última é a mais recente)."""
+    from processes.models import Movement
+
+    movs = []
+
+    for mov in Movement.objects.filter(process=proc).order_by('id'):
+        texto = ' '.join([
             mov.act_description or '',
             mov.observation or '',
             mov.act_normalized or '',
-        ])
-    for rag in RAGExample.objects.filter(
-            process=proc, active=True).order_by('-id')[:5]:
-        partes.extend([
-            rag.despacho_ato or '',
-            rag.despacho_observacao or '',
-        ])
+        ]).strip()
+        if not texto:
+            continue
+        data_mov = mov.act_date or mov.reference_date or _parse_data_br(texto)
+        evento = 0
+        try:
+            evento = int(str(mov.event_number).strip())
+        except (TypeError, ValueError):
+            pass
+        movs.append({
+            'data': data_mov,
+            'evento': evento,
+            'texto': texto,
+        })
 
     # Se o processo ainda não tem movimentações no banco, busca no Projudi.
     if item and http_session and item.get('procHref'):
@@ -522,17 +546,80 @@ def _texto_movimentos_20bpm(proc, item=None, http_session=None):
             if resposta.status_code == 200 and 'expirou' not in resposta.text.lower():
                 from projudiProcessNavigator import ProcessoParser
                 parser = ProcessoParser(resposta.text)
-                movs, _ = parser.extrair_movimentacoes()
-                for mov in movs:
-                    partes.extend([
+                movs_projudi, _ = parser.extrair_movimentacoes()
+                for mov in movs_projudi:
+                    texto = ' '.join([
                         mov.get('ato', '') or '',
                         mov.get('observacao', '') or '',
                         mov.get('ato_normalizado', '') or '',
-                    ])
+                    ]).strip()
+                    if not texto:
+                        continue
+                    data_mov = _parse_data_br(
+                        mov.get('data_texto', '') or texto
+                    )
+                    evento = 0
+                    try:
+                        evento = int(str(mov.get('evento', '')).strip())
+                    except (TypeError, ValueError):
+                        pass
+                    movs.append({
+                        'data': data_mov,
+                        'evento': evento,
+                        'texto': texto,
+                    })
         except Exception as e:
             print(f'   ⚠️ Não foi possível ler as movimentações no Projudi: {e}')
 
-    return '\n'.join(p for p in partes if p)
+    # Ordena do mais antigo para o mais recente. As movimentações sem data
+    # ficam no fim, preservando a ordem de evento.
+    movs.sort(key=lambda m: (
+        m['data'] or date.min,
+        m['evento'],
+    ))
+
+    return movs
+
+
+def _texto_movimentos_20bpm(proc, item=None, http_session=None):
+    movs = _movimentos_20bpm(proc, item=item, http_session=http_session)
+    return '\n'.join(m['texto'] for m in movs if m.get('texto'))
+
+
+def _data_audiencia_recente_20bpm(movs):
+    """Procura a data da audiência nas últimas movimentações.
+
+    A prioridade é a movimentação mais recente que designa audiência de
+    instrução. Depois, qualquer movimentação recente que mencione audiência,
+    ignorando audiências já realizadas/certificadas.
+    """
+    for exigir_designacao in (True, False):
+        for mov in reversed(movs):
+            texto = mov.get('texto') or ''
+            up = _normalizar(texto)
+
+            if any(k in up for k in (
+                    'REALIZADA', 'AUDIENCIA REALIZADA',
+                    'AUDIÊNCIA REALIZADA', 'CERTIFICO QUE A AUDIENCIA',
+                    'CERTIFICO QUE A AUDIÊNCIA')):
+                continue
+
+            if exigir_designacao:
+                if not any(k in up for k in (
+                        'DESIGNADA', 'INSTRUCAO', 'INSTRUÇÃO')):
+                    continue
+            else:
+                if not any(k in up for k in (
+                        'AUDIENCIA', 'AUDIÊNCIA',
+                        'PARTICIPAR DA AUDIENCIA',
+                        'PARTICIPAR DA AUDIÊNCIA')):
+                    continue
+
+            data = _data_audiencia_20bpm(texto)
+            if data:
+                return data
+
+    return ''
 
 
 def _endereco_20bpm(party):
@@ -675,9 +762,22 @@ def _gerar_conteudo_20bpm(item, user, http_session,
         print('   ⚠️ Template "Ofício 20º BPM" não encontrado.')
         return '', None, proc, {}, ''
 
-    texto = _texto_movimentos_20bpm(proc, item=item, http_session=http_session)
+    movs = _movimentos_20bpm(proc, item=item, http_session=http_session)
+    texto = '\n'.join(m['texto'] for m in movs if m.get('texto'))
+    data_audiencia = (
+        _data_audiencia_recente_20bpm(movs)
+        or _data_audiencia_20bpm(texto)
+    )
+
+    # A RAG serve só como contexto para achar os policiais; não entra na
+    # escolha da data da audiência.
+    for rag in RAGExample.objects.filter(
+            process=proc, active=True).order_by('-id')[:5]:
+        texto += '\n' + ' '.join([
+            rag.despacho_ato or '',
+            rag.despacho_observacao or '',
+        ])
     policiais = _policiais_20bpm(proc, texto)
-    data_audiencia = _data_audiencia_20bpm(texto)
 
     if not policiais:
         print('   ⚠️ Não encontrei os policiais/testemunhas do 20º BPM.')
