@@ -156,6 +156,11 @@ Para um novo tipo de ofício:
   - data e hora da audiência;
   - testemunhas/policiais militares cadastrados como terceiros ou citados
     no despacho.
+- Regra dos policiais/testemunhas:
+  - inclui a parte quando o nome/patente indica PM ou o endereço é do 20º BPM;
+  - junta todos os policiais encontrados em um único ofício;
+  - se o despacho pedir **apenas uma testemunha específica** (ex.: “ouça-se
+    apenas a testemunha FULANO”), gera o ofício somente com essa pessoa.
 - Destinatário fixo:
   - `Ten Cel PM EMÍLIA SILVA COSTA NETA`;
   - `Comandante do 20º BPM`;

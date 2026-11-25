@@ -534,20 +534,56 @@ def _texto_movimentos_20bpm(proc, item=None, http_session=None):
     return '\n'.join(p for p in partes if p)
 
 
+def _endereco_20bpm(party):
+    endereco = _normalizar(getattr(party, 'address', '') or '')
+    return any(k in endereco for k in (
+        '20 BPM', '20O BPM', '20° BPM', 'BATALHAO 20',
+        '20 BATALHAO', '20º BPM',
+    ))
+
+
+def _testemunha_especifica_20bpm(texto):
+    """Detecta quando o despacho pede apenas uma testemunha específica."""
+    padroes = (
+        r'(?:apenas|somente|especificamente|em especial|t[ãa]o somente)'
+        r'\s+(?:a\s+)?testemunha\s+'
+        r'([A-ZÀ-Ú]{2,}(?:\s+(?:DE|DA|DO|DAS|DOS|E|[A-ZÀ-Ú]{2,})){1,6})',
+        r'testemunha\s+'
+        r'([A-ZÀ-Ú]{2,}(?:\s+(?:DE|DA|DO|DAS|DOS|E|[A-ZÀ-Ú]{2,})){1,6})'
+        r'[,;]?\s+(?:apenas|somente|especificamente)',
+    )
+    for padrao in padroes:
+        m = re.search(padrao, texto, re.I)
+        if m:
+            return m.group(1).strip().upper()
+    return ''
+
+
 def _policiais_20bpm(proc, texto):
     from processes.models import Party
 
+    especifica = _testemunha_especifica_20bpm(texto)
     nomes = []
+
     for party in Party.objects.filter(process=proc):
         up = _normalizar(party.name)
-        if (party.role == 'terceiro'
-                or any(k in up for k in (
-                    'PM', 'BPM', 'POLICIAL', 'SARGENTO', 'CABO',
-                    'SOLDADO', 'TENENTE', 'CAPITAO', 'ALFERES'))):
-            if not any(k in up for k in (
-                    'COMANDANTE', '20 BPM', 'POLICIA', 'MILITAR',
-                    'BATALHAO', 'LOTADO')):
-                nomes.append(party.name.strip())
+        sinais_pm = any(k in up for k in (
+            'PM', 'BPM', 'POLICIAL', 'SARGENTO', 'CABO',
+            'SOLDADO', 'TENENTE', 'CAPITAO', 'ALFERES',
+        ))
+
+        # Inclui quem tem nome/patente de PM ou endereço no 20º BPM.
+        if not sinais_pm and not _endereco_20bpm(party):
+            continue
+        if any(k in up for k in (
+                'COMANDANTE', '20 BPM', 'POLICIA', 'MILITAR',
+                'BATALHAO', 'LOTADO')):
+            continue
+
+        nome = party.name.strip()
+        if especifica and especifica not in up and up not in especifica:
+            continue
+        nomes.append(nome)
 
     # Fallback: nomes citados após "testemunhas"/"arrolamento" no despacho.
     if not nomes:
@@ -565,7 +601,12 @@ def _policiais_20bpm(proc, texto):
                     and not any(k in up for k in (
                         'POLICIA', 'MILITAR', 'BPM', 'LOTADO',
                         'TESTEMUNHA', 'ARROLAMENTO', 'COMANDANTE'))):
+                if especifica and especifica not in up and up not in especifica:
+                    continue
                 nomes.append(nome.upper())
+
+    if especifica and not nomes:
+        nomes.append(especifica)
 
     # Deduplica preservando a ordem.
     return list(dict.fromkeys(n for n in nomes if n))
