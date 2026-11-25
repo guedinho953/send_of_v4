@@ -28,7 +28,8 @@ class OficioPlanilhaWebhookService:
 
     @property
     def configurado(self):
-        return bool(self.url)
+        # O script do Apps Script usa token; sem ele a chamada é recusada.
+        return bool(self.url and self.token)
 
     def _post(self, payload):
         if not self.url:
@@ -67,7 +68,8 @@ class OficioPlanilhaWebhookService:
         dados = self._post({'action': 'proximo_numero'})
         numero = (dados.get('numero') or '').strip()
 
-        if not re.match(r'^\d{1,5}/\d{4}$', numero):
+        # Aceita número puro (259) ou com ano (259/2026, 259/25).
+        if not re.match(r'^\d{1,5}(?:\s*/\s*\d{2,4})?$', numero):
             raise OficioPlanilhaWebhookError(
                 f'O Apps Script não retornou um número válido: {numero!r}'
             )
