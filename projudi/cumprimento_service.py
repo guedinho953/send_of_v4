@@ -1828,6 +1828,13 @@ class CumprimentoService:
                 ),
                 'recorrente': CumprimentoService._nome_recorrente(record),
                 'observacao_prazo': record.observacao_prazo or '',
+                'evento_decisao': (
+                    getattr(record, 'evento_decisao', '')
+                    or getattr(
+                        getattr(record, 'rag_example', None),
+                        'evento_despacho', ''
+                    )
+                ),
                 'descricao_movimentacao': (
                     getattr(record, 'act_verb', '') or ''
                 ),

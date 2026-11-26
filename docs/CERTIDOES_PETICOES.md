@@ -260,6 +260,7 @@ Ele recebe:
 
 - processo (com ou sem pontuação; pode digitar só os dígitos);
 - RAG (somente RAGs ativas com template de certidão vinculado);
+- evento da decisão (usado no corpo da certidão);
 - URL do Projudi (opcional);
 - opção “Gerar novamente”.
 
@@ -352,8 +353,16 @@ Template:
 Certidão de Inexistência de Custas da Execução
 ```
 
-O corpo público certifica que não existem custas processuais relativas à
-execução pendentes de recolhimento. Depois da prévia, o botão
+O corpo público usa o evento da decisão informado:
+
+```text
+Certifico, para os devidos fins, que, em atenção à Decisão
+(evento XX), o processo supra se encontra na fase de
+execução/cumprimento de sentença e não existem custas processuais
+relativas à execução pendentes de recolhimento, nem débito a esse título.
+```
+
+Não são exibidas as linhas de parte nem de movimentação. Depois da prévia, o botão
 **Apenas juntar certidão** insere o documento no Projudi pelo mesmo fluxo
 de juntada das demais certidões.
 

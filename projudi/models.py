@@ -355,6 +355,9 @@ class CumprimentoRecord(TimeStampedModel):
 
     # Comando / ato de origem
     act_verb = models.CharField('Ato', max_length=50, blank=True)
+    evento_decisao = models.CharField(
+        'Evento da Decisão', max_length=20, blank=True,
+        help_text='Número do evento da decisão usado na certidão')
     snippet = models.TextField('Trecho da Decisão', blank=True)
 
     # Template/Documento gerado

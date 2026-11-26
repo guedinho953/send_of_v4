@@ -262,6 +262,9 @@ class CertidaoGerarViaRagView(LoginRequiredMixin, View):
         processo = (request.POST.get('processo') or '').strip()
         rag_id = (request.POST.get('rag_id') or '').strip()
         processo_url = (request.POST.get('processo_url') or '').strip()
+        evento_decisao = (
+            request.POST.get('evento_decisao') or ''
+        ).strip()
         forcar = request.POST.get('forcar') == '1'
 
         if not processo or not rag_id.isdigit():
@@ -376,6 +379,7 @@ class CertidaoGerarViaRagView(LoginRequiredMixin, View):
                 f'#{rag.id} — {rag.despacho_ato}'
             ),
             act_verb=(rag.despacho_ato or 'certifique-se')[:50],
+            evento_decisao=evento_decisao,
             snippet=(rag.despacho_observacao or '')[:2000],
             template_used=template,
             rag_example=rag,
