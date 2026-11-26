@@ -412,7 +412,8 @@ class PeticaoQueueService:
                 resultado = dict(lista_embargos[-1])
                 resultado['origem'] = 'embargos'
             # 2) Há decisão de embargos, mas a intimação não veio rotulada:
-            #    usa a última intimação posterior à decisão dos embargos.
+            #    só usa quando existe UMA única intimação posterior à decisão
+            #    (evita escolher intimação alheia aos embargos).
             elif embargos_decisoes:
                 embargos_decisoes.sort(
                     key=lambda d: (d['data'], d['data_mov'])
@@ -425,11 +426,8 @@ class PeticaoQueueService:
                     c for c in base_genericos
                     if c['data_mov'] >= ultima_decisao['data_mov']
                 ]
-                if posteriores:
-                    posteriores.sort(
-                        key=lambda c: (c['data'], c['data_mov'])
-                    )
-                    resultado = dict(posteriores[-1])
+                if len(posteriores) == 1:
+                    resultado = dict(posteriores[0])
                     resultado['origem'] = 'embargos'
             # 3) Sem embargos: prevalece a intimação da sentença.
             else:

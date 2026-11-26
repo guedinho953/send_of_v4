@@ -43,14 +43,15 @@ A contagem é feita a partir da **intimação da sentença ao recorrente**:
 5. marca **TEMPESTIVO** ou **INTEMPESTIVO**.
 
 **Embargos de declaração:** se houver embargos antes do recurso, o marco
-inicial passa a ser a **intimação da decisão dos embargos** (acolhidos,
-não acolhidos, rejeitados ou julgados), e não a intimação da sentença
-original. O sistema:
+inicial passa a ser a **intimação a respeito da decisão dos embargos**
+(acolhidos, não acolhidos, rejeitados ou julgados), e não a intimação da
+sentença original. O sistema:
 
 1. procura uma intimação que referencie os embargos de declaração;
-2. se não encontrar rotulada, usa a última intimação posterior à decisão
-   dos embargos;
-3. só usa a intimação da sentença quando não há embargos.
+2. se não encontrar rotulada, usa somente quando existe **uma única**
+   intimação posterior à decisão dos embargos; havendo mais de uma, não
+   escolhe arbitrariamente e sinaliza a intimação como não localizada;
+3. só usa a intimação da sentença quando **não há embargos**.
 
 O evento do protocolo do recurso e o evento da intimação considerada
 (sentença ou embargos) são identificados no processo e podem ser ajustados
