@@ -86,6 +86,7 @@
         <button type="submit" class="btn btn-orange">🔄 Sincronizar Movimentações</button>
     </form>
     <a href="{% url 'projudi:certidao_peticoes' %}" id="link-fila-peticoes" class="btn" style="background:#7c3aed; color:white;">📥 Fila de Petições</a>
+    <a href="#certidoes-rag" class="btn" style="background:#0891b2; color:white;">🔎 Localizar despacho modelo (RAG)</a>
     <a href="{% url 'projudi:certidao_modelos' %}" class="btn btn-outline">🧩 Modelos de Certidões</a>
     <a href="{% url 'projudi:movimentacao_fila' %}" class="btn btn-outline">📥 Fila de Movimentações</a>
     <a href="{% url 'projudi:movimentacao_dashboard' %}" class="btn btn-outline">📋 Todas as Movimentações</a>
@@ -180,7 +181,7 @@
 {% endif %}
 
 {% if not origem_atual or origem_atual == 'movimentacao' %}
-<div class="section-title">📄 Certidões de despacho (RAG)</div>
+<div class="section-title" id="certidoes-rag">📄 Certidões de despacho (RAG)</div>
 <div class="section-sub">
     Rastreia as movimentações pelo RAG do despacho e executa somente as
     certidões, sem executar todos os cumprimentos/movimentações.
