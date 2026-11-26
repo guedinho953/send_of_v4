@@ -83,6 +83,11 @@ Na prévia da certidão de **Recurso Inominado** existem as ações:
 - **Apenas intimar contrarrazões (10 dias)** — aparece quando a certidão
   já foi juntada.
 
+> **Importante:** esse fluxo de intimação em 10 dias é exclusivo do recurso
+> **TEMPESTIVO e PREPARADO**. Para recurso **INTEMPESTIVO** ou
+> **TEMPESTIVO SEM PREPARO** (gratuidade), a prévia mostra um aviso e
+> permite apenas juntar a certidão; a intimação segue fluxo próprio.
+
 A intimação usa:
 
 ```text
@@ -97,8 +102,9 @@ processo; sem cadastro, sugere **Autoras/Autores**.
 
 São duas movimentações no Projudi: a juntada da certidão e a intimação.
 Se a certidão for juntada mas a intimação falhar, a certidão permanece
-marcada como juntada e o botão **Apenas intimar** pode ser usado para
-repetir somente a intimação.
+marcada como juntada e a prévia salva é reaberta automaticamente
+(`/projudi/certidoes/peticoes/<id>/preview/`) para usar o botão
+**Apenas intimar** e repetir somente a intimação.
 
 ## Assinatura
 

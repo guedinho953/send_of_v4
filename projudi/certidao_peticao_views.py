@@ -4,7 +4,7 @@ from datetime import date, datetime
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpResponseRedirect
+from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.views import View
@@ -22,6 +22,28 @@ def _parse_data_br(valor):
         except ValueError:
             continue
     return None
+
+
+def _situacao_certidao_recurso(html):
+    """Classifica a certidão de recurso inominado pelo corpo gerado.
+
+    Retorna:
+      - 'intempestivo' — certidão certifica a intempestividade;
+      - 'preparo'      — tempestivo e regularmente preparado;
+      - 'gratuidade'   — tempestivo, sem preparo por gratuidade;
+      - ''             — não identificado.
+    """
+    texto = (html or '').upper()
+    # "INTEMPESTIVO" contém "TEMPESTIVO": verifica primeiro.
+    if 'INTEMPESTIVO' in texto:
+        return 'intempestivo'
+    if 'PREPARADO' in texto:
+        return 'preparo'
+    if ('GRATUIDADE' in texto
+            or 'ASSISTÊNCIA JUDICIÁRIA GRATUITA' in texto
+            or 'ASSISTENCIA JUDICIARIA GRATUITA' in texto):
+        return 'gratuidade'
+    return ''
 
 
 class CertidaoPeticaoQueueView(LoginRequiredMixin, TemplateView):
@@ -282,6 +304,10 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
                 'processo': processo,
                 'tipo': tipo,
                 'eh_recurso': eh_recurso,
+                'situacao_recurso': situacao_recurso,
+                'pode_intimar': (
+                    eh_recurso and situacao_recurso == 'preparo'
+                ),
                 'tipo_label': info['label'],
                 'situacao_label': situacao_label,
                 'recorrente': recorrente,
@@ -299,6 +325,59 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
         })
 
 
+class CertidaoPeticaoPreviewView(LoginRequiredMixin, TemplateView):
+    """Reabre a prévia de uma certidão já gerada.
+
+    Permite voltar à certidão depois de uma juntada parcial (por exemplo,
+    certidão juntada mas intimação falhou) e usar a ação "Apenas intimar".
+    Os detalhes internos da geração não são recuperados nesta tela — só o
+    corpo da certidão e as ações de juntada/intimação.
+    """
+
+    template_name = 'projudi/certidao_peticao_preview.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from processes.models import GeneratedDocument
+
+        doc = get_object_or_404(GeneratedDocument, pk=self.kwargs['pk'])
+        user_tenant_id = getattr(self.request.user, 'tenant_id', None)
+        if doc.tenant_id and user_tenant_id and doc.tenant_id != user_tenant_id:
+            raise Http404('Certidão não pertence ao seu órgão.')
+
+        rotulo = doc.template.name if doc.template else 'Certidão'
+        eh_recurso = rotulo == 'Certidão de Recurso Inominado'
+        situacao = (
+            _situacao_certidao_recurso(doc.html_content)
+            if eh_recurso else ''
+        )
+        context.update({
+            'documento': doc,
+            'html_content': doc.html_content,
+            'item': {
+                'processo': doc.process.number if doc.process else '',
+                'tipo': '',
+                'eh_recurso': eh_recurso,
+                'situacao_recurso': situacao,
+                'pode_intimar': eh_recurso and situacao == 'preparo',
+                'tipo_label': rotulo,
+                'situacao_label': '',
+                'recorrente': '',
+                'evento_recurso': '',
+                'evento_intimacao': '',
+                'observacao_juntada': '',
+                'polo_sugerido': 'autores',
+                'dias': '',
+                'data_envio': None,
+                'data_inicio': None,
+                'meio_label': '',
+                'ultimo_dia': None,
+                'data_decurso': None,
+            },
+        })
+        return context
+
+
 class CertidaoPeticaoJuntarIntimarView(LoginRequiredMixin, View):
     """Junta a certidão gerada no Projudi e/ou intima a parte contrária.
 
@@ -311,6 +390,12 @@ class CertidaoPeticaoJuntarIntimarView(LoginRequiredMixin, View):
       - intimar: apenas intima (exige certidão já juntada);
       - juntar_intimar: junta (se ainda não juntada) e intima.
     """
+
+    @staticmethod
+    def _preview_redirect(doc):
+        return HttpResponseRedirect(
+            reverse('projudi:certidao_peticao_preview', args=[doc.id])
+        )
 
     def post(self, request):
         from processes.models import GeneratedDocument
@@ -327,14 +412,14 @@ class CertidaoPeticaoJuntarIntimarView(LoginRequiredMixin, View):
         user_tenant_id = getattr(request.user, 'tenant_id', None)
         if doc.tenant_id and user_tenant_id and doc.tenant_id != user_tenant_id:
             messages.error(request, 'Certidão não pertence ao seu órgão.')
-            return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
+            return self._preview_redirect(doc)
 
         if not doc.process:
             messages.error(request, 'A certidão não está vinculada a um processo.')
-            return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
+            return self._preview_redirect(doc)
         if not (doc.html_content or '').strip():
             messages.error(request, 'A certidão não possui conteúdo para juntar.')
-            return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
+            return self._preview_redirect(doc)
 
         rotulo_certidao = (
             doc.template.name if doc.template else 'Certidão'
@@ -343,14 +428,32 @@ class CertidaoPeticaoJuntarIntimarView(LoginRequiredMixin, View):
         acao = (request.POST.get('acao') or 'juntar_intimar').strip().lower()
         if acao not in ('juntar', 'intimar', 'juntar_intimar'):
             messages.error(request, 'Ação inválida.')
-            return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
+            return self._preview_redirect(doc)
         if acao in ('intimar', 'juntar_intimar') and not eh_recurso:
             messages.error(
                 request,
                 'A intimação para contrarrazões só se aplica à '
                 'Certidão de Recurso Inominado.'
             )
-            return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
+            return self._preview_redirect(doc)
+
+        # A intimação para contrarrazões do fluxo padrão só vale para
+        # recurso TEMPESTIVO e PREPARADO. Intempestivo e sem preparo
+        # (gratuidade) têm tratamento próprio.
+        situacao_recurso = (
+            _situacao_certidao_recurso(doc.html_content)
+            if eh_recurso else ''
+        )
+        if (acao in ('intimar', 'juntar_intimar')
+                and situacao_recurso != 'preparo'):
+            messages.warning(
+                request,
+                'Esta certidão não é de recurso TEMPESTIVO e PREPARADO. '
+                'A intimação de contrarrazões em 10 dias é exclusiva desse '
+                'caso; para intempestivo ou sem preparo, use o fluxo próprio. '
+                'A certidão pode ser apenas juntada.'
+            )
+            return self._preview_redirect(doc)
 
         polo = (request.POST.get('polo_intimacao') or 'autores').strip().lower()
         if polo not in ('autores', 'res', 'todos'):
@@ -410,21 +513,21 @@ class CertidaoPeticaoJuntarIntimarView(LoginRequiredMixin, View):
                     'documento=%s', rotulo_certidao, processo, doc.id,
                 )
                 messages.error(request, f'Erro ao juntar a certidão: {exc}')
-                return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
+                return self._preview_redirect(doc)
 
             if not certidao_juntada:
                 messages.error(
                     request,
                     'A certidão não foi juntada. A intimação não foi realizada.'
                 )
-                return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
+                return self._preview_redirect(doc)
 
         if acao == 'intimar' and not certidao_juntada:
             messages.error(
                 request,
                 'Junte a certidão antes de intimar a parte contrária.'
             )
-            return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
+            return self._preview_redirect(doc)
 
         # ── 2. Intimação da parte contrária ─────────────────────────
         if acao in ('intimar', 'juntar_intimar'):
@@ -453,7 +556,7 @@ class CertidaoPeticaoJuntarIntimarView(LoginRequiredMixin, View):
                     'A certidão foi juntada, mas a intimação falhou: '
                     f'{exc}'
                 )
-                return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
+                return self._preview_redirect(doc)
 
             if not ok_intimacao:
                 messages.warning(
@@ -462,7 +565,7 @@ class CertidaoPeticaoJuntarIntimarView(LoginRequiredMixin, View):
                     'confirmada. Confira o processo no Projudi e, se '
                     'necessário, use o botão "Apenas intimar".'
                 )
-                return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
+                return self._preview_redirect(doc)
 
             logger.info(
                 'Intimação para contrarrazões realizada | processo=%s | '
@@ -475,10 +578,11 @@ class CertidaoPeticaoJuntarIntimarView(LoginRequiredMixin, View):
                 request,
                 f'✅ {rotulo_certidao} juntada ao processo.'
             )
-        else:
-            messages.success(
-                request,
-                '✅ Certidão juntada e parte contrária intimada para '
-                'apresentar contrarrazões em 10 dias úteis.'
-            )
+            return self._preview_redirect(doc)
+
+        messages.success(
+            request,
+            '✅ Certidão juntada e parte contrária intimada para '
+            'apresentar contrarrazões em 10 dias úteis.'
+        )
         return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
