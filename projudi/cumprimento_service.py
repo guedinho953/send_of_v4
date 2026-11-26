@@ -711,6 +711,11 @@ class CumprimentoService:
             or 'Certidão de Prazo'
         ) if certidao_html else ''
 
+        # Na certidão, a observação do Mov581 deve identificar o documento,
+        # não o verbo interno "certifique-se".
+        if not observacao and certidao_html:
+            observacao = certidao_titulo or 'Certidão'
+
         # Papel final (autor/réu/ambos) — JSON da RAG (polo_prazo)
         # sobrepõe o parte_papel do record.
         papel = self._papel_resolvido(record)

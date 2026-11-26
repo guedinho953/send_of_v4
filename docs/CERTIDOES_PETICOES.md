@@ -375,7 +375,15 @@ execução/cumprimento de sentença e não existem custas processuais
 relativas à execução pendentes de recolhimento, nem débito a esse título.
 ```
 
-Não são exibidas as linhas de parte nem de movimentação. Depois da prévia, o botão
+Não são exibidas as linhas de parte nem de movimentação.
+
+Na movimentação do Projudi, a observação usa o nome do documento:
+
+```text
+Certidão de Inexistência de Custas da Execução
+```
+
+e não mais “Cumprimento de certifique-se”. Depois da prévia, o botão
 **Apenas juntar certidão** insere o documento no Projudi pelo mesmo fluxo
 de juntada das demais certidões.
 
