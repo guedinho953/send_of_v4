@@ -963,23 +963,26 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
         # registra apenas uma observação na movimentação 11383 informando
         # a data em que o prazo vencerá.
         origem_despacho = (
-            ' (localizado automaticamente)'
+            ', localizado automaticamente'
             if resultado.get('despacho_auto') else ''
         )
         if date.today() < resultado['data_decurso']:
             from .movimentacao_service import MovimentacaoService
 
             observacao_decurso = (
-                'Certidão de Decurso de Pagamento Voluntário — prazo ainda '
-                f'não decorrido. Processo: {resultado["processo"]}; '
+                'Certifico que o prazo de 15 (quinze) dias para o pagamento '
+                'voluntário do débito referente ao Cumprimento de '
+                'Sentença/Impugnação, referente ao Despacho (evento n.º '
+                f'{resultado["evento_despacho"]}){origem_despacho}, ainda '
+                'não decorreu. '
+                f'Processo: {resultado["processo"]}; '
                 f'executado(a): {resultado["executado"]}; '
-                f'despacho: evento {resultado["evento_despacho"]}'
-                f'{origem_despacho}; '
-                f'evento da intimação: {resultado["evento_intimacao"]}; '
-                f'intimação: {resultado["data_intimacao"].strftime("%d/%m/%Y")}'
-                f'; último dia do prazo: '
+                'data da intimação: '
+                f'{resultado["data_intimacao"].strftime("%d/%m/%Y")} '
+                f'(evento {resultado["evento_intimacao"]}); '
+                'último dia do prazo: '
                 f'{resultado["ultimo_dia"].strftime("%d/%m/%Y")}; '
-                f'decurso do prazo: '
+                'o decurso do prazo ocorrerá em '
                 f'{resultado["data_decurso"].strftime("%d/%m/%Y")}.'
             )
             record = MovimentacaoService(request.user).importar(

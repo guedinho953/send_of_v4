@@ -496,12 +496,32 @@ despacho de mero expediente de 27/10/2026 e registra último dia
 25/11/2026, o mesmo resultado do cálculo a partir da intimação do
 evento 84.
 
+O corpo público da certidão usa o seguinte texto:
+
+```text
+Certifico, para os devidos fins, o decurso do prazo de 15 (quinze) dias
+para o pagamento voluntário do débito referente ao Cumprimento de
+Sentença/Impugnação, referente ao Despacho (evento n.º 78), tendo
+decorrido o prazo em 26/11/2026, data da intimação: 02/11/2026.
+```
+
 Se o prazo **já decorreu**, a prévia permite juntar a certidão pelo fluxo
 normal de documentos.
 
 Se o prazo **ainda não decorreu**, o sistema não gera certidão: cria uma
 movimentação pendente na Fila com código **11383 - Cumprimento de Ofício**
-e observação informando o último dia e a data em que ocorrerá o decurso.
+e observação informando o despacho, a data da intimação, o último dia e a
+data em que ocorrerá o decurso:
+
+```text
+Certifico que o prazo de 15 (quinze) dias para o pagamento voluntário do
+débito referente ao Cumprimento de Sentença/Impugnação, referente ao
+Despacho (evento n.º 78), ainda não decorreu. Processo:
+0002019-65.2026.8.05.0191; executado(a): COMPANHIA DE ELETRICIDADE DO
+ESTADO DA BAHIA COELBA; data da intimação: 02/11/2026 (evento 84);
+último dia do prazo: 25/11/2026; o decurso do prazo ocorrerá em
+26/11/2026.
+```
 
 ## Assinatura
 
