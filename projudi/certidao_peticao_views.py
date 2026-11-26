@@ -14,7 +14,7 @@ from django.views.generic import TemplateView
 from .assinantes import ASSINANTE_PADRAO, ASSINANTES
 from .certidao_constants import NOME_CERTIDAO_CUSTAS
 from .cumprimento_service import CumprimentoService
-from .peticao_service import TIPOS, PeticaoQueueService
+from .peticao_service import MEIO_LABEL, TIPOS, PeticaoQueueService
 
 
 def _parse_data_br(valor):
@@ -79,6 +79,8 @@ class CertidaoPeticaoQueueView(LoginRequiredMixin, TemplateView):
             'erro': erro,
             'total': len(itens),
             'contagem': contagem,
+            'tipos': TIPOS,
+            'meios': MEIO_LABEL,
             'assinante_padrao': ASSINANTE_PADRAO,
             'assinantes': [
                 {'chave': chave, 'nome': dados[0], 'cargo': dados[1]}

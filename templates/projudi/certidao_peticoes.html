@@ -35,6 +35,9 @@
 <p style="font-size:13px; color:#6b7280; margin:0 0 16px;">
     Lida diretamente de <code>JuntadaPeticao</code>. O prazo é contado em dias úteis
     conforme a forma de intimação (DJEN, advogado, e-mail, AR ou mandado).
+    A ação detectada é apenas uma sugestão: você pode trocar o modelo e ajustar
+    a data/meio antes de gerar. Petições não classificadas aparecem para
+    escolha manual.
     A primeira leitura consulta o Projudi e pode levar até 30 segundos; depois
     fica em cache por 5 minutos.
 </p>
@@ -85,7 +88,7 @@
         <div class="pet-header">
             <div>
                 <div class="pet-processo">{{ item.processo }}</div>
-                <span class="pet-tipo">{{ item.tipo_label }} — {{ item.dias }} dias úteis</span>
+                <span class="pet-tipo">{{ item.tipo_label }}{% if item.dias %} — {{ item.dias }} dias úteis{% endif %}</span>
                 {% if item.tipo == 'recurso_inominado' %}
                     {% if item.tempestivo %}
                         <span style="display:inline-block; margin-left:6px; background:#d1fae5; color:#065f46; border-radius:10px; padding:2px 9px; font-size:11px; font-weight:700;">TEMPESTIVO</span>
@@ -125,6 +128,11 @@
             &nbsp;|&nbsp; <strong>Término:</strong> {{ item.ultimo_dia_fmt }}
             &nbsp;|&nbsp; <strong>Decurso:</strong> {{ item.data_decurso_fmt }}
         </div>
+        {% elif not item.tipo %}
+        <div class="prazo-box">
+            Petição sem classificação automática. Escolha a ação, confira a
+            data da intimação e o meio; o prazo será calculado ao gerar.
+        </div>
         {% elif item.erro_prazo %}
         <div class="prazo-box vencido">Erro no prazo: {{ item.erro_prazo }}</div>
         {% endif %}
@@ -135,35 +143,63 @@
                 <input type="hidden" name="assinante" value="{{ assinante_padrao }}" class="assinante-hidden">
                 <input type="hidden" name="assinante_nome" value="" class="assinante-nome-hidden">
                 <input type="hidden" name="assinante_cargo" value="" class="assinante-cargo-hidden">
-                <input type="hidden" name="tipo" value="{{ item.tipo }}">
                 <input type="hidden" name="processo" value="{{ item.processo }}">
                 <input type="hidden" name="processo_url" value="{{ item.processo_url }}">
                 <input type="hidden" name="data_envio" value="{{ item.data_envio_fmt }}">
-                <input type="hidden" name="data_inicio" value="{{ item.data_inicio_fmt }}">
-                <input type="hidden" name="meio_intimacao" value="{{ item.meio_intimacao }}">
-                <input type="hidden" name="meio_label" value="{{ item.meio_label }}">
                 <input type="hidden" name="origem_intimacao" value="{{ item.origem_intimacao }}">
                 <input type="hidden" name="documento_texto" value="{{ item.documento_texto }}">
-                {% if item.tipo == 'recurso_inominado' %}
+
                 <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:6px; width:100%;">
-                    <label style="font-size:12px; color:#374151;"><strong>Situação do recurso:</strong></label>
-                    <select name="situacao_recurso" style="padding:5px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px;">
-                        <option value="gratuidade">Tempestivo — pedido de gratuidade</option>
-                        <option value="preparo">Tempestivo — preparo integral</option>
-                        <option value="intempestivo">Intempestivo</option>
+                    <label style="font-size:12px; color:#374151;"><strong>Ação/modelo:</strong></label>
+                    <select name="tipo" class="tipo-select" required
+                            style="padding:5px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px;">
+                        <option value="">Selecione...</option>
+                        {% for chave, info in tipos.items %}
+                        <option value="{{ chave }}" {% if item.tipo == chave %}selected{% endif %}>
+                            {{ info.label }} — {{ info.dias }} dias
+                        </option>
+                        {% endfor %}
                     </select>
-                    <label style="font-size:12px; color:#374151;">Evento do recurso:</label>
-                    <input type="text" name="evento_recurso" value="{{ item.evento_recurso }}" placeholder="ex.: 55" style="width:80px; padding:5px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px;">
-                    <label style="font-size:12px; color:#374151;">Evento da intimação (sentença/embargos):</label>
-                    <input type="text" name="evento_intimacao" value="{{ item.evento_intimacao }}" placeholder="ex.: 48" style="width:80px; padding:5px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px;">
+
+                    <label style="font-size:12px; color:#374151;">Data da intimação:</label>
+                    <input type="text" name="data_inicio" value="{{ item.data_inicio_fmt }}"
+                           placeholder="dd/mm/aaaa" required
+                           style="width:105px; padding:5px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px;">
+
+                    <label style="font-size:12px; color:#374151;">Meio:</label>
+                    <select name="meio_intimacao"
+                            style="padding:5px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px;">
+                        {% for chave, label in meios.items %}
+                        <option value="{{ chave }}" {% if item.meio_intimacao == chave %}selected{% endif %}>
+                            {{ label }}
+                        </option>
+                        {% endfor %}
+                    </select>
                 </div>
-                <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:6px; width:100%;">
-                    <label style="font-size:12px; color:#374151;">Recorrente:</label>
-                    <input type="text" name="recorrente" value="{{ item.recorrente }}" placeholder="nome do recorrente" style="flex:1; min-width:220px; padding:5px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px;">
+
+                <div class="recurso-campos" style="display:none; width:100%;">
+                    <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:6px; width:100%;">
+                        <label style="font-size:12px; color:#374151;"><strong>Situação do recurso:</strong></label>
+                        <select name="situacao_recurso" style="padding:5px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px;">
+                            <option value="gratuidade">Tempestivo — pedido de gratuidade</option>
+                            <option value="preparo">Tempestivo — preparo integral</option>
+                            <option value="intempestivo">Intempestivo</option>
+                        </select>
+                        <label style="font-size:12px; color:#374151;">Evento do recurso:</label>
+                        <input type="text" name="evento_recurso" value="{{ item.evento_recurso }}" placeholder="ex.: 55" style="width:80px; padding:5px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px;">
+                        <label style="font-size:12px; color:#374151;">Evento da intimação (sentença/embargos):</label>
+                        <input type="text" name="evento_intimacao" value="{{ item.evento_intimacao }}" placeholder="ex.: 48" style="width:80px; padding:5px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px;">
+                    </div>
+                    <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:6px; width:100%;">
+                        <label style="font-size:12px; color:#374151;">Recorrente:</label>
+                        <input type="text" name="recorrente" value="{{ item.recorrente }}" placeholder="nome do recorrente" style="flex:1; min-width:220px; padding:5px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px;">
+                    </div>
                 </div>
-                {% else %}
-                <input type="hidden" name="recorrente" value="{{ item.recorrente }}">
-                {% endif %}
+
+                <div style="font-size:11px; color:#6b7280; width:100%; margin-bottom:6px;">
+                    Se trocar a ação ou a data, o prazo será recalculado ao gerar a certidão.
+                </div>
+
                 <button type="submit" class="btn btn-sm" style="background:#7c3aed; color:white;">
                     📄 Gerar certidão
                 </button>
@@ -177,8 +213,7 @@
     {% endfor %}
 {% elif not erro %}
 <div class="empty-state">
-    📭 Nenhuma petição dos tipos previstos (recurso inominado, contrarrazões,
-    impugnação/cumprimento de sentença ou impugnação/penhora) na fila.
+    📭 Nenhuma petição pendente na fila.
 </div>
 {% endif %}
 {% endblock %}
@@ -210,6 +245,19 @@ document.addEventListener('DOMContentLoaded', function () {
     if (nome) nome.addEventListener('input', atualizarAssinatura);
     if (cargo) cargo.addEventListener('input', atualizarAssinatura);
     atualizarAssinatura();
+
+    document.querySelectorAll('.tipo-select').forEach(function (sel) {
+        const card = sel.closest('.pet-card');
+        const campos = card ? card.querySelector('.recurso-campos') : null;
+        function atualizarTipo() {
+            if (campos) {
+                campos.style.display = sel.value === 'recurso_inominado'
+                    ? 'block' : 'none';
+            }
+        }
+        sel.addEventListener('change', atualizarTipo);
+        atualizarTipo();
+    });
 });
 </script>
 {% endblock %}

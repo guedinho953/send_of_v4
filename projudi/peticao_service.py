@@ -536,8 +536,8 @@ class PeticaoQueueService:
         return resultado
 
     def listar(self, forcar=False):
-        """Lê a fila e devolve somente os tipos que geram certidão."""
-        chave_cache = f'peticao_queue:{self.user.pk}'
+        """Lê a fila e devolve tipos conhecidos e petições não classificadas."""
+        chave_cache = f'peticao_queue_v2:{self.user.pk}'
         if not forcar:
             em_cache = cache.get(chave_cache)
             if em_cache is not None:
@@ -586,7 +586,11 @@ class PeticaoQueueService:
                 if len(tds) > 3 else texto_data
             )
             tipo = classificar_peticao(texto_tipo)
-            if not tipo or not data_envio:
+            if not data_envio:
+                continue
+            # Mantém também petições que a classificação automática não
+            # reconheceu, para o usuário escolher a ação manualmente.
+            if not tipo and 'JUNTADA DE PETICAO' not in _norm(texto_tipo):
                 continue
 
             doc_link = tr.find('a', href=re.compile('DownloadArquivo'))
@@ -603,7 +607,7 @@ class PeticaoQueueService:
                     BASE_URL, proc_link.get('href', '')
                 ),
                 'data_envio': data_envio,
-                'tipo': tipo,
+                'tipo': tipo or '',
                 'documento_url': doc_url,
                 'documento_texto': doc_texto,
             })
@@ -612,15 +616,19 @@ class PeticaoQueueService:
         # As consultas ao processo e ao PDF são independentes: roda em
         # paralelo para a fila não ficar "rodando" por muito tempo.
         # Cada thread usa sua própria sessão requests para não serializar
-        # as conexões.
-        if bases:
+        # as conexões. Itens sem classificação automática não consultam o
+        # processo: o usuário escolhe a ação e informa a intimação no card.
+        analisaveis = [b for b in bases if b.get('tipo')]
+        if analisaveis:
             cookies = session.cookies.get_dict()
-            with ThreadPoolExecutor(max_workers=min(6, len(bases))) as executor:
+            with ThreadPoolExecutor(
+                max_workers=min(6, len(analisaveis))
+            ) as executor:
                 futuros = {
                     executor.submit(
                         self._analisar_item, cookies, base
                     ): base
-                    for base in bases
+                    for base in analisaveis
                 }
                 for futuro in as_completed(futuros):
                     base = futuros[futuro]
@@ -634,7 +642,7 @@ class PeticaoQueueService:
 
         itens = []
         for base in bases:
-            info = TIPOS[base['tipo']]
+            info = TIPOS.get(base['tipo'])
             intimacao = base.get('_intimacao') or {}
             data_inicio = intimacao.get('data') or base['data_envio']
             fluxo_intimacao = intimacao.get('meio') or 'intimacao'
@@ -644,22 +652,25 @@ class PeticaoQueueService:
             if not intimacao:
                 meio_label = (
                     'Data de envio (intimação não localizada no processo)'
+                    if info else
+                    'Data de envio (informe a intimação e escolha a ação)'
                 )
 
             prazo = None
             erro_prazo = ''
-            try:
-                prazo = CumprimentoService(
-                    self.user
-                ).contar_prazo_por_fluxo(
-                    fluxo_intimacao,
-                    data_inicio,
-                    info['dias'],
-                    modo='uteis',
-                    tenant=getattr(self.user, 'tenant', None),
-                )
-            except Exception as exc:
-                erro_prazo = str(exc)
+            if info:
+                try:
+                    prazo = CumprimentoService(
+                        self.user
+                    ).contar_prazo_por_fluxo(
+                        fluxo_intimacao,
+                        data_inicio,
+                        info['dias'],
+                        modo='uteis',
+                        tenant=getattr(self.user, 'tenant', None),
+                    )
+                except Exception as exc:
+                    erro_prazo = str(exc)
 
             item = {
                 'cod_documento': base['cod_documento'],
@@ -702,8 +713,11 @@ class PeticaoQueueService:
                     if prazo and base['data_envio'] else None
                 ),
                 'tipo': base['tipo'],
-                'tipo_label': info['label'],
-                'dias': info['dias'],
+                'tipo_label': (
+                    info['label'] if info
+                    else 'Não classificada — escolha a ação'
+                ),
+                'dias': info['dias'] if info else None,
                 'documento_url': base['documento_url'],
                 'documento_texto': base['documento_texto'],
                 'recorrente': (

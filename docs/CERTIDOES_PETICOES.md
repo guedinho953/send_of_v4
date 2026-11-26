@@ -17,6 +17,26 @@ Rota no sistema:
 | Impugnação / Cumprimento de Sentença | Impugnação/Cumprimento | 15 dias úteis |
 | Impugnação / Decurso do Prazo da Penhora | Impugnação/Penhora | 15 dias úteis |
 
+## Escolha manual da ação/modelo
+
+A classificação pelo texto da petição é apenas uma sugestão. Em cada item
+da fila existe um seletor **Ação/modelo**, já preenchido com o tipo
+detectado, que pode ser trocado antes de gerar a certidão:
+
+- Recurso Inominado;
+- Contrarrazões;
+- Impugnação/Cumprimento de Sentença;
+- Impugnação/Decurso do Prazo da Penhora.
+
+Também é possível ajustar a **data da intimação** e o **meio** usados no
+cálculo. Petições que a classificação automática não reconheceu aparecem
+com `Não classificada — escolha a ação`; elas não têm prazo calculado até
+que o usuário escolha o modelo e gere a certidão.
+
+Exemplo: uma linha `Juntada de Petição de Solicitação de Execução de
+Sentença` não é classificada automaticamente, mas passa a aparecer na
+fila para que a ação seja escolhida manualmente.
+
 ## Contagem — Lei 11.419/2006
 
 A contagem usa o meio de intimação localizado no processo:
