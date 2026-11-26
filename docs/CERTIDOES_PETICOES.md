@@ -72,6 +72,18 @@ Os dados privados (evento da intimação da sentença, data da intimação,
 A certidão é exibida em tela para impressão. A inserção automática no
 Projudi/Mov581 é uma etapa separada, que pode ser adicionada depois.
 
+## Assinatura
+
+A fila de petições tem um seletor de assinatura no topo:
+
+- **Ivan Guedes da Silva — Secretário em Substituição** (padrão);
+- **Mauro Emílio Viana da Silva Moreira — Secretário**;
+- **Outro** (nome e cargo digitados).
+
+A escolha vale para todas as certidões geradas naquela página. O template
+usa `{{ servidor }}` e `{{ servidor_cargo }}`; portanto não fica mais fixo
+como “Servidor Secretaria 2”.
+
 ## Desempenho
 
 A primeira leitura consulta a fila e os processos no Projudi e pode levar

@@ -1793,6 +1793,7 @@ class CumprimentoService:
                 'servidor': CumprimentoService._capitalizar_nome_proprio(
                     getattr(self.user, 'full_name', '')
                     or getattr(self.user, 'first_name', '') or '...'),
+                'servidor_cargo': 'Secretário em Substituição',
             }
             return tpl.render(ctx)
         except Exception:

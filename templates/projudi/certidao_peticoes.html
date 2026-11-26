@@ -65,6 +65,19 @@
     intimação/leitura. Se não localizar, usa a data de envio da petição como fallback.
 </div>
 
+<div style="background:#f5f3ff; border:1px solid #ddd6fe; border-radius:8px; padding:10px 12px; margin-bottom:16px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+    <strong style="font-size:13px; color:#5b21b6;">Assinatura da certidão:</strong>
+    <select id="assinanteSelect" onchange="atualizarAssinatura()" style="padding:6px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px;">
+        <option value="ivan" selected>Ivan Guedes da Silva — Secretário em Substituição</option>
+        <option value="mauro">Mauro Emílio Viana da Silva Moreira — Secretário</option>
+        <option value="outro">Outro (digitar)</option>
+    </select>
+    <input id="assinanteNome" type="text" placeholder="Nome do assinante"
+           style="display:none; padding:6px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px; min-width:220px;">
+    <input id="assinanteCargo" type="text" placeholder="Cargo"
+           style="display:none; padding:6px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px; min-width:180px;">
+</div>
+
 {% if itens %}
     {% for item in itens %}
     <div class="pet-card {% if item.vencido %}vencido{% endif %}">
@@ -114,6 +127,9 @@
         <div style="margin-top:10px; display:flex; gap:6px; flex-wrap:wrap;">
             <form method="post" action="{% url 'projudi:certidao_peticao_gerar' %}">
                 {% csrf_token %}
+                <input type="hidden" name="assinante" value="ivan" class="assinante-hidden">
+                <input type="hidden" name="assinante_nome" value="" class="assinante-nome-hidden">
+                <input type="hidden" name="assinante_cargo" value="" class="assinante-cargo-hidden">
                 <input type="hidden" name="tipo" value="{{ item.tipo }}">
                 <input type="hidden" name="processo" value="{{ item.processo }}">
                 <input type="hidden" name="data_envio" value="{{ item.data_envio_fmt }}">
@@ -158,4 +174,35 @@
     impugnação/cumprimento de sentença ou impugnação/penhora) na fila.
 </div>
 {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function atualizarAssinatura() {
+    const sel = document.getElementById('assinanteSelect');
+    if (!sel) return;
+    const outro = sel.value === 'outro';
+    const nome = document.getElementById('assinanteNome');
+    const cargo = document.getElementById('assinanteCargo');
+    if (nome) nome.style.display = outro ? 'inline-block' : 'none';
+    if (cargo) cargo.style.display = outro ? 'inline-block' : 'none';
+
+    document.querySelectorAll('.assinante-hidden').forEach(function (i) {
+        i.value = sel.value;
+    });
+    document.querySelectorAll('.assinante-nome-hidden').forEach(function (i) {
+        i.value = outro && nome ? nome.value : '';
+    });
+    document.querySelectorAll('.assinante-cargo-hidden').forEach(function (i) {
+        i.value = outro && cargo ? cargo.value : '';
+    });
+}
+document.addEventListener('DOMContentLoaded', function () {
+    const nome = document.getElementById('assinanteNome');
+    const cargo = document.getElementById('assinanteCargo');
+    if (nome) nome.addEventListener('input', atualizarAssinatura);
+    if (cargo) cargo.addEventListener('input', atualizarAssinatura);
+    atualizarAssinatura();
+});
+</script>
 {% endblock %}

@@ -9,6 +9,7 @@ from django.urls import reverse
 from django.views import View
 from django.views.generic import TemplateView
 
+from .assinantes import ASSINANTE_PADRAO, ASSINANTES
 from .cumprimento_service import CumprimentoService
 from .peticao_service import TIPOS, PeticaoQueueService
 
@@ -78,6 +79,19 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
         meio_label = (request.POST.get('meio_label') or '').strip()
         recorrente = (request.POST.get('recorrente') or '').strip()
         documento = (request.POST.get('documento_texto') or '').strip()
+
+        assinante = (request.POST.get('assinante') or ASSINANTE_PADRAO).strip()
+        if assinante == 'outro':
+            servidor = (
+                request.POST.get('assinante_nome') or ''
+            ).strip() or 'Ivan Guedes da Silva'
+            servidor_cargo = (
+                request.POST.get('assinante_cargo') or ''
+            ).strip() or 'Secretário em Substituição'
+        else:
+            servidor, servidor_cargo = ASSINANTES.get(
+                assinante, ASSINANTES[ASSINANTE_PADRAO]
+            )
 
         try:
             resultado = CumprimentoService(request.user).contar_prazo_por_fluxo(
@@ -219,10 +233,8 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
                 'parte': recorrente or 'parte',
                 'recorrente': recorrente or 'não identificado',
                 'data': date.today().strftime('%d/%m/%Y'),
-                'servidor': CumprimentoService._capitalizar_nome_proprio(
-                    getattr(request.user, 'full_name', '')
-                    or getattr(request.user, 'first_name', '') or '...'
-                ),
+                'servidor': servidor,
+                'servidor_cargo': servidor_cargo,
             }
             ctx.update(ctx_extra)
             html = Template(template.html_template).render(Context(ctx))

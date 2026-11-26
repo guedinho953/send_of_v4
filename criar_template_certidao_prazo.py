@@ -71,7 +71,7 @@ HTML = f'''<div style="font-family:'Times New Roman',serif; font-size:12pt; max-
 <div style="font-size:10pt; font-family:'Courier New',monospace; margin:30px 0 6px; text-align:center;">
   <div style="margin-bottom:16px;">Paulo Afonso-BA, {{{{ data }}}}.</div>
   <strong>{{{{ servidor }}}}</strong><br>
-  Servidor Secretaria 2<br>
+  {{{{ servidor_cargo }}}}<br>
   Documento Assinado Eletronicamente<sup>1</sup>
 </div>
 
