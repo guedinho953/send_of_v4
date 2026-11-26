@@ -44,10 +44,10 @@ HTML = """
 
   <div style="font-size:12pt; font-family:'Courier New',monospace; text-align:justify; text-indent:80px; line-height:1.5;">
     Certifico, para os devidos fins, que, em atenção à Decisão
-    (evento {{ evento_decisao|default:"____" }}), o processo supra se
-    encontra na fase de execução/cumprimento de sentença e não existem
-    custas processuais relativas à execução pendentes de recolhimento, nem
-    débito a esse título.
+    {% if evento_decisao %}(evento {{ evento_decisao }}){% else %}evento infra{% endif %},
+    o processo supra se encontra na fase de execução/cumprimento de
+    sentença e não existem custas processuais relativas à execução
+    pendentes de recolhimento, nem débito a esse título.
   </div>
 
   <div style="font-size:12pt; font-family:'Courier New',monospace; margin-top:18px; text-align:justify; text-indent:80px;">

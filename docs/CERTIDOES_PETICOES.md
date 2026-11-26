@@ -245,6 +245,19 @@ RAGs, importa as certidões localizadas e, quando a opção automática está
 marcada, executa cada certidão: monta o documento com o template, assina e
 junta no processo via Mov581.
 
+O **evento da decisão** é descoberto na página `DadosProcesso` pelo mesmo
+`arquivo=...` do documento que casou com a RAG. Se não for localizado:
+
+```text
+em atenção à Decisão evento infra
+```
+
+Sem parênteses. Com evento localizado:
+
+```text
+em atenção à Decisão (evento 27)
+```
+
 Sem a opção automática, os cartões aparecem na lista para revisão e o
 botão **📄 Gerar e juntar certidão** faz a execução individual.
 

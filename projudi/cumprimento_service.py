@@ -114,6 +114,9 @@ class CumprimentoService:
 
                 # Tipo do ato a partir do template
                 tipo_ato = self._mapear_template_para_tipo_ato(template)
+                evento_decisao = self._evento_do_documento(
+                    session, mov, proc
+                )
 
                 # Decide fluxo para cada parte
                 ato_data = {
@@ -157,6 +160,7 @@ class CumprimentoService:
                                 f'{next(iter(ja_comunicadas.values())).get("mensagem", "")}'
                             ),
                         },
+                        'evento_decisao': evento_decisao,
                         'texto_mov': texto,
                     })
                     continue
@@ -174,6 +178,7 @@ class CumprimentoService:
                     'template': template,
                     'classificacao': resultado_cls,
                     'decisao': decisao,
+                    'evento_decisao': evento_decisao,
                     'texto_mov': texto,
                 })
 
@@ -213,6 +218,51 @@ class CumprimentoService:
             except RAGExample.DoesNotExist:
                 continue
         return None, None, None
+
+    def _evento_do_documento(self, session, mov, proc) -> str:
+        """Descobre o evento do documento que casou com o despacho/RAG.
+
+        O documento baixado da lista de movimentações tem o mesmo
+        `arquivo=...` da linha do DadosProcesso. A primeira coluna dessa
+        linha é o número do evento.
+        """
+        import re
+        from bs4 import BeautifulSoup
+
+        link_doc = mov.get('link_documento') or ''
+        match = re.search(r'arquivo=(\d+)', link_doc)
+        if not match:
+            return ''
+        arquivo = match.group(1)
+
+        url = (
+            mov.get('link_processo')
+            or getattr(proc, 'projudi_url', '')
+            or ''
+        )
+        if not url:
+            return ''
+        try:
+            resposta = session.get(url, timeout=15)
+            if resposta.status_code != 200:
+                return ''
+            soup = BeautifulSoup(resposta.text, 'html.parser')
+            for tr in soup.find_all('tr'):
+                tds = tr.find_all('td', recursive=False)
+                if not tds:
+                    continue
+                texto_evento = tds[0].get_text(' ', strip=True)
+                match_evento = re.match(r'\s*(\d+)\b', texto_evento)
+                if not match_evento:
+                    continue
+                evento = match_evento.group(1)
+                for a in tr.find_all('a', href=True):
+                    href = a['href']
+                    if f'arquivo={arquivo}' in href:
+                        return evento
+        except Exception:
+            return ''
+        return ''
 
     # =================================================================
     # MAPEAMENTO template_type → tipo_ato
@@ -441,6 +491,7 @@ class CumprimentoService:
                         or 'Comunicação já realizada (pre-check tracker).'
                     ),
                     'act_verb': '',
+                    'evento_decisao': data.get('evento_decisao', ''),
                     'snippet': texto_mov[:2000],
                     'template_used': template,
                     'rag_example': rag,
@@ -461,6 +512,7 @@ class CumprimentoService:
                     'numero_processo_cnj': getattr(processo, 'number', ''),
                     'fluxo_justificativa': decisao.get('justificativa', ''),
                     'act_verb': decisao.get('ato', ''),
+                    'evento_decisao': data.get('evento_decisao', ''),
                     'snippet': texto_mov[:2000],
                     'template_used': template,
                     'rag_example': rag,
@@ -491,6 +543,7 @@ class CumprimentoService:
                     'parte_papel': parte_dec.get('papel', ''),
                     'endereco_analisado': endereco,
                     'act_verb': '',
+                    'evento_decisao': data.get('evento_decisao', ''),
                     'snippet': texto_mov[:2000],
                     'template_used': template,
                     'rag_example': rag,
