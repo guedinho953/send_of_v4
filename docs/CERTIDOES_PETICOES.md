@@ -69,8 +69,36 @@ Os dados privados (evento da intimação da sentença, data da intimação,
 - na observação para juntada exibida na prévia;
 - fora do corpo público da certidão.
 
-A certidão é exibida em tela para impressão. A inserção automática no
-Projudi/Mov581 é uma etapa separada, que pode ser adicionada depois.
+A certidão é exibida em tela para impressão. Na própria prévia é possível
+juntá-la ao Projudi e/ou intimar a parte contrária (veja abaixo).
+
+## Juntar a certidão e intimar contrarrazões
+
+Na prévia da certidão de **Recurso Inominado** existem as ações:
+
+- **Apenas juntar certidão** — insere a certidão no Projudi via Mov581 e
+  assina o documento;
+- **Juntar certidão + intimar contrarrazões (10 dias)** — junta a certidão
+  e, na sequência, faz a intimação da parte contrária;
+- **Apenas intimar contrarrazões (10 dias)** — aparece quando a certidão
+  já foi juntada.
+
+A intimação usa:
+
+```text
+Mov581 · Intimação · prazo_intimacao='3' (10 dias úteis)
+motivo_intimacao='3'
+polo_intimacao='autores' | 'res' | 'todos'
+```
+
+O polo da parte contrária deve ser conferido na prévia. O sistema sugere
+o polo oposto ao recorrente quando ele está cadastrado como parte no
+processo; sem cadastro, sugere **Autoras/Autores**.
+
+São duas movimentações no Projudi: a juntada da certidão e a intimação.
+Se a certidão for juntada mas a intimação falhar, a certidão permanece
+marcada como juntada e o botão **Apenas intimar** pode ser usado para
+repetir somente a intimação.
 
 ## Assinatura
 

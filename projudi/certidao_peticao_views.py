@@ -1,10 +1,11 @@
 """Fila de petições e geração de certidões de prazo."""
+import logging
 from datetime import date, datetime
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpResponseRedirect
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.views import View
 from django.views.generic import TemplateView
@@ -210,7 +211,6 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
         else:
             observacao_juntada += '.'
 
-        import logging
         logging.getLogger('projudi.certidoes').info(
             'Certidão de petição gerada | processo=%s | tipo=%s | %s',
             processo, info['label'], observacao_juntada,
@@ -258,17 +258,37 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
             messages.error(request, f'Erro ao gerar a certidão: {exc}')
             return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
 
+        # Polo sugerido para a intimação de contrarrazões: se o recorrente
+        # estiver cadastrado como autor, intima-se o polo réu; se estiver
+        # cadastrado como réu, intima-se o polo autor. Sem cadastro, usa-se
+        # "autores" como sugestão (caso mais comum: réu recorrente).
+        polo_sugerido = 'autores'
+        if eh_recurso and recorrente:
+            from processes.models import Party
+            parte = (
+                Party.objects
+                .filter(process=proc, name__icontains=recorrente[:40])
+                .first()
+            )
+            if parte and parte.is_author_side:
+                polo_sugerido = 'res'
+            elif parte and parte.is_defendant_side:
+                polo_sugerido = 'autores'
+
         return render(request, 'projudi/certidao_peticao_preview.html', {
             'documento': doc,
             'html_content': html,
             'item': {
                 'processo': processo,
+                'tipo': tipo,
+                'eh_recurso': eh_recurso,
                 'tipo_label': info['label'],
                 'situacao_label': situacao_label,
                 'recorrente': recorrente,
                 'evento_recurso': evento_recurso,
                 'evento_intimacao': evento_intimacao,
                 'observacao_juntada': observacao_juntada,
+                'polo_sugerido': polo_sugerido,
                 'dias': info['dias'],
                 'data_envio': data_envio,
                 'data_inicio': data_inicio,
@@ -277,3 +297,188 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
                 'data_decurso': resultado.data_decurso,
             },
         })
+
+
+class CertidaoPeticaoJuntarIntimarView(LoginRequiredMixin, View):
+    """Junta a certidão gerada no Projudi e/ou intima a parte contrária.
+
+    A certidão é inserida na movimentação 581 (com assinatura) e, em seguida,
+    é feita uma segunda movimentação 581 de intimação da parte contrária para
+    apresentar contrarrazões no prazo de 10 dias úteis (código 3 do Projudi).
+
+    Ações aceitas:
+      - juntar: apenas junta a certidão;
+      - intimar: apenas intima (exige certidão já juntada);
+      - juntar_intimar: junta (se ainda não juntada) e intima.
+    """
+
+    def post(self, request):
+        from processes.models import GeneratedDocument
+        from .movimentacao_service import MovimentacaoService
+
+        documento_id = (request.POST.get('documento_id') or '').strip()
+        if not documento_id.isdigit():
+            messages.error(request, 'Documento da certidão não informado.')
+            return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
+
+        doc = get_object_or_404(GeneratedDocument, pk=int(documento_id))
+
+        # Isola por tenant quando ambos os lados têm tenant definido.
+        user_tenant_id = getattr(request.user, 'tenant_id', None)
+        if doc.tenant_id and user_tenant_id and doc.tenant_id != user_tenant_id:
+            messages.error(request, 'Certidão não pertence ao seu órgão.')
+            return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
+
+        if not doc.process:
+            messages.error(request, 'A certidão não está vinculada a um processo.')
+            return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
+        if not (doc.html_content or '').strip():
+            messages.error(request, 'A certidão não possui conteúdo para juntar.')
+            return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
+
+        rotulo_certidao = (
+            doc.template.name if doc.template else 'Certidão'
+        )
+        eh_recurso = rotulo_certidao == 'Certidão de Recurso Inominado'
+        acao = (request.POST.get('acao') or 'juntar_intimar').strip().lower()
+        if acao not in ('juntar', 'intimar', 'juntar_intimar'):
+            messages.error(request, 'Ação inválida.')
+            return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
+        if acao in ('intimar', 'juntar_intimar') and not eh_recurso:
+            messages.error(
+                request,
+                'A intimação para contrarrazões só se aplica à '
+                'Certidão de Recurso Inominado.'
+            )
+            return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
+
+        polo = (request.POST.get('polo_intimacao') or 'autores').strip().lower()
+        if polo not in ('autores', 'res', 'todos'):
+            polo = 'autores'
+
+        observacao = (
+            request.POST.get('observacao_juntada') or ''
+        ).strip()
+        recorrente = (request.POST.get('recorrente') or '').strip()
+        processo = doc.process.number
+        url_processo = doc.process.projudi_url or ''
+
+        logger = logging.getLogger('projudi.certidoes')
+        service = MovimentacaoService(request.user)
+
+        # ── 1. Juntada da certidão ──────────────────────────────────
+        certidao_juntada = bool(doc.exported_to_projudi)
+        if acao in ('juntar', 'juntar_intimar') and not certidao_juntada:
+            try:
+                record = service.importar(
+                    processo_numero=processo,
+                    act_verb='certifique-se',
+                    observacao=(
+                        f'Juntada da {rotulo_certidao}. ' + observacao
+                    ).strip(),
+                    categoria='certidao',
+                    processo_cnj=processo,
+                    parte_nome=recorrente,
+                    url_processo=url_processo,
+                    codigo_movimentacao='581',
+                    descricao_movimentacao=rotulo_certidao,
+                )
+                if observacao:
+                    # Dados privados também ficam no log interno da movimentação.
+                    service.criar_log(
+                        record, 'info',
+                        f'Dados internos da certidão: {observacao}',
+                        {'documento_id': doc.id,
+                         'origem': 'certidao_recurso_inominado'},
+                    )
+                certidao_juntada = service.executar_requests(
+                    record,
+                    certidao_html=doc.html_content,
+                    certidao_titulo=rotulo_certidao,
+                )
+                if certidao_juntada:
+                    doc.exported_to_projudi = True
+                    doc.save(update_fields=['exported_to_projudi'])
+                    logger.info(
+                        'Certidão juntada | tipo=%s | processo=%s | '
+                        'documento=%s | %s',
+                        rotulo_certidao, processo, doc.id, observacao,
+                    )
+            except Exception as exc:
+                logger.exception(
+                    'Erro ao juntar certidão | tipo=%s | processo=%s | '
+                    'documento=%s', rotulo_certidao, processo, doc.id,
+                )
+                messages.error(request, f'Erro ao juntar a certidão: {exc}')
+                return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
+
+            if not certidao_juntada:
+                messages.error(
+                    request,
+                    'A certidão não foi juntada. A intimação não foi realizada.'
+                )
+                return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
+
+        if acao == 'intimar' and not certidao_juntada:
+            messages.error(
+                request,
+                'Junte a certidão antes de intimar a parte contrária.'
+            )
+            return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
+
+        # ── 2. Intimação da parte contrária ─────────────────────────
+        if acao in ('intimar', 'juntar_intimar'):
+            observacao_intimacao = (
+                'Intimem-se a parte contrária para apresentar contrarrazões '
+                'ao recurso inominado, no prazo de 10 (dez) dias úteis.'
+            )
+            try:
+                ok_intimacao = service.executar_com_intimacao(
+                    processo_numero=processo,
+                    observacao=observacao_intimacao,
+                    codigo_mov='581',
+                    descricao_mov='Intimação',
+                    prazo_intimacao='3',   # código 3 = 10 dias úteis
+                    motivo_intimacao='3',
+                    polo_intimacao=polo,
+                    natureza_override='civel',
+                )
+            except Exception as exc:
+                logger.exception(
+                    'Erro ao intimar contrarrazões | processo=%s | documento=%s',
+                    processo, doc.id,
+                )
+                messages.error(
+                    request,
+                    'A certidão foi juntada, mas a intimação falhou: '
+                    f'{exc}'
+                )
+                return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
+
+            if not ok_intimacao:
+                messages.warning(
+                    request,
+                    'A certidão foi juntada, mas a intimação não foi '
+                    'confirmada. Confira o processo no Projudi e, se '
+                    'necessário, use o botão "Apenas intimar".'
+                )
+                return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
+
+            logger.info(
+                'Intimação para contrarrazões realizada | processo=%s | '
+                'documento=%s | polo=%s | prazo=10 dias úteis',
+                processo, doc.id, polo,
+            )
+
+        if acao == 'juntar':
+            messages.success(
+                request,
+                f'✅ {rotulo_certidao} juntada ao processo.'
+            )
+        else:
+            messages.success(
+                request,
+                '✅ Certidão juntada e parte contrária intimada para '
+                'apresentar contrarrazões em 10 dias úteis.'
+            )
+        return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))

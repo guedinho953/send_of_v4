@@ -48,8 +48,67 @@
 {% endif %}
 
 {% if documento %}
-<div style="margin-top:10px; font-size:12px; color:#6b7280;">
-    Documento gerado #{{ documento.id }} — {{ documento.sequential_number|stringformat:"03d" }}/{{ documento.year }}
+<div style="margin-top:16px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:16px;">
+    <div style="font-size:14px; font-weight:600; color:#111827; margin-bottom:4px;">
+        Ações no Projudi
+    </div>
+    <div style="font-size:12px; color:#6b7280; margin-bottom:12px;">
+        Documento gerado #{{ documento.id }} — {{ documento.sequential_number|stringformat:"03d" }}/{{ documento.year }}
+        {% if documento.exported_to_projudi %}
+        <span style="color:#047857; font-weight:600;">· ✅ Certidão já juntada</span>
+        {% endif %}
+    </div>
+
+    <form method="post" action="{% url 'projudi:certidao_peticao_juntar_intimar' %}"
+          onsubmit="return confirm('Esta ação será executada no Projudi. Deseja continuar?');">
+        {% csrf_token %}
+        <input type="hidden" name="documento_id" value="{{ documento.id }}">
+        <input type="hidden" name="observacao_juntada" value="{{ item.observacao_juntada }}">
+        <input type="hidden" name="recorrente" value="{{ item.recorrente }}">
+
+        {% if item.eh_recurso %}
+        <div style="margin-bottom:12px;">
+            <label for="poloIntimacao" style="display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:4px;">
+                Parte contrária a intimar para contrarrazões
+            </label>
+            <select id="poloIntimacao" name="polo_intimacao"
+                    style="padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px; background:#fff; color:#374151;">
+                <option value="autores" {% if item.polo_sugerido == 'autores' %}selected{% endif %}>Autoras / Autores</option>
+                <option value="res" {% if item.polo_sugerido == 'res' %}selected{% endif %}>Réus / Rés</option>
+                <option value="todos">Ambas as partes (autores e rés)</option>
+            </select>
+            <div style="font-size:11px; color:#92400e; margin-top:4px;">
+                ⚠️ Confira o polo: a intimação será feita com prazo de
+                <strong>10 dias úteis</strong> (código 3 do Projudi).
+            </div>
+        </div>
+        {% endif %}
+
+        <div style="font-size:11px; color:#6b7280; margin-bottom:10px;">
+            A execução abre o Projudi e pode levar alguns minutos. Não feche a página.
+            A juntada e a intimação são registradas em movimentações separadas.
+        </div>
+
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            {% if not documento.exported_to_projudi %}
+            <button type="submit" name="acao" value="juntar" class="btn btn-outline"
+                    onclick="return confirm('Juntar a certidão no Projudi sem intimar a parte contrária?');">
+                📎 Apenas juntar certidão
+            </button>
+            {% endif %}
+            {% if item.eh_recurso %}
+            <button type="submit" name="acao" value="{% if documento.exported_to_projudi %}intimar{% else %}juntar_intimar{% endif %}"
+                    class="btn" style="background:#7c3aed; border-color:#7c3aed;"
+                    onclick="return confirm('{% if documento.exported_to_projudi %}Intimar a parte selecionada para apresentar contrarrazões em 10 dias úteis?{% else %}Juntar a certidão e intimar a parte selecionada para apresentar contrarrazões em 10 dias úteis?{% endif %}');">
+                {% if documento.exported_to_projudi %}
+                📨 Apenas intimar contrarrazões (10 dias)
+                {% else %}
+                📎📨 Juntar certidão + intimar contrarrazões (10 dias)
+                {% endif %}
+            </button>
+            {% endif %}
+        </div>
+    </form>
 </div>
 {% endif %}
 {% endblock %}
