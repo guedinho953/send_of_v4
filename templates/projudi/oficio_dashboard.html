@@ -244,6 +244,7 @@
             🔍 Rastrear & Expedir Ofícios (RAG)
         </button>
     </form>
+    <a href="{% url 'projudi:certidao_dashboard' %}" class="btn btn-outline">📄 Certidões</a>
     <a href="{% url 'projudi:oficio_list' %}{% if request.GET.status %}?status={{ request.GET.status }}{% endif %}" class="btn btn-outline">📋 Ver Lista Completa</a>
 </div>
 
