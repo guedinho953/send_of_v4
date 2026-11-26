@@ -515,10 +515,8 @@ data em que ocorrerá o decurso:
 
 ```text
 Certifico que o prazo de 15 (quinze) dias para o pagamento voluntário do
-débito referente ao Cumprimento de Sentença/Impugnação, referente ao
-Despacho (evento n.º 78), ainda não decorreu. Processo:
-0002019-65.2026.8.05.0191; executado(a): COMPANHIA DE ELETRICIDADE DO
-ESTADO DA BAHIA COELBA; data da intimação: 02/11/2026 (evento 84);
+débito ref. ao Cumprimento de Sentença/Impugnação, Despacho (evento n.º
+78), ainda não decorreu. Data da intimação: 02/11/2026 (evento 84);
 último dia do prazo: 25/11/2026; o decurso do prazo ocorrerá em
 26/11/2026.
 ```

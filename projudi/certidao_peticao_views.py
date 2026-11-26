@@ -971,13 +971,10 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
 
             observacao_decurso = (
                 'Certifico que o prazo de 15 (quinze) dias para o pagamento '
-                'voluntário do débito referente ao Cumprimento de '
-                'Sentença/Impugnação, referente ao Despacho (evento n.º '
-                f'{resultado["evento_despacho"]}){origem_despacho}, ainda '
-                'não decorreu. '
-                f'Processo: {resultado["processo"]}; '
-                f'executado(a): {resultado["executado"]}; '
-                'data da intimação: '
+                'voluntário do débito ref. ao Cumprimento de '
+                'Sentença/Impugnação, Despacho (evento n.º '
+                f'{resultado["evento_despacho"]}), ainda não decorreu. '
+                'Data da intimação: '
                 f'{resultado["data_intimacao"].strftime("%d/%m/%Y")} '
                 f'(evento {resultado["evento_intimacao"]}); '
                 'último dia do prazo: '
