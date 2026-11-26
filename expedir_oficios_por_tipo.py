@@ -135,6 +135,50 @@ def _extrair_cnj(texto):
     return m.group(0) if m else ''
 
 
+def _parse_numero_oficio(numero):
+    """Extrai (sequencial, ano) de '001/2026', '259/25' ou '259'."""
+    m = re.search(r'(\d{1,5})(?:\s*/\s*(\d{2,4}))?', str(numero or ''))
+    if not m:
+        return None, None
+    seq = int(m.group(1))
+    if m.group(2):
+        ano = int(m.group(2))
+        if ano < 100:
+            ano += 2000
+    else:
+        ano = date.today().year
+    return seq, ano
+
+
+def _proximo_numero_sistema(template=None):
+    """Fallback quando a planilha Google não está disponível.
+
+    Usa o maior número já conhecido no sistema (GeneratedDocument e
+    OficioRecord) + 1, no ano atual.
+    """
+    from projudi.models import OficioRecord
+
+    ano = date.today().year
+    seq = GeneratedDocument.proximo_numero(template) if template else 1
+
+    # Se este template já tem sequência própria (inclusive números vindos da
+    # planilha), continua dela. Só usa o maior OficioRecord quando ainda não
+    # há sequência nenhuma (primeiro uso/planilha nunca configurada).
+    tem_sequencia = bool(
+        template
+        and GeneratedDocument.objects.filter(
+            template=template, year=ano).exists()
+    )
+    if not tem_sequencia:
+        for numero in OficioRecord.objects.exclude(
+                numero_oficio='').values_list('numero_oficio', flat=True):
+            s, a = _parse_numero_oficio(numero)
+            if s and a == ano:
+                seq = max(seq, s + 1)
+
+    return f'{seq:03d}/{ano}'
+
+
 def _eh_ciap(texto):
     alvo = _normalizar(texto)
     return any(_normalizar(alias) in alvo for alias in CIAP_ALIASES)
@@ -891,8 +935,7 @@ def _gerar_conteudo_20bpm(item, user, http_session,
 
     numero = numero_documento
     if not numero:
-        seq = GeneratedDocument.proximo_numero(template)
-        numero = f'{seq:03d}/{date.today().year}'
+        numero = _proximo_numero_sistema(template)
 
     ctx = {
         'numero_documento': numero,
@@ -1259,14 +1302,24 @@ def _processar_item(page, item, tipo, user, http_session,
     nome_parte = ''
     template = None
     numero_planilha = ''
+    numero_documento = ''
 
     # Número oficial da planilha Google: último número + 1.
     if planilha:
         try:
             numero_planilha = planilha.proximo_numero()
+            numero_documento = numero_planilha
             print(f'   🔢 Próximo número da planilha: {numero_planilha}')
         except Exception as e:
             print(f'   ⚠️ Não foi possível ler a planilha Google: {e}')
+
+    # Sem planilha (ou planilha fora do ar), usa a numeração do sistema.
+    if tipo_efetivo:
+        template = _resolver_template(tipo_efetivo)
+        if not numero_documento and template:
+            numero_documento = _proximo_numero_sistema(template)
+            print(f'   🔢 Planilha indisponível; usando número do sistema: '
+                  f'{numero_documento}')
 
     # CIAP: a ata é a fonte da pessoa que vai cumprir e do tipo de prestação
     # (serviços x pecuniária). Sem isso, não confecciona o ofício.
@@ -1275,7 +1328,7 @@ def _processar_item(page, item, tipo, user, http_session,
             item, tipo_efetivo, user, http_session,
             assinante_nome=assinante_nome,
             assinante_cargo=assinante_cargo,
-            numero_documento=numero_planilha or None,
+            numero_documento=numero_documento or None,
         )
 
     if _eh_ciap(tipo_efetivo):
@@ -1368,17 +1421,39 @@ def _processar_item(page, item, tipo, user, http_session,
         doc.save(update_fields=['exported_to_projudi'])
         print(f'   💾 GeneratedDocument #{doc.id} marcado como exportado.')
 
-    if sucesso and planilha and numero_planilha:
-        processo_num = (
-            proc.number if proc else
-            _extrair_cnj(
-                ' '.join([
-                    item.get('rowText') or '',
-                    item.get('procText') or '',
-                ])
-            )
+    processo_num = (
+        proc.number if proc else
+        _extrair_cnj(
+            ' '.join([
+                item.get('rowText') or '',
+                item.get('procText') or '',
+            ])
         )
-        destinatario = _destinatario_item(item, tipo_efetivo)
+    )
+    destinatario = _destinatario_item(item, tipo_efetivo)
+
+    # Reserva o número no sistema, para o fallback não repetir 001/2026.
+    if sucesso and html_gerado and proc and template and numero_documento:
+        seq, ano = _parse_numero_oficio(numero_documento)
+        if seq and ano:
+            _novo, criado = GeneratedDocument.objects.get_or_create(
+                template=template,
+                year=ano,
+                sequential_number=seq,
+                defaults={
+                    'process': proc,
+                    'tenant': proc.tenant,
+                    'html_content': html_gerado,
+                    'recipient_name': destinatario,
+                    'exported_to_projudi': True,
+                },
+            )
+            if criado:
+                print(f'   💾 Número {numero_documento} reservado no sistema.')
+            else:
+                print(f'   ℹ️ Número {numero_documento} já estava no sistema.')
+
+    if sucesso and planilha and numero_planilha:
         try:
             planilha.registrar(
                 numero_planilha,
