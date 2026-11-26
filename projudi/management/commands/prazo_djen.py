@@ -399,12 +399,16 @@ class Command(BaseCommand):
 
         ctx = {
             'processo': options['processo'] or '—',
-            'parte': options['parte'] or 'as partes',
+            'parte': options['parte'] or '',
             'observacao_prazo': self._observacao(res, protocolo, info),
             'texto_certidao': texto_certidao,
             'data': date.today().strftime('%d/%m/%Y'),
             'servidor': options['servidor'],
         }
+        parte_html = (
+            f'<p>Para: {html_escape(ctx["parte"])}</p>'
+            if ctx['parte'] else ''
+        )
 
         if texto_certidao:
             titulo = 'CERTIDÃO'
@@ -426,7 +430,7 @@ class Command(BaseCommand):
                     '<div style="font-family:Times New Roman,serif;font-size:12pt;">'
                     '<h3>CERTIDÃO</h3>'
                     f'<p>Processo: {html_escape(ctx["processo"])}</p>'
-                    f'<p>Para: {html_escape(ctx["parte"])}</p>'
+                    f'{parte_html}'
                     f'<p>{html_escape(texto_certidao)}</p>'
                     f'<p>Paulo Afonso-BA, {ctx["data"]}.<br>'
                     f'{html_escape(ctx["servidor"])}</p></div>'
@@ -436,7 +440,7 @@ class Command(BaseCommand):
                     '<div style="font-family:Times New Roman,serif;font-size:12pt;">'
                     f'<h3>{titulo}</h3>'
                     f'<p>Processo: {ctx["processo"]}</p>'
-                    f'<p>Para: {ctx["parte"]}</p>'
+                    f'{parte_html}'
                     f'<p>Certifico que, referente ao processo em epígrafe, '
                     f'{ctx["observacao_prazo"]}</p>'
                     f'<p>Paulo Afonso-BA, {ctx["data"]}.<br>'

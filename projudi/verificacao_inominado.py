@@ -85,11 +85,29 @@ def achar_recurso_inominado(movs, evento=None):
     return max(candidatos, key=lambda item: item[0])[1]
 
 
-def achar_intimacao_djen(movs, evento_recurso=None, data_limite=None):
+def _normalizar_parte(texto) -> str:
+    """Normaliza nome de parte para comparação, ignorando pontuação."""
+    texto = _normalizar(texto)
+    texto = re.sub(r'[^A-Z0-9 ]+', ' ', texto)
+    return re.sub(r'\s+', ' ', texto).strip()
+
+
+def mov_menciona_parte(mov, parte) -> bool:
+    """Indica se o movimento cita o nome da parte/recorrente."""
+    if not parte:
+        return False
+    alvo = _normalizar_parte(parte)
+    return bool(alvo) and alvo in _normalizar_parte(_texto_mov(mov))
+
+
+def achar_intimacao_djen(movs, evento_recurso=None, data_limite=None,
+                         parte=None):
     """Localiza a disponibilização no DJEN anterior ao recurso.
 
     Pode filtrar pelo evento do recurso ou pela data-limite (data do
     protocolo, quando a petição ainda não virou evento no processo).
+    Quando ``parte`` é informada (o recorrente), dá preferência às
+    comunicações que citam nominalmente essa parte.
 
     Retorna (mov, data_disponibilizacao, origem) ou (None, None, None).
     Prioriza o campo data_djen; se não houver, usa o movimento de
@@ -127,9 +145,21 @@ def achar_intimacao_djen(movs, evento_recurso=None, data_limite=None):
             candidatos_fallback.append((ev, mov, d_mov, 'movimento'))
 
     if candidatos_djen:
-        ev, mov, data, origem = max(candidatos_djen, key=lambda x: x[0])
-        return mov, data, origem
+        com_parte = [
+            c for c in candidatos_djen if mov_menciona_parte(c[1], parte)
+        ]
+        escolhido = (
+            max(com_parte, key=lambda x: x[0]) if com_parte
+            else max(candidatos_djen, key=lambda x: x[0])
+        )
+        return escolhido[1], escolhido[2], escolhido[3]
     if candidatos_fallback:
-        ev, mov, data, origem = max(candidatos_fallback, key=lambda x: x[0])
-        return mov, data, origem
+        com_parte = [
+            c for c in candidatos_fallback if mov_menciona_parte(c[1], parte)
+        ]
+        escolhido = (
+            max(com_parte, key=lambda x: x[0]) if com_parte
+            else max(candidatos_fallback, key=lambda x: x[0])
+        )
+        return escolhido[1], escolhido[2], escolhido[3]
     return None, None, None

@@ -17,6 +17,7 @@
 | 06 | [WINDOWS_FIREFOX](WINDOWS_FIREFOX.md) | Windows nativo, Firefox local, Playwright, PostgreSQL local, dump do Docker, modo portátil e Ubuntu | Rodar no Windows/Linux |
 | 07 | [DEPOL_DILIGENCIAS](DEPOL_DILIGENCIAS.md) | Ofício à DEPOL com diligências do parecer do MP (com/sem cópia) | Expedir diligências |
 | 08 | [PRAZO_DJEN](PRAZO_DJEN.md) | Contagem DJEN, certidão de tempestividade/trânsito e fila JuntadaPeticao (recurso inominado) | Conferir prazos e preparo |
+| 09 | [MANUAL_RECORRENTE_PARTES](MANUAL_RECORRENTE_PARTES.md) | Atualização: intimação do recorrente, partes e manual para o outro PC | Implementar no outro PC |
 
 ---
 

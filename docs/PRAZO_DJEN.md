@@ -90,6 +90,18 @@ python manage.py certidao_inominado ^
 
 Se o recurso for **INTEMPESTIVO**, o preparo não é verificado/mencionado.
 
+A tempestividade é apurada pela intimação **do recorrente**. O comando tenta
+identificar quem recorreu no PDF da petição (ou use `--recorrente`), filtra o
+DJEN pelo nome e usa a comunicação dirigida a essa parte. A linha `PARA` da
+certidão mostra `Promovente: ... / Promovido: ...`; se as partes não forem
+localizadas, a linha é omitida.
+
+| Opção | Efeito |
+|-------|--------|
+| `--recorrente` | Nome do recorrente, quando não for possível ler no PDF |
+| `--peticao-url` | URL do PDF da petição (para identificar o recorrente) |
+| `--parte` | Sobrescreve o texto da linha `PARA` |
+
 Se a busca automática não achar o evento/data, use os sobreposições:
 
 ```bat
@@ -132,8 +144,13 @@ controle no dashboard.
 | `--preparo` | `gratuidade`, `completo`, `incompleto`/`insuficiente` ou `nao_pago` |
 | `--verificar-pdf` | Baixa a petição e confirma “RECURSO INOMINADO” no texto quando o tipo/nome não bastam |
 | `--data-protocolo` | Sobrescreve a data de envio |
+| `--recorrente` | Nome do recorrente, se não for possível ler no PDF |
+| `--peticao-url` | URL do PDF da petição (default: a da fila) |
 | `--nao-registrar` | Teste: gera o preview sem gravar no dashboard |
 | `--saida` | Caminho do HTML do preview |
+
+O comando identifica o recorrente no PDF da petição e usa a intimação/DJEN
+dirigida a ele. Se não conseguir, informe `--recorrente`.
 
 Os **comprovantes/guias não definem o preparo**: o comando apenas os lista.
 Quem confere os valores é o usuário, que informa o `--preparo`.
@@ -169,7 +186,7 @@ ficam registradas em:
 ## Testes
 
 ```bat
-python -m unittest test_prazo_djen test_verificacao_inominado test_peticoes_inominado
+python -m unittest test_prazo_djen test_verificacao_inominado test_peticoes_inominado test_partes_inominado
 ```
 
 Casos cobertos:
@@ -183,7 +200,10 @@ Casos cobertos:
 - detecção de recurso inominado e exclusão de contrarrazões;
 - DJEN posterior à data do protocolo é ignorado;
 - leitura da fila `JuntadaPeticao`, detecção por tipo/nome do PDF e separação
-  dos comprovantes.
+  dos comprovantes;
+- identificação do recorrente e escolha do DJEN nominal do recorrente
+  (ex.: evento da Maria x evento do Banco);
+- linha `PARA` com promovente/promovido ou omissão quando não localizados.
 
 ## Limitações / próximos passos
 
@@ -191,6 +211,10 @@ Casos cobertos:
   informado pelo usuário (os comprovantes são apenas listados).
 - Se a petição ainda não virou evento no processo, o evento da certidão fica
   `infra` e a data de protocolo vem da fila (`Data Envio`).
+- Se a petição for digitalizada (sem texto), a identificação automática do
+  recorrente pode falhar; nesse caso use `--recorrente "NOME"`.
+- Se a intimação escolhida não citar o recorrente, o comando avisa; confira ou
+  use `--data-disponibilizacao`/`--evento-intimacao`.
 - O trânsito é projetado como o **primeiro dia útil após o vencimento**.
   Confirme nos autos que não houve recurso antes de assinar.
 - Prazos especiais (fazenda pública, litisconsórcio, etc.) devem ser ajustados

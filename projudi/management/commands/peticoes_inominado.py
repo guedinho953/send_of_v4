@@ -64,7 +64,13 @@ class Command(BaseCommand):
                             help='Nº do evento da intimação/DJEN')
         parser.add_argument('--data-disponibilizacao',
                             help='Sobrescreve a data de disponibilização')
-        parser.add_argument('--parte', help='Nome da parte')
+        parser.add_argument('--parte', help='Nome da parte (linha "PARA")')
+        parser.add_argument(
+            '--recorrente',
+            help='Nome do recorrente (se não for possível ler no PDF)')
+        parser.add_argument(
+            '--peticao-url',
+            help='URL do PDF da petição (default: a da fila)')
         parser.add_argument('--servidor', default='IVAN GUEDES DA SILVA')
         parser.add_argument('--habilitacao', choices=['regular', 'omitir'],
                             default='regular')
@@ -155,6 +161,11 @@ class Command(BaseCommand):
             processo=peticao['processo'],
             preparo=options['preparo'],
             url=peticao['processo_url'],
+            peticao_url=(
+                options.get('peticao_url')
+                or (peticao['peticao']['url'] if peticao['peticao'] else None)
+            ),
+            recorrente=options.get('recorrente'),
             data_protocolo=data_protocolo,
             evento_recurso=options.get('evento_recurso'),
             evento_intimacao=options.get('evento_intimacao'),

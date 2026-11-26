@@ -14,6 +14,7 @@ Se a detecção automática falhar, informe manualmente:
 
 import os
 
+from bs4 import BeautifulSoup
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
@@ -22,9 +23,13 @@ os.environ.setdefault('PLAYWRIGHT_HEADLESS', '1')
 
 import expedir_oficios_por_tipo as E
 from projudiProcessNavigator import ProcessoParser
+from projudi.partes_inominado import (
+    achar_recorrente, extrair_partes_processo, texto_partes, texto_pdf,
+    url_peticao_movimento,
+)
 from projudi.verificacao_inominado import (
     achar_intimacao_djen, achar_recurso_inominado, data_djen,
-    data_mov, evento_mov,
+    data_mov, evento_mov, mov_menciona_parte,
 )
 
 
@@ -41,6 +46,12 @@ class Command(BaseCommand):
             ],
             help='Preparo informado pelo usuário')
         parser.add_argument('--url', help='URL DadosProcesso (opcional)')
+        parser.add_argument(
+            '--peticao-url',
+            help='URL do PDF da petição (para identificar o recorrente)')
+        parser.add_argument(
+            '--recorrente',
+            help='Nome do recorrente (se não for possível ler na petição)')
         parser.add_argument('--evento-recurso', help='Nº do evento do recurso')
         parser.add_argument('--evento-intimacao',
                             help='Nº do evento da intimação/DJEN')
@@ -84,6 +95,17 @@ class Command(BaseCommand):
         if not movs:
             raise CommandError('Nenhuma movimentação encontrada no processo.')
 
+        soup = BeautifulSoup(resposta.text, 'html.parser')
+        partes = extrair_partes_processo(parser, soup)
+        partes_texto = options.get('parte') or texto_partes(partes)
+
+        if partes_texto:
+            self.stdout.write(f'Partes...: {partes_texto}')
+        else:
+            self.stdout.write(
+                'Partes...: não localizadas na página do processo '
+                '(a linha "PARA" será omitida).')
+
         evento_recurso_arg = (
             int(options['evento_recurso'])
             if options.get('evento_recurso') else None
@@ -122,6 +144,28 @@ class Command(BaseCommand):
             from projudi.management.commands.prazo_djen import _parse_data
             data_protocolo = _parse_data(options['data_protocolo'])
 
+        peticao_url = (
+            options.get('peticao_url')
+            or (url_peticao_movimento(recurso) if recurso else '')
+        )
+        texto_peticao = texto_pdf(http, peticao_url) if peticao_url else ''
+        recorrente = (
+            options.get('recorrente')
+            or achar_recorrente(texto_peticao, partes)
+            or ''
+        ).strip()
+        if recorrente:
+            origem_rec = (
+                'informado manualmente' if options.get('recorrente')
+                else 'identificado na petição PDF'
+            )
+            self.stdout.write(
+                f'Recorrente: {recorrente} ({origem_rec})')
+        else:
+            self.stdout.write(self.style.WARNING(
+                'Recorrente não identificado; a intimação considerada será a '
+                'mais recente. Use --recorrente para especificar.'))
+
         if options.get('data_disponibilizacao'):
             from projudi.management.commands.prazo_djen import _parse_data
             data_dispo = _parse_data(options['data_disponibilizacao'])
@@ -134,7 +178,8 @@ class Command(BaseCommand):
                 else None
             )
             mov_int, data_dispo, origem = achar_intimacao_djen(
-                movs, evento_busca, data_limite=data_protocolo)
+                movs, evento_busca, data_limite=data_protocolo,
+                parte=recorrente or None)
             if not mov_int or not data_dispo:
                 raise CommandError(
                     'Não encontrei a disponibilização/DJEN anterior ao '
@@ -144,10 +189,15 @@ class Command(BaseCommand):
             texto_int = ' '.join(
                 str(mov_int.get(k) or '') for k in
                 ('ato', 'observacao'))
+            sufixo = f'; recorrente {recorrente}' if recorrente else ''
             self.stdout.write(
                 f'Intimação: evento {evento_intimacao} — '
                 f'{texto_int[:120]} — disponibilização '
-                f'{data_dispo.strftime("%d/%m/%Y")} ({origem})')
+                f'{data_dispo.strftime("%d/%m/%Y")} ({origem}{sufixo})')
+            if recorrente and not mov_menciona_parte(mov_int, recorrente):
+                self.stdout.write(self.style.WARNING(
+                    'Aviso: a intimação escolhida não cita o recorrente '
+                    'nominalmente. Confira antes de assinar.'))
 
         if not data_protocolo:
             raise CommandError(
@@ -167,7 +217,7 @@ class Command(BaseCommand):
             evento_recurso=(str(evento_recurso) if evento_recurso else 'infra'),
             evento_intimacao=str(evento_intimacao),
             processo=processo,
-            parte=options.get('parte') or '',
+            parte=partes_texto or '',
             servidor=options['servidor'],
             habilitacao=options['habilitacao'],
             saida=options.get('saida') or None,
