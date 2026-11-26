@@ -467,9 +467,17 @@ cumprimento de sentença/execução (por exemplo, evento 78).
 Campos:
 
 - processo;
-- evento do despacho;
+- evento do despacho (opcional);
 - executado (opcional; se vazio, usa o promovido/réu);
 - assinante.
+
+Com o evento em branco, o sistema percorre os eventos do processo **de
+cima para baixo** (dos mais recentes para os mais antigos), baixa os
+documentos dos atos decisórios e procura a ordem de pagamento em 15 dias.
+No exemplo, ele localiza automaticamente o evento 78.
+
+Se não conseguir identificar o despacho, o formulário é mantido e o
+sistema pede para o usuário informar o evento manualmente.
 
 O sistema localiza a intimação eletrônica (DJEN) do despacho para o
 executado e calcula o último dia e o decurso. Exemplo validado no processo

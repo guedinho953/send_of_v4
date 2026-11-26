@@ -920,11 +920,20 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
         processo = (request.POST.get('processo') or '').strip()
         evento = (request.POST.get('evento') or '').strip()
         executado = (request.POST.get('executado') or '').strip()
-        if not processo or not evento.isdigit():
-            messages.error(request, 'Informe o processo e o evento do despacho.')
+        if not processo:
+            messages.error(request, 'Informe o processo.')
             return HttpResponseRedirect(
                 reverse('projudi:certidao_decurso_pagamento')
             )
+        if evento and not evento.isdigit():
+            messages.error(
+                request,
+                'Evento inválido. Informe apenas o número do evento do '
+                'despacho ou deixe em branco para busca automática.'
+            )
+            return render(request, self.template_name, self._contexto(
+                processo=processo, evento=evento, executado=executado,
+            ))
 
         assinante = (
             request.POST.get('assinante') or ASSINANTE_PADRAO
@@ -953,6 +962,10 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
         # Enquanto o prazo não decorrer, não há certidão de decurso:
         # registra apenas uma observação na movimentação 11383 informando
         # a data em que o prazo vencerá.
+        origem_despacho = (
+            ' (localizado automaticamente)'
+            if resultado.get('despacho_auto') else ''
+        )
         if date.today() < resultado['data_decurso']:
             from .movimentacao_service import MovimentacaoService
 
@@ -960,7 +973,8 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
                 'Certidão de Decurso de Pagamento Voluntário — prazo ainda '
                 f'não decorrido. Processo: {resultado["processo"]}; '
                 f'executado(a): {resultado["executado"]}; '
-                f'despacho: evento {resultado["evento_despacho"]}; '
+                f'despacho: evento {resultado["evento_despacho"]}'
+                f'{origem_despacho}; '
                 f'evento da intimação: {resultado["evento_intimacao"]}; '
                 f'intimação: {resultado["data_intimacao"].strftime("%d/%m/%Y")}'
                 f'; último dia do prazo: '
@@ -1058,7 +1072,8 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
 
         observacao = (
             'Certidão de Decurso de Pagamento Voluntário — '
-            f'despacho evento {resultado["evento_despacho"]}; '
+            f'despacho evento {resultado["evento_despacho"]}'
+            f'{origem_despacho}; '
             f'evento da intimação: {resultado["evento_intimacao"]}; '
             f'intimação em {ctx["data_intimacao"]}; '
             f'último dia {ctx["ultimo_dia"]}; '

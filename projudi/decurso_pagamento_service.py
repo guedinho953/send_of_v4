@@ -1,5 +1,6 @@
 """Certidão de decurso do prazo de pagamento voluntário (15 dias)."""
 import re
+from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 
@@ -17,7 +18,7 @@ class DecursoPagamentoService:
     def __init__(self, user):
         self.user = user
 
-    def analisar(self, numero, evento, parte_nome='', dias=15):
+    def analisar(self, numero, evento='', parte_nome='', dias=15):
         digitos = normalize_process_number(numero)
         if len(digitos) < 15:
             return {'erro': 'Número de processo inválido.'}
@@ -48,13 +49,37 @@ class DecursoPagamentoService:
 
         movs = TransitoJulgadoService(self.user)._movimentacoes(soup)
         evento = str(evento or '').strip()
-        if not evento.isdigit():
-            return {'erro': 'Informe o evento do despacho.'}
-        despacho = next(
-            (m for m in movs if m['evento'] == evento), None
-        )
-        if not despacho:
-            return {'erro': f'Evento {evento} não encontrado no processo.'}
+        despacho_auto = False
+        if evento:
+            if not evento.isdigit():
+                return {
+                    'erro': (
+                        'Evento inválido. Informe apenas o número do evento '
+                        'do despacho.'
+                    )
+                }
+            despacho = next(
+                (m for m in movs if m['evento'] == evento), None
+            )
+            if not despacho:
+                return {
+                    'erro': (
+                        f'Evento {evento} não encontrado. Confira o número '
+                        'e informe novamente.'
+                    )
+                }
+        else:
+            despacho = self._localizar_despacho_pagamento(session, movs)
+            if not despacho:
+                return {
+                    'erro': (
+                        'Não foi possível localizar automaticamente o '
+                        'despacho que determina o pagamento em 15 dias. '
+                        'Informe o evento do despacho manualmente.'
+                    )
+                }
+            evento = despacho['evento']
+            despacho_auto = True
 
         parte = None
         if parte_nome:
@@ -106,6 +131,8 @@ class DecursoPagamentoService:
             'url': localizado['url'],
             'evento_despacho': evento,
             'despacho_texto': despacho['texto'][:500],
+            'despacho_auto': despacho_auto,
+            'despacho_trecho': (despacho.get('trecho') or '')[:500],
             'executado': parte['nome'],
             'parte_papel': parte.get('papel') or '',
             'evento_intimacao': intima['evento'],
@@ -120,6 +147,101 @@ class DecursoPagamentoService:
             'ultimo_dia': prazo.ultimo_dia,
             'data_decurso': prazo.data_decurso,
         }
+
+    def _localizar_despacho_pagamento(self, session, movs):
+        """Percorre os eventos de cima para baixo e acha o despacho.
+
+        A página do Projudi exibe os eventos mais recentes no topo. A busca
+        segue essa ordem, baixando o documento de cada ato decisório até
+        encontrar a ordem de pagamento em 15 dias.
+        """
+        termos_decisao = (
+            'DESPACHO', 'DECISAO', 'SENTENCA', 'ACORDAO',
+            'JULGADA', 'JULGADO', 'HOMOLOG',
+        )
+        candidatos = []
+        for mov in movs:
+            if not mov.get('links'):
+                continue
+            up = _norm(mov['texto'])
+            # Não confunde petições/juntadas que apenas citam o despacho
+            # com o próprio ato decisório.
+            if any(k in up for k in (
+                'JUNTADA DE PETICAO', 'PETICAO', 'REQUERIMENTO',
+                'IMPUGNACAO', 'CONTRARRAZOES', 'RECURSO',
+                'MANIFESTACAO', 'MEMORIAIS',
+            )):
+                continue
+            if not any(t in up for t in termos_decisao):
+                continue
+            if 'INTIMA' in up or 'DISPONIBILIZ' in up:
+                continue
+            candidatos.append(mov)
+
+        # Eventos mais recentes primeiro, como aparecem na tela.
+        candidatos.sort(key=lambda m: int(m['evento']), reverse=True)
+
+        for mov in candidatos[:30]:
+            for link in mov.get('links') or []:
+                texto = self._ler_documento(session, link)
+                if not texto:
+                    continue
+                trecho = self._trecho_pagamento(texto)
+                if trecho:
+                    resultado = dict(mov)
+                    resultado['trecho'] = trecho
+                    resultado['documento_texto'] = texto
+                    return resultado
+        return None
+
+    @staticmethod
+    def _ler_documento(session, link):
+        """Baixa e extrai o texto de um documento HTML ou PDF."""
+        if not link:
+            return ''
+        url = urljoin('https://projudi.tjba.jus.br', link)
+        try:
+            resposta = session.get(url, timeout=12)
+            if resposta.status_code != 200:
+                return ''
+            ctype = (resposta.headers.get('content-type') or '').lower()
+            if 'pdf' in ctype or 'original=true' in url.lower():
+                import fitz
+                pdf = fitz.open(stream=resposta.content, filetype='pdf')
+                return '\n'.join(p.get_text() for p in pdf)
+            html = resposta.content.decode(
+                resposta.encoding or 'latin-1', errors='ignore'
+            )
+            return BeautifulSoup(html, 'html.parser').get_text(
+                '\n', strip=True
+            )
+        except Exception:
+            return ''
+
+    @staticmethod
+    def _trecho_pagamento(texto):
+        """Retorna o trecho que caracteriza a ordem de pagamento em 15 dias."""
+        up = _norm(texto)
+        if not up:
+            return ''
+        if not any(k in up for k in (
+            'PAGAMENTO', 'PAGAR', 'ART. 523', 'CUMPRIR', 'CUMPRA',
+        )):
+            return ''
+        padroes = (
+            r'INTIME.{0,400}EXECUTAD.{0,400}CUMPRIR.{0,400}\b15\b',
+            r'EXECUTAD.{0,400}CUMPRIR.{0,400}\b15\b',
+            r'CUMPRIR.{0,300}SENTENCA.{0,300}\b15\b',
+            r'PAGAMENTO.{0,400}\b15\b.{0,80}(?:DIAS|QUINZE)',
+            r'\b15\b.{0,80}(?:DIAS|QUINZE).{0,400}PAGAMENTO',
+            r'PRAZO DE 15.{0,80}(?:DIAS|QUINZE).{0,300}CUMPRIR',
+            r'ART\.?\s*523',
+        )
+        for padrao in padroes:
+            m = re.search(padrao, up)
+            if m:
+                return m.group(0)[:500]
+        return ''
 
     @staticmethod
     def _descricao_evento(texto):

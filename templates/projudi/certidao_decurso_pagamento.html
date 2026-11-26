@@ -20,11 +20,13 @@
 </div>
 
 <div style="background:#fffbeb; border-left:4px solid #f59e0b; border-radius:6px; padding:10px 12px; margin-bottom:16px; font-size:12px; color:#92400e; line-height:1.5;">
-    O sistema confere se o prazo de 15 dias úteis já decorreu. Se já
-    decorreu, gera a certidão. Se ainda não decorreu, <strong>não gera
-    certidão</strong>: cria uma observação na movimentação
-    <strong>tipo 11383</strong> informando a data em que ocorrerá o decurso.
-    Confirme que o executado não efetuou o pagamento.
+    O sistema percorre os eventos do processo, de cima para baixo, e procura
+    o despacho que determinou o pagamento em 15 dias. Se não conseguir
+    identificar, pede para informar o evento manualmente. Depois confere se
+    o prazo já decorreu: se decorreu, gera a certidão; se ainda não decorreu,
+    <strong>não gera certidão</strong> e cria uma observação na movimentação
+    <strong>tipo 11383</strong> informando a data do decurso. Confirme que o
+    executado não efetuou o pagamento.
 </div>
 
 <div style="background:#fff; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,.08); padding:20px; max-width:820px;">
@@ -40,10 +42,14 @@
 
         <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:14px;">
             <div>
-                <label for="evento" style="display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:4px;">Evento do despacho *</label>
-                <input id="evento" name="evento" required value="{{ evento }}"
-                       placeholder="ex.: 78"
+                <label for="evento" style="display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:4px;">Evento do despacho (opcional)</label>
+                <input id="evento" name="evento" value="{{ evento }}"
+                       placeholder="automático"
                        style="width:130px; padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px;">
+                <div style="font-size:11px; color:#6b7280; margin-top:4px; max-width:260px;">
+                    Deixe vazio para o sistema localizar o despacho. Informe
+                    apenas se a busca automática não encontrar.
+                </div>
             </div>
             <div>
                 <label for="executado" style="display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:4px;">Executado(a) (opcional)</label>
