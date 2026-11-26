@@ -84,6 +84,9 @@ class Command(BaseCommand):
         parser.add_argument('--saida', help='Arquivo HTML de saída')
         parser.add_argument('--sem-html', action='store_true',
                             help='Só calcula, sem gerar HTML')
+        parser.add_argument(
+            '--nao-registrar', action='store_true',
+            help='Não grava o controle no dashboard (apenas preview/teste)')
 
     def handle(self, *args, **options):
         if options.get('preparo') == 'insuficiente':
@@ -208,13 +211,14 @@ class Command(BaseCommand):
                 preparo_status=preparo_status,
                 habilitacao_regular=habilitacao_regular,
             )
-        self._registrar_log(
-            res, protocolo, info, options, certidao_path,
-            texto_certidao=texto_certidao,
-            preparo_status=preparo_status,
-            habilitacao_regular=habilitacao_regular,
-            tempestivo=tempestivo,
-        )
+        if not options.get('nao_registrar'):
+            self._registrar_log(
+                res, protocolo, info, options, certidao_path,
+                texto_certidao=texto_certidao,
+                preparo_status=preparo_status,
+                habilitacao_regular=habilitacao_regular,
+                tempestivo=tempestivo,
+            )
 
     def _tenant(self, options):
         if options['tenant']:

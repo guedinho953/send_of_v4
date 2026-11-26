@@ -16,7 +16,7 @@
 | 05 | [CONFIGURAR-RAGS](05-CONFIGURAR-RAGS.md) | sequencia_cumprimento: tipos de passo, códigos (localizador, subtipo, prazo), polo, exemplos | Configurar RAGExamples |
 | 06 | [WINDOWS_FIREFOX](WINDOWS_FIREFOX.md) | Windows nativo, Firefox local, Playwright, PostgreSQL local, dump do Docker, modo portátil e Ubuntu | Rodar no Windows/Linux |
 | 07 | [DEPOL_DILIGENCIAS](DEPOL_DILIGENCIAS.md) | Ofício à DEPOL com diligências do parecer do MP (com/sem cópia) | Expedir diligências |
-| 08 | [PRAZO_DJEN](PRAZO_DJEN.md) | Contagem DJEN e certidão de tempestividade/trânsito semiautomática (10/15 dias úteis) | Conferir prazos |
+| 08 | [PRAZO_DJEN](PRAZO_DJEN.md) | Contagem DJEN, certidão de tempestividade/trânsito e fila JuntadaPeticao (recurso inominado) | Conferir prazos e preparo |
 
 ---
 

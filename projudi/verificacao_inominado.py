@@ -85,8 +85,11 @@ def achar_recurso_inominado(movs, evento=None):
     return max(candidatos, key=lambda item: item[0])[1]
 
 
-def achar_intimacao_djen(movs, evento_recurso):
+def achar_intimacao_djen(movs, evento_recurso=None, data_limite=None):
     """Localiza a disponibilização no DJEN anterior ao recurso.
+
+    Pode filtrar pelo evento do recurso ou pela data-limite (data do
+    protocolo, quando a petição ainda não virou evento no processo).
 
     Retorna (mov, data_disponibilizacao, origem) ou (None, None, None).
     Prioriza o campo data_djen; se não houver, usa o movimento de
@@ -97,12 +100,17 @@ def achar_intimacao_djen(movs, evento_recurso):
 
     for mov in movs:
         ev = evento_mov(mov)
-        if ev >= int(evento_recurso):
+        if evento_recurso is not None and ev >= int(evento_recurso):
             continue
 
         texto = _normalizar(_texto_mov(mov))
         d_djen = data_djen(mov)
         d_mov = data_mov(mov)
+        # Para o limite, vale a data efetiva da comunicação: se houver
+        # DJEN, é ela que conta (o movimento pode ter data anterior).
+        d_efetiva = d_djen or d_mov
+        if data_limite and d_efetiva and d_efetiva > data_limite:
+            continue
 
         if d_djen:
             candidatos_djen.append((ev, mov, d_djen, 'DJEN'))

@@ -54,6 +54,8 @@ class Command(BaseCommand):
                             default='regular')
         parser.add_argument('--saida', help='Arquivo HTML de saída')
         parser.add_argument('--sem-html', action='store_true')
+        parser.add_argument('--nao-registrar', action='store_true',
+                            help='Teste: não grava no dashboard')
         parser.add_argument('--user', help='E-mail do usuário da sessão')
 
     def handle(self, *args, **options):
@@ -97,16 +99,24 @@ class Command(BaseCommand):
                 f'{(recurso.get("ato") or "")[:120]} — '
                 f'protocolo {data_protocolo or "?"}')
         else:
-            if not (options.get('evento_recurso')
-                    and options.get('data_protocolo')):
+            # A petição pode estar na fila de juntada e ainda não ter virado
+            # movimento no processo. Nesse caso usamos a data de protocolo
+            # informada (data de envio da petição) e o evento fica "infra".
+            if not options.get('data_protocolo'):
                 raise CommandError(
                     'Não encontrei o recurso inominado no processo. '
-                    'Informe --evento-recurso e --data-protocolo '
-                    '(e, se preciso, --url).')
-            evento_recurso = int(options['evento_recurso'])
+                    'Informe --data-protocolo (e, se souber, '
+                    '--evento-recurso).')
+            evento_recurso = evento_recurso_arg
             data_protocolo = None
-            self.stdout.write(
-                f'Recurso..: evento {evento_recurso} (informado manualmente)')
+            if evento_recurso:
+                self.stdout.write(
+                    f'Recurso..: evento {evento_recurso} '
+                    '(informado manualmente)')
+            else:
+                self.stdout.write(
+                    'Recurso..: não localizado como movimento no processo; '
+                    'usando evento "infra" e a data de protocolo informada.')
 
         if options.get('data_protocolo'):
             from projudi.management.commands.prazo_djen import _parse_data
@@ -118,8 +128,13 @@ class Command(BaseCommand):
             evento_intimacao = options.get('evento_intimacao') or ''
             origem = 'informada manualmente'
         else:
+            evento_busca = (
+                evento_recurso
+                if isinstance(evento_recurso, int) and evento_recurso > 0
+                else None
+            )
             mov_int, data_dispo, origem = achar_intimacao_djen(
-                movs, evento_recurso)
+                movs, evento_busca, data_limite=data_protocolo)
             if not mov_int or not data_dispo:
                 raise CommandError(
                     'Não encontrei a disponibilização/DJEN anterior ao '
@@ -149,7 +164,7 @@ class Command(BaseCommand):
             disponibilizacao=data_dispo.strftime('%d/%m/%Y'),
             protocolo=data_protocolo.strftime('%d/%m/%Y'),
             preparo=options['preparo'],
-            evento_recurso=str(evento_recurso),
+            evento_recurso=(str(evento_recurso) if evento_recurso else 'infra'),
             evento_intimacao=str(evento_intimacao),
             processo=processo,
             parte=options.get('parte') or '',
@@ -157,6 +172,7 @@ class Command(BaseCommand):
             habilitacao=options['habilitacao'],
             saida=options.get('saida') or None,
             sem_html=options['sem_html'],
+            nao_registrar=options['nao_registrar'],
         )
 
     def _usuario(self, email=None):

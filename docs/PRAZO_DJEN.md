@@ -100,6 +100,44 @@ python manage.py certidao_inominado --processo ... --preparo completo ^
 
 Também é possível informar `--url` com a URL `DadosProcesso` do Projudi.
 
+## Fila de petições (`JuntadaPeticao`)
+
+A página `https://projudi.tjba.jus.br/projudi/listagens/JuntadaPeticao` lista
+as petições aguardando juntada. O comando abaixo varre essa fila, identifica
+os **recursos inominados** (pelo tipo da juntada, pelo nome do PDF e,
+opcionalmente, pelo conteúdo do PDF) e mostra os comprovantes/guias para
+conferência manual:
+
+```bat
+python manage.py peticoes_inominado --listar
+```
+
+Para gerar a certidão de uma petição da fila, informe o CNJ e o preparo:
+
+```bat
+python manage.py peticoes_inominado ^
+  --processo 0002888-28.2026.8.05.0191 ^
+  --preparo gratuidade
+```
+
+O comando usa a **data de envio** da petição como data de protocolo, abre o
+processo e busca o DJEN anterior a essa data. Ele **não executa**
+“Movimentar/Juntar” no Projudi: apenas lê a fila, gera o preview e registra o
+controle no dashboard.
+
+| Opção | Efeito |
+|-------|--------|
+| `--listar` | Só lista as petições de recurso inominado |
+| `--processo` | CNJ da petição a certificar |
+| `--preparo` | `gratuidade`, `completo`, `incompleto`/`insuficiente` ou `nao_pago` |
+| `--verificar-pdf` | Baixa a petição e confirma “RECURSO INOMINADO” no texto quando o tipo/nome não bastam |
+| `--data-protocolo` | Sobrescreve a data de envio |
+| `--nao-registrar` | Teste: gera o preview sem gravar no dashboard |
+| `--saida` | Caminho do HTML do preview |
+
+Os **comprovantes/guias não definem o preparo**: o comando apenas os lista.
+Quem confere os valores é o usuário, que informa o `--preparo`.
+
 ## Dashboard de certidões
 
 Acesse **Certidões** no menu ou:
@@ -131,7 +169,7 @@ ficam registradas em:
 ## Testes
 
 ```bat
-python -m unittest test_prazo_djen
+python -m unittest test_prazo_djen test_verificacao_inominado test_peticoes_inominado
 ```
 
 Casos cobertos:
@@ -141,14 +179,18 @@ Casos cobertos:
 - disponibilização na sexta → publicação segunda; início terça;
 - disponibilização no domingo/feriado → considerada segunda; publicação terça;
   início quarta;
-- prazo de 1 dia inclui o próprio dia de início.
+- prazo de 1 dia inclui o próprio dia de início;
+- detecção de recurso inominado e exclusão de contrarrazões;
+- DJEN posterior à data do protocolo é ignorado;
+- leitura da fila `JuntadaPeticao`, detecção por tipo/nome do PDF e separação
+  dos comprovantes.
 
 ## Limitações / próximos passos
 
-- O comando é **semiautomático**: não lê automaticamente a intimação do
-  Projudi; o usuário informa a data de disponibilização.
-- A próxima evolução é uma tela para escolher a intimação/comunicação do
-  processo e pré-preencher `--disponibilizacao`.
+- O comando é **semiautomático**: lê a fila e o processo, mas o preparo é
+  informado pelo usuário (os comprovantes são apenas listados).
+- Se a petição ainda não virou evento no processo, o evento da certidão fica
+  `infra` e a data de protocolo vem da fila (`Data Envio`).
 - O trânsito é projetado como o **primeiro dia útil após o vencimento**.
   Confirme nos autos que não houve recurso antes de assinar.
 - Prazos especiais (fazenda pública, litisconsórcio, etc.) devem ser ajustados

@@ -403,7 +403,12 @@ class ProcessoParser:
         )
 
         if match:
-            return datetime.strptime(match.group(1), "%d/%m/%y").date()
+            valor = match.group(1)
+            for formato in ('%d/%m/%Y', '%d/%m/%y'):
+                try:
+                    return datetime.strptime(valor, formato).date()
+                except ValueError:
+                    continue
 
         return None
         
@@ -503,7 +508,15 @@ class ProcessoParser:
             data_refencia_str = self.extrair_data_referencia(texto_evento)
 
             data_str = tds[2].get_text(strip=True)
-            data = datetime.strptime(data_str, "%d/%m/%y").date()
+            data = None
+            for formato in ('%d/%m/%Y', '%d/%m/%y'):
+                try:
+                    data = datetime.strptime(data_str, formato).date()
+                    break
+                except ValueError:
+                    continue
+            if data is None:
+                continue
             autor = tds[3].get_text(" ", strip=True)
             # if obs:
             #     observacao = obs
@@ -1054,7 +1067,12 @@ class ProcessoParser:
         )
 
         if match:
-            return datetime.strptime(match.group(1), "%d/%m/%y").date()
+            valor = match.group(1)
+            for formato in ('%d/%m/%Y', '%d/%m/%y'):
+                try:
+                    return datetime.strptime(valor, formato).date()
+                except ValueError:
+                    continue
 
         return None
         
@@ -1197,7 +1215,15 @@ class ProcessoParser:
             data_refencia_str = self.extrair_data_referencia(texto_evento)
 
             data_str = tds[2].get_text(strip=True)
-            data = datetime.strptime(data_str, "%d/%m/%y").date()
+            data = None
+            for formato in ('%d/%m/%Y', '%d/%m/%y'):
+                try:
+                    data = datetime.strptime(data_str, formato).date()
+                    break
+                except ValueError:
+                    continue
+            if data is None:
+                continue
             autor = tds[3].get_text(" ", strip=True)
 
             # if len(tds) > 4:

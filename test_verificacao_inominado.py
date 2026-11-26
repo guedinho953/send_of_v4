@@ -64,6 +64,21 @@ class VerificacaoInominadoTest(unittest.TestCase):
         self.assertEqual(data, date(2026, 3, 9))
         self.assertEqual(origem, 'movimento')
 
+    def test_intimacao_respeita_data_limite_do_protocolo(self):
+        movs = list(self.movs) + [{
+            'evento': '76',
+            'ato': 'Disponibilização no DJEN',
+            'data_obj': date(2026, 3, 25),
+            'data_djen': date(2026, 3, 27),
+            'data_texto': '25/03/26',
+        }]
+        mov, data, origem = achar_intimacao_djen(
+            movs, None, data_limite=date(2026, 3, 26))
+        self.assertIsNotNone(mov)
+        self.assertEqual(mov['evento'], '59')
+        self.assertEqual(data, date(2026, 3, 12))
+        self.assertEqual(origem, 'DJEN')
+
     def test_sem_recurso(self):
         self.assertIsNone(achar_recurso_inominado(self.movs[2:]))
 
