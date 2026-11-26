@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Prévia — {{ modelo.name }}{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:16px;">
+    <div>
+        <h1 class="section-title" style="font-size:20px; margin:0;">👁 Prévia do modelo</h1>
+        <div style="font-size:13px; color:#6b7280; margin-top:4px;">
+            {{ modelo.name }}
+            {% if not modelo.active %}<span style="color:#b45309;">· Inativo</span>{% endif %}
+        </div>
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <a href="{% url 'projudi:certidao_modelos' %}" class="btn btn-outline">← Modelos</a>
+        <a href="{% url 'projudi:certidao_modelo_editar' modelo.pk %}" class="btn btn-outline">✏️ Editar</a>
+    </div>
+</div>
+
+<div style="background:#eff6ff; border-left:4px solid #2563eb; border-radius:6px; padding:10px 12px; margin-bottom:14px; font-size:12px; color:#1e40af;">
+    A prévia usa dados de exemplo (processo fictício, parte e servidor padrão).
+    No Projudi, os dados reais são preenchidos na execução.
+</div>
+
+<div style="background:#fff; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,.08); padding:24px;">
+    <div style="max-width:800px; margin:0 auto; font-size:12px; line-height:1.6;">
+        {{ html_content|safe }}
+    </div>
+</div>
+{% endblock %}

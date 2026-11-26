@@ -6,6 +6,7 @@ from . import cumprimento_views
 from . import movimentacao_views
 from . import certidao_views
 from . import certidao_peticao_views
+from . import certidao_modelo_views
 
 app_name = 'projudi'
 
@@ -75,6 +76,12 @@ urlpatterns = [
 
     # Aba Certidões (separadas por origem: petição x movimentação)
     path('certidoes/dashboard/', certidao_views.CertidaoDashboardView.as_view(), name='certidao_dashboard'),
+    path('certidoes/modelos/', certidao_modelo_views.CertidaoModeloListView.as_view(), name='certidao_modelos'),
+    path('certidoes/modelos/novo/', certidao_modelo_views.CertidaoModeloCreateView.as_view(), name='certidao_modelo_novo'),
+    path('certidoes/modelos/<int:pk>/editar/', certidao_modelo_views.CertidaoModeloUpdateView.as_view(), name='certidao_modelo_editar'),
+    path('certidoes/modelos/<int:pk>/preview/', certidao_modelo_views.CertidaoModeloPreviewView.as_view(), name='certidao_modelo_preview'),
+    path('certidoes/modelos/<int:pk>/duplicar/', certidao_modelo_views.CertidaoModeloDuplicarView.as_view(), name='certidao_modelo_duplicar'),
+    path('certidoes/modelos/<int:pk>/toggle/', certidao_modelo_views.CertidaoModeloToggleView.as_view(), name='certidao_modelo_toggle'),
     path('certidoes/rastrear-rag/', certidao_views.CertidaoRastrearRagView.as_view(), name='certidao_rastrear_rag'),
     path('certidoes/rag/gerar/', certidao_views.CertidaoGerarViaRagView.as_view(), name='certidao_gerar_rag'),
     path('certidoes/rag/<int:pk>/executar/', certidao_views.CertidaoExecutarRagView.as_view(), name='certidao_executar_rag'),

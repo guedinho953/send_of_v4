@@ -204,6 +204,27 @@ A geração da certidão em si continua usando `CumprimentoService` e o
 `MovimentacaoRecord` gerado entra em **Certidões vindas das movimentações**
 com `origem='movimentacao'`.
 
+## Modelos de Certidões
+
+Rota:
+
+```text
+/projudi/certidoes/modelos/
+```
+
+Permite cadastrar, editar, pré-visualizar, duplicar e ativar/desativar
+modelos de certidão sem usar o Django Admin.
+
+Todo modelo criado aqui recebe:
+
+```text
+template_type = certidao
+```
+
+Para aparecer em **Gerar certidão via RAG**, ele precisa ser vinculado a uma
+`RAGExample` em `suggested_templates`. O vínculo ainda é feito no Django
+Admin (ou por script), mas o modelo em si é cadastrado na área de Certidões.
+
 ## Gerar certidão via RAG (documento no Projudi)
 
 Na seção **Certidões de despacho (RAG)** existe o formulário:

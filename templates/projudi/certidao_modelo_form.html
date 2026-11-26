@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}{% if modelo %}Editar{% else %}Novo{% endif %} Modelo de Certidão — Send of v4{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-card { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 4px; }
+    input[type="text"], textarea { width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; }
+    textarea.codigo { font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.45; min-height: 520px; }
+    .campo { margin-bottom: 16px; }
+    .ajuda { font-size: 11px; color: #6b7280; margin-top: 4px; line-height: 1.4; }
+    .btn-outline { background: transparent; border: 1px solid #d1d5db; color: #374151; }
+    .btn-outline:hover { background: #f3f4f6; }
+    .btn-green { background: #059669; color: white; }
+    .btn-green:hover { background: #047857; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:16px;">
+    <div>
+        <h1 class="section-title" style="font-size:22px; margin:0;">
+            {% if modelo %}✏️ Editar modelo{% else %}＋ Novo modelo de certidão{% endif %}
+        </h1>
+        <p style="font-size:13px; color:#6b7280; margin:4px 0 0;">
+            O tipo é sempre <strong>certidao</strong>. Use os placeholders do sistema no HTML.
+        </p>
+    </div>
+    <div style="display:flex; gap:8px;">
+        <a href="{% url 'projudi:certidao_modelos' %}" class="btn btn-outline">← Modelos</a>
+        {% if modelo %}
+        <a href="{% url 'projudi:certidao_modelo_preview' modelo.pk %}" class="btn btn-outline">👁 Prévia</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="form-card">
+    <form method="post">
+        {% csrf_token %}
+
+        <div class="campo">
+            <label for="name">Nome do modelo *</label>
+            <input type="text" id="name" name="name" required value="{{ valores.name }}"
+                   placeholder="Ex.: Certidão de Inexistência de Custas da Execução">
+        </div>
+
+        <div class="campo">
+            <label for="description">Descrição / quando usar</label>
+            <input type="text" id="description" name="description" value="{{ valores.description }}"
+                   placeholder="Ex.: Para decisão que declara extinta a execução sem custas.">
+        </div>
+
+        <div class="campo">
+            <label for="html_template">Template HTML *</label>
+            <textarea id="html_template" name="html_template" class="codigo" required
+                      placeholder="<div>...</div>">{{ valores.html_template }}</textarea>
+            <div class="ajuda">
+                Placeholders disponíveis: <code>{{ processo }}</code>,
+                <code>{{ parte }}</code>, <code>{{ data }}</code>,
+                <code>{{ servidor }}</code>, <code>{{ servidor_cargo }}</code>,
+                <code>{{ observacao_prazo }}</code>,
+                <code>{{ descricao_movimentacao }}</code>,
+                <code>{{ texto_certidao }}</code>.
+                O brasão pode usar a URL
+                <code>https://projudi.tjba.jus.br/projudi/imagens/brasaoPetroBranco.jpg</code>.
+            </div>
+        </div>
+
+        <div class="campo">
+            <label style="display:flex; align-items:center; gap:6px; font-weight:500;">
+                <input type="checkbox" name="active" value="1" {% if valores.active %}checked{% endif %}>
+                Modelo ativo
+            </label>
+        </div>
+
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="submit" class="btn btn-green">💾 Salvar modelo</button>
+            <a href="{% url 'projudi:certidao_modelos' %}" class="btn btn-outline">Cancelar</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
