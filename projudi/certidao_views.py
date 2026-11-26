@@ -252,7 +252,9 @@ class CertidaoGerarViaRagView(LoginRequiredMixin, View):
     """
 
     def post(self, request):
-        from base.utils import normalize_process_number
+        from base.utils import (
+            format_process_number, normalize_process_number,
+        )
         from processes.models import Process, RAGExample
         from .cumprimento_service import CumprimentoService
 
@@ -264,6 +266,16 @@ class CertidaoGerarViaRagView(LoginRequiredMixin, View):
         if not processo or not rag_id.isdigit():
             messages.error(request, 'Informe o processo e a RAG.')
             return HttpResponseRedirect(reverse('projudi:certidao_dashboard'))
+
+        digitos = normalize_process_number(processo)
+        if len(digitos) != 20:
+            messages.error(
+                request,
+                'Número do processo inválido. Use o formato '
+                '0000000-00.0000.8.00.0000.'
+            )
+            return HttpResponseRedirect(reverse('projudi:certidao_dashboard'))
+        processo = format_process_number(digitos)
 
         rag = RAGExample.objects.filter(
             pk=int(rag_id), active=True
@@ -284,20 +296,45 @@ class CertidaoGerarViaRagView(LoginRequiredMixin, View):
             )
             return HttpResponseRedirect(reverse('projudi:certidao_dashboard'))
 
-        proc, _ = Process.objects.get_or_create(
-            number=processo,
-            defaults={
-                'number_normalized': normalize_process_number(processo),
-                'tenant': request.user.tenant,
-                'status': 'analyzing',
-                'projudi_url': processo_url,
-            },
-        )
-        if processo_url and not proc.projudi_url:
-            proc.projudi_url = processo_url
-            proc.save(update_fields=['projudi_url'])
-        elif not processo_url and proc.projudi_url:
-            processo_url = proc.projudi_url
+        proc = Process.objects.filter(
+            number_normalized=digitos
+        ).first()
+        if proc is None:
+            proc = Process.objects.filter(number=processo).first()
+
+        if proc is None:
+            if not processo_url:
+                messages.error(
+                    request,
+                    'Processo não cadastrado. Informe a URL do Projudi '
+                    '(DadosProcesso?numeroProcesso=...) para localizar o '
+                    'número interno.'
+                )
+                return HttpResponseRedirect(
+                    reverse('projudi:certidao_dashboard')
+                )
+            proc = Process.objects.create(
+                number=processo,
+                number_normalized=digitos,
+                tenant=request.user.tenant,
+                status='analyzing',
+                projudi_url=processo_url,
+            )
+        else:
+            processo = proc.number
+            if processo_url and not proc.projudi_url:
+                proc.projudi_url = processo_url
+                proc.save(update_fields=['projudi_url'])
+            elif not processo_url and proc.projudi_url:
+                processo_url = proc.projudi_url
+
+        if not processo_url:
+            messages.error(
+                request,
+                'A URL do processo no Projudi não está cadastrada. '
+                'Informe a URL DadosProcesso?numeroProcesso=...'
+            )
+            return HttpResponseRedirect(reverse('projudi:certidao_dashboard'))
 
         existente = CumprimentoRecord.objects.filter(
             user=request.user,

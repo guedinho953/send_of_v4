@@ -258,10 +258,14 @@ Na seção **Certidões de despacho (RAG)** existe o formulário:
 
 Ele recebe:
 
-- processo;
+- processo (número CNJ completo, 20 dígitos);
 - RAG (somente RAGs ativas com template de certidão vinculado);
 - URL do Projudi (opcional; usa a URL já salva no processo);
 - opção “Gerar novamente”.
+
+O sistema valida o número e usa o cadastro do `Process` pela versão
+normalizada. Se o processo ainda não existir, a URL do Projudi é
+obrigatória para localizar o número interno.
 
 O sistema cria um `CumprimentoRecord`, usa o template de certidão da RAG e
 executa `CumprimentoService.executar_cumprimento`: o documento é montado,
