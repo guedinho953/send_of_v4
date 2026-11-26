@@ -204,6 +204,23 @@ A geração da certidão em si continua usando `CumprimentoService` e o
 `MovimentacaoRecord` gerado entra em **Certidões vindas das movimentações**
 com `origem='movimentacao'`.
 
+## Movimentações de hoje
+
+A listagem do Projudi traz a data da movimentação. Os fluxos de
+sincronização aceitam o parâmetro `hoje=1` para processar somente as
+movimentações do dia:
+
+- **Movimentações → Sincronizar somente hoje**;
+- **Cumprimentos → Sincronizar somente hoje**;
+- **Certidões → Certidões de despacho (RAG) → Rastrear RAG de hoje**.
+
+Depois da sincronização, o filtro **📅 Hoje** mostra somente as
+movimentações do dia, e o botão **Executar pendentes de hoje** executa
+apenas essas movimentações.
+
+Itens sem data na listagem são preservados para não perder movimento por
+falha de leitura.
+
 ## Certidão de inexistência de custas da execução
 
 Essa certidão fica na área de **Certidões**, dentro do grupo

@@ -131,6 +131,9 @@
         <button type="submit" class="btn btn-orange">
             🔄 Sincronizar com Projudi
         </button>
+        <button type="submit" name="hoje" value="1" class="btn btn-outline">
+            📅 Sincronizar somente hoje
+        </button>
     </form>
     <form method="post" action="{% url 'projudi:rastrear_expedir' %}" style="display:inline;">
         {% csrf_token %}

@@ -120,6 +120,13 @@ class CumprimentoService:
                     'tipo_ato': tipo_ato,
                     'act_verb': rag.despacho_ato[:50] if rag.despacho_ato else '',
                     'destinatario_texto': '',
+                    # Certidão é ato interno: um único registro de
+                    # movimentação simples, sem decidir fluxo por parte.
+                    'tipo_cumprimento': (
+                        'movimentacao'
+                        if getattr(template, 'template_type', '') == 'certidao'
+                        else ''
+                    ),
                     # 'forcar_mandado': o passo JSON explícito (não fallback)
                     # é sinalizado pelo chamador quando for caso
                 }
@@ -646,6 +653,10 @@ class CumprimentoService:
                       if cfg['observacao_prazo'] else '')
         certidao_html = (self._html_certidao_prazo(record)
                          if cfg['expede_certidao_prazo'] else '')
+        certidao_titulo = (
+            getattr(getattr(record, 'template_used', None), 'name', '')
+            or 'Certidão de Prazo'
+        ) if certidao_html else ''
 
         # Papel final (autor/réu/ambos) — JSON da RAG (polo_prazo)
         # sobrepõe o parte_papel do record.
@@ -671,9 +682,11 @@ class CumprimentoService:
                 'origem': 'movimentacao',
                 'observacao': observacao,
                 'codigo_movimentacao': '581',
-                'descricao_movimentacao': ('Certidão de Prazo'
-                                           if certidao_html
-                                           else 'Cumprimento de Decisão'),
+                'descricao_movimentacao': (
+                    certidao_titulo
+                    if certidao_html
+                    else 'Cumprimento de Decisão'
+                ),
                 'parte_nome': record.parte_nome or '',
                 'parte_papel': record.parte_papel or '',
                 'url_processo': record.url_processo or '',
@@ -687,10 +700,15 @@ class CumprimentoService:
             mov.categoria = 'certidao' if certidao_html else 'registro'
             mov.origem = 'movimentacao'
             mov.act_verb = 'certifique-se' if certidao_html else 'registre-se'
+            mov.descricao_movimentacao = (
+                certidao_titulo if certidao_html
+                else 'Cumprimento de Decisão'
+            )
             mov.parte_papel = record.parte_papel or ''
             mov.status = 'pendente'
             mov.save(update_fields=['observacao', 'categoria', 'origem',
-                                    'act_verb', 'parte_papel', 'status'])
+                                    'act_verb', 'descricao_movimentacao',
+                                    'parte_papel', 'status'])
 
         try:
             from projudi.movimentacao_service import MovimentacaoService
@@ -698,8 +716,7 @@ class CumprimentoService:
             ok = svc.executar_requests(
                 mov,
                 certidao_html=certidao_html,
-                certidao_titulo=('Certidão de Prazo'
-                                 if certidao_html else None) or '',
+                certidao_titulo=certidao_titulo,
             )
         except Exception as e:
             record.status = 'falha'
@@ -1772,27 +1789,48 @@ class CumprimentoService:
         }
 
     def _html_certidao_prazo(self, record: CumprimentoRecord) -> str:
-        """HTML da certidão de prazo a partir do JSON controlado.
+        """HTML da certidão controlada pela RAG.
 
-        Usa o mesmo texto genérico de observação (observacao_prazo),
-        embrulhado no cabeçalho de certidão. Datas em %d/%m/%Y.
+        Usa o `template_used` quando ele é uma certidão específica (ex.:
+        Certidão de Inexistência de Custas da Execução). Para os demais
+        casos mantém o comportamento antigo de usar 'Certidão de Prazo'.
         """
         p = record.prazo_info or {}
-        if not p:
+
+        from processes.models import DocumentTemplate
+        from django.template import Template, Context
+        from datetime import date as _date
+
+        # Certidão específica escolhida pelo RAG (ex.: custas da execução).
+        # Ela pode ser emitida mesmo sem prazo_info, pois não depende de
+        # contagem de prazo.
+        certidao_especifica = None
+        template_used = getattr(record, 'template_used', None)
+        if (template_used
+                and template_used.template_type == 'certidao'
+                and template_used.name != 'Certidão de Prazo'):
+            certidao_especifica = template_used
+
+        if not p and certidao_especifica is None:
             return ''
-        # 1) Tenta o DocumentTemplate 'Certidão de Prazo' (base Ofício CIAP).
+
         try:
-            from processes.models import DocumentTemplate
-            from django.template import Template, Context
-            tpl = DocumentTemplate.objects.get(
-                name='Certidão de Prazo', active=True)
-            from datetime import date as _date
+            tpl = certidao_especifica or DocumentTemplate.objects.get(
+                name='Certidão de Prazo', active=True
+            )
             ctx = {
                 'processo': record.numero_processo_cnj or record.processo,
-                'parte': CumprimentoService._rotulo_parte(
-                    self._papel_resolvido(record), record.parte_nome),
+                'parte': (
+                    record.parte_nome
+                    or CumprimentoService._rotulo_parte(
+                        self._papel_resolvido(record), record.parte_nome
+                    )
+                ),
                 'recorrente': CumprimentoService._nome_recorrente(record),
                 'observacao_prazo': record.observacao_prazo or '',
+                'descricao_movimentacao': (
+                    getattr(record, 'act_verb', '') or ''
+                ),
                 'data': _date.today().strftime('%d/%m/%Y'),
                 'servidor': CumprimentoService._capitalizar_nome_proprio(
                     getattr(self.user, 'full_name', '')

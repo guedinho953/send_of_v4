@@ -109,8 +109,10 @@ class CertidaoRastrearRagView(LoginRequiredMixin, View):
         from bs4 import BeautifulSoup
         from processes.models import DocumentTemplate
         from .cumprimento_service import CumprimentoService
+        from .movimentacao_utils import filtrar_hoje
 
         service = CumprimentoService(request.user)
+        somente_hoje = request.POST.get('hoje') == '1'
         try:
             result = service.projudi_service._get_session_from_cookies()
             if not result:
@@ -140,6 +142,9 @@ class CertidaoRastrearRagView(LoginRequiredMixin, View):
                         client.extrair_links_movimentacoes(soup)
                     )
 
+            if somente_hoje:
+                movs = filtrar_hoje(movs)
+
             if not movs:
                 messages.info(
                     request,
@@ -167,10 +172,12 @@ class CertidaoRastrearRagView(LoginRequiredMixin, View):
                     print(f'[CertidaoRAG] Erro importando: {exc}')
 
             if importados:
+                sufixo = ' de hoje' if somente_hoje else ''
                 messages.success(
                     request,
-                    f'🔎 {importados} certidão(ões) de RAG identificada(s). '
-                    'Confira a lista e execute somente as certidões desejadas.'
+                    f'🔎 {importados} certidão(ões) de RAG{sufixo} '
+                    'identificada(s). Confira a lista e execute somente as '
+                    'certidões desejadas.'
                 )
             else:
                 messages.info(

@@ -133,8 +133,10 @@ class CumprimentoSyncView(LoginRequiredMixin, View):
         from projudi_client import ProjudiClient
         from processes.models import DocumentTemplate
         from bs4 import BeautifulSoup
+        from .movimentacao_utils import filtrar_hoje
 
         service = CumprimentoService(request.user)
+        somente_hoje = request.POST.get('hoje') == '1'
         try:
             # Captura sessão
             result = service.projudi_service._get_session_from_cookies()
@@ -156,6 +158,9 @@ class CumprimentoSyncView(LoginRequiredMixin, View):
                 if len(rp.text) > 1000:
                     sp = BeautifulSoup(rp.text, 'html.parser')
                     movs.extend(client.extrair_links_movimentacoes(sp))
+
+            if somente_hoje:
+                movs = filtrar_hoje(movs)
 
             if not movs:
                 messages.info(request, 'Nenhuma movimentação encontrada nas últimas páginas.')

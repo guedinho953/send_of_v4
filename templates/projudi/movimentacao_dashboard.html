@@ -81,7 +81,16 @@
     <form method="post" action="{% url 'projudi:movimentacao_sync' %}" style="display:inline;">
         {% csrf_token %}
         <button type="submit" class="btn btn-orange">🔄 Sincronizar Movimentações</button>
+        <button type="submit" name="hoje" value="1" class="btn btn-outline">📅 Sincronizar somente hoje</button>
     </form>
+    {% if pendentes_hoje %}
+    <form method="post" action="{% url 'projudi:movimentacao_batch' %}" style="display:inline;"
+          onsubmit="return confirm('Executar somente as movimentações pendentes de hoje?');">
+        {% csrf_token %}
+        <input type="hidden" name="hoje" value="1">
+        <button type="submit" class="btn btn-green">▶️ Executar pendentes de hoje ({{ pendentes_hoje }})</button>
+    </form>
+    {% endif %}
     <a href="{% url 'projudi:movimentacao_list' %}" class="btn btn-outline">📋 Ver Lista Completa</a>
     <a href="{% url 'projudi:certidao_dashboard' %}" class="btn" style="background:#7c3aed; color:white;">📄 Certidões</a>
     <a href="{% url 'projudi:cumprimento_dashboard' %}" class="btn btn-outline">📬 Cumprimentos</a>
@@ -102,7 +111,9 @@
 
 <div class="filtro-bar">
     <a href="?{% if request.GET.categoria %}categoria={{ request.GET.categoria }}{% endif %}"
-       class="filtro-btn {% if not request.GET.status %}active{% endif %}">Todos os status</a>
+       class="filtro-btn {% if not request.GET.status and data_atual != 'hoje' %}active{% endif %}">Todos os status</a>
+    <a href="?data=hoje{% if request.GET.categoria %}&categoria={{ request.GET.categoria }}{% endif %}"
+       class="filtro-btn {% if data_atual == 'hoje' %}active{% endif %}">📅 Hoje</a>
     <a href="?status=pendente{% if request.GET.categoria %}&categoria={{ request.GET.categoria }}{% endif %}"
        class="filtro-btn {% if request.GET.status == 'pendente' %}active{% endif %}">⏳ Pendentes</a>
     <a href="?status=cumprido{% if request.GET.categoria %}&categoria={{ request.GET.categoria }}{% endif %}"
@@ -126,6 +137,7 @@
                 <div class="mov-meta">
                     {{ m.get_categoria_display }}
                     {% if m.parte_nome %} | 👤 {{ m.parte_nome }}{% endif %}
+                    {% if m.data_movimentacao %} | 📅 {{ m.data_movimentacao|date:"d/m/Y" }}{% endif %}
                     | 🕒 {{ m.created_at|date:"d/m/Y H:i" }}
                 </div>
             </div>

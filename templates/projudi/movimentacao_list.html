@@ -38,7 +38,9 @@
 
 <div class="filtro-bar">
     <a href="?{% if request.GET.categoria %}categoria={{ request.GET.categoria }}{% endif %}"
-       class="filtro-btn {% if not request.GET.status %}active{% endif %}">Todos os status</a>
+       class="filtro-btn {% if not request.GET.status and request.GET.data != 'hoje' %}active{% endif %}">Todos os status</a>
+    <a href="?data=hoje{% if request.GET.categoria %}&categoria={{ request.GET.categoria }}{% endif %}"
+       class="filtro-btn {% if request.GET.data == 'hoje' %}active{% endif %}">📅 Hoje</a>
     <a href="?status=pendente{% if request.GET.categoria %}&categoria={{ request.GET.categoria }}{% endif %}"
        class="filtro-btn {% if request.GET.status == 'pendente' %}active{% endif %}">Pendentes</a>
     <a href="?status=cumprido{% if request.GET.categoria %}&categoria={{ request.GET.categoria }}{% endif %}"
@@ -83,6 +85,7 @@
                     <th>Categoria</th>
                     <th>Parte</th>
                     <th>Status</th>
+                    <th>Data mov.</th>
                     <th>Criada em</th>
                     <th>Ações</th>
                 </tr>
@@ -98,6 +101,7 @@
                     <td>{{ m.get_categoria_display }}</td>
                     <td>{{ m.parte_nome|default:"—" }}</td>
                     <td><span class="tag-status tag-{{ m.status }}">{{ m.get_status_display }}</span></td>
+                    <td style="font-size:12px; color:#6b7280;">{{ m.data_movimentacao|date:"d/m/Y"|default:"—" }}</td>
                     <td style="font-size:12px; color:#6b7280;">{{ m.created_at|date:"d/m/Y H:i" }}</td>
                     <td>
                         <a href="{% url 'projudi:movimentacao_detail' m.pk %}" class="btn btn-sm btn-outline">Detalhes</a>
@@ -114,11 +118,11 @@
     {% if is_paginated %}
     <div class="paginacao">
         {% if page_obj.has_previous %}
-        <a href="?page={{ page_obj.previous_page_number }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.categoria %}&categoria={{ request.GET.categoria }}{% endif %}">← Anterior</a>
+        <a href="?page={{ page_obj.previous_page_number }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.categoria %}&categoria={{ request.GET.categoria }}{% endif %}{% if request.GET.data %}&data={{ request.GET.data }}{% endif %}">← Anterior</a>
         {% endif %}
         <span class="atual">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
         {% if page_obj.has_next %}
-        <a href="?page={{ page_obj.next_page_number }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.categoria %}&categoria={{ request.GET.categoria }}{% endif %}">Próxima →</a>
+        <a href="?page={{ page_obj.next_page_number }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.categoria %}&categoria={{ request.GET.categoria }}{% endif %}{% if request.GET.data %}&data={{ request.GET.data }}{% endif %}">Próxima →</a>
         {% endif %}
     </div>
     {% endif %}

@@ -490,6 +490,9 @@ class MovimentacaoRecord(TimeStampedModel):
         'Origem', max_length=20, choices=ORIGEM_CHOICES,
         default='movimentacao', db_index=True,
         help_text='Separa certidões/procedimentos de petições e de movimentações')
+    data_movimentacao = models.DateField(
+        'Data da Movimentação', null=True, blank=True, db_index=True,
+        help_text='Data mostrada na listagem de movimentações do Projudi')
     observacao = models.TextField('Observação', blank=True,
         help_text='Texto a ser registrado como observação da movimentação')
 
