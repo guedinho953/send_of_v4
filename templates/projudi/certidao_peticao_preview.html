@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Certidão gerada — {{ item.processo }}{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:16px;">
+    <div>
+        <h1 class="section-title" style="font-size:20px; margin:0;">📄 Certidão gerada</h1>
+        <div style="font-size:13px; color:#6b7280; margin-top:4px;">
+            {{ item.tipo_label }} — {{ item.dias }} dias úteis |
+            {{ item.processo }} |
+            Intimação: {{ item.meio_label }}
+            {% if item.data_inicio %} em {{ item.data_inicio|date:"d/m/Y" }}{% endif %}
+        </div>
+        <div style="font-size:13px; color:#374151; margin-top:4px;">
+            Término: <strong>{{ item.ultimo_dia|date:"d/m/Y" }}</strong>
+            | Decurso: <strong>{{ item.data_decurso|date:"d/m/Y" }}</strong>
+        </div>
+    </div>
+    <div style="display:flex; gap:8px;">
+        <button onclick="window.print()" class="btn">🖨 Imprimir</button>
+        <a href="{% url 'projudi:certidao_peticoes' %}" class="btn btn-outline">← Voltar à fila</a>
+        <a href="{% url 'projudi:certidao_dashboard' %}" class="btn btn-outline">Certidões</a>
+    </div>
+</div>
+
+<div style="background:#fff; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,.08); padding:24px;">
+    <div style="max-width:800px; margin:0 auto; font-size:12px; line-height:1.6;">
+        {{ html_content|safe }}
+    </div>
+</div>
+
+{% if documento %}
+<div style="margin-top:10px; font-size:12px; color:#6b7280;">
+    Documento gerado #{{ documento.id }} — {{ documento.sequential_number|stringformat:"03d" }}/{{ documento.year }}
+</div>
+{% endif %}
+{% endblock %}

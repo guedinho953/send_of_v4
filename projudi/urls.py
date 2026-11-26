@@ -5,6 +5,7 @@ from . import mandado_views
 from . import cumprimento_views
 from . import movimentacao_views
 from . import certidao_views
+from . import certidao_peticao_views
 
 app_name = 'projudi'
 
@@ -74,6 +75,8 @@ urlpatterns = [
 
     # Aba Certidões (separadas por origem: petição x movimentação)
     path('certidoes/dashboard/', certidao_views.CertidaoDashboardView.as_view(), name='certidao_dashboard'),
+    path('certidoes/peticoes/', certidao_peticao_views.CertidaoPeticaoQueueView.as_view(), name='certidao_peticoes'),
+    path('certidoes/peticoes/gerar/', certidao_peticao_views.CertidaoPeticaoGerarView.as_view(), name='certidao_peticao_gerar'),
 
     # Aba Movimentações (NOVO — atos internos via Mov581)
     path('movimentacoes/dashboard/', movimentacao_views.MovimentacaoDashboardView.as_view(), name='movimentacao_dashboard'),

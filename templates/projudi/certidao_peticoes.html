@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block title %}Fila de Petições — Certidões{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .stat-card { background: #fff; border-radius: 10px; padding: 16px; box-shadow: 0 2px 4px rgba(0,0,0,.06); border-left: 4px solid #7c3aed; text-align: center; }
+    .stat-card h4 { margin: 0; font-size: 26px; color: #1e3a5f; }
+    .stat-card p { margin: 4px 0 0; font-size: 11px; color: #6b7280; text-transform: uppercase; }
+    .pet-card { background: #fff; border-radius: 8px; padding: 14px 16px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.06); border-left: 4px solid #7c3aed; }
+    .pet-card.vencido { border-left-color: #dc2626; }
+    .pet-header { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+    .pet-processo { font-family: monospace; font-weight: 700; color: #1e3a5f; font-size: 15px; }
+    .pet-tipo { display: inline-block; background: #ede9fe; color: #5b21b6; border-radius: 10px; padding: 2px 8px; font-size: 11px; font-weight: 600; margin-top: 5px; }
+    .pet-meta { font-size: 12px; color: #6b7280; margin-top: 6px; line-height: 1.6; }
+    .pet-meta strong { color: #374151; }
+    .prazo-box { background: #f9fafb; border-radius: 6px; padding: 8px 10px; margin-top: 8px; font-size: 12px; color: #374151; }
+    .prazo-box .ok { color: #047857; font-weight: 700; }
+    .prazo-box .vencido { color: #b91c1c; font-weight: 700; }
+    .btn-sm { padding: 5px 12px; font-size: 12px; border-radius: 5px; }
+    .empty-state { background:#fff; border-radius:8px; padding:30px; text-align:center; color:#6b7280; }
+    .aviso { background:#fffbeb; border-left:4px solid #f59e0b; padding:12px 16px; border-radius:6px; margin-bottom:16px; font-size:13px; color:#92400e; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+    <h1 class="section-title" style="font-size:22px; margin-bottom:6px;">📥 Fila de Petições</h1>
+    <a href="{% url 'projudi:certidao_dashboard' %}" class="btn btn-outline">← Certidões</a>
+</div>
+<p style="font-size:13px; color:#6b7280; margin:0 0 16px;">
+    Lida diretamente de <code>JuntadaPeticao</code>. O prazo é contado em dias úteis
+    conforme a forma de intimação (DJEN, advogado, e-mail, AR ou mandado).
+</p>
+
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+{% endif %}
+
+{% if erro %}
+<div class="alert alert-warning">
+    ⚠️ Não foi possível ler a fila de petições: {{ erro }}
+    <a href="{% url 'projudi:sync_session' %}">Sincronizar sessão</a>
+</div>
+{% endif %}
+
+<div class="stats-grid">
+    <div class="stat-card" style="border-left-color:#7c3aed;"><h4>{{ contagem.recurso_inominado }}</h4><p>Recurso Inominado (10 dias)</p></div>
+    <div class="stat-card" style="border-left-color:#7c3aed;"><h4>{{ contagem.contrarrazoes }}</h4><p>Contrarrazões (10 dias)</p></div>
+    <div class="stat-card" style="border-left-color:#0891b2;"><h4>{{ contagem.impugnacao_cumprimento }}</h4><p>Impugnação/Cumprimento (15 dias)</p></div>
+    <div class="stat-card" style="border-left-color:#0891b2;"><h4>{{ contagem.impugnacao_penhora }}</h4><p>Impugnação/Penhora (15 dias)</p></div>
+</div>
+
+<div class="aviso">
+    <strong>Base da contagem:</strong> usa a data da intimação localizada no processo.
+    Para DJEN, usa a disponibilização; para advogado/e-mail/AR/mandado, a data da
+    intimação/leitura. Se não localizar, usa a data de envio da petição como fallback.
+</div>
+
+{% if itens %}
+    {% for item in itens %}
+    <div class="pet-card {% if item.vencido %}vencido{% endif %}">
+        <div class="pet-header">
+            <div>
+                <div class="pet-processo">{{ item.processo }}</div>
+                <span class="pet-tipo">{{ item.tipo_label }} — {{ item.dias }} dias úteis</span>
+                <div class="pet-meta">
+                    <strong>Envio:</strong> {{ item.data_envio_fmt }}
+                    &nbsp;|&nbsp; <strong>Intimação:</strong>
+                    {{ item.meio_label }}
+                    {% if item.data_intimacao_fmt %} em {{ item.data_intimacao_fmt }}{% endif %}
+                    {% if item.recorrente %}<br><strong>Parte/recorrente:</strong> {{ item.recorrente }}{% endif %}
+                </div>
+            </div>
+            <div style="text-align:right; font-size:12px; color:#6b7280;">
+                {% if item.prazo %}
+                    {% if item.vencido %}
+                        <span class="prazo-box vencido">Prazo decorrido</span>
+                    {% else %}
+                        <span class="prazo-box ok">{{ item.dias_restantes }} dia(s) útil(eis)</span>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+
+        {% if item.prazo %}
+        <div class="prazo-box">
+            <strong>Início:</strong> {{ item.data_inicio_fmt }}
+            &nbsp;|&nbsp; <strong>Término:</strong> {{ item.ultimo_dia_fmt }}
+            &nbsp;|&nbsp; <strong>Decurso:</strong> {{ item.data_decurso_fmt }}
+        </div>
+        {% elif item.erro_prazo %}
+        <div class="prazo-box vencido">Erro no prazo: {{ item.erro_prazo }}</div>
+        {% endif %}
+
+        <div style="margin-top:10px; display:flex; gap:6px; flex-wrap:wrap;">
+            <form method="post" action="{% url 'projudi:certidao_peticao_gerar' %}">
+                {% csrf_token %}
+                <input type="hidden" name="tipo" value="{{ item.tipo }}">
+                <input type="hidden" name="processo" value="{{ item.processo }}">
+                <input type="hidden" name="data_envio" value="{{ item.data_envio_fmt }}">
+                <input type="hidden" name="data_inicio" value="{{ item.data_inicio_fmt }}">
+                <input type="hidden" name="meio_intimacao" value="{{ item.meio_intimacao }}">
+                <input type="hidden" name="meio_label" value="{{ item.meio_label }}">
+                <input type="hidden" name="recorrente" value="{{ item.recorrente }}">
+                <input type="hidden" name="documento_texto" value="{{ item.documento_texto }}">
+                <button type="submit" class="btn btn-sm" style="background:#7c3aed; color:white;">
+                    📄 Gerar certidão
+                </button>
+            </form>
+            {% if item.documento_url %}
+            <a href="{{ item.documento_url }}" target="_blank" class="btn btn-sm btn-outline">📎 Ver petição</a>
+            {% endif %}
+            <a href="{{ item.processo_url }}" target="_blank" class="btn btn-sm btn-outline">🔗 Processo</a>
+        </div>
+    </div>
+    {% endfor %}
+{% elif not erro %}
+<div class="empty-state">
+    📭 Nenhuma petição dos tipos previstos (recurso inominado, contrarrazões,
+    impugnação/cumprimento de sentença ou impugnação/penhora) na fila.
+</div>
+{% endif %}
+{% endblock %}
