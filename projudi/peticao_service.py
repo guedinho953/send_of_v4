@@ -24,6 +24,10 @@ BASE_URL = 'https://projudi.tjba.jus.br/projudi/'
 URL_PETICOES = urljoin(BASE_URL, 'listagens/JuntadaPeticao')
 
 TIPOS = {
+    'decurso_pagamento': {
+        'label': 'Decurso do Prazo de Pagamento Voluntário',
+        'dias': 15,
+    },
     'recurso_inominado': {
         'label': 'Recurso Inominado',
         'dias': 10,
@@ -38,10 +42,6 @@ TIPOS = {
     },
     'impugnacao_penhora': {
         'label': 'Impugnação/Decurso do Prazo da Penhora',
-        'dias': 15,
-    },
-    'decurso_pagamento': {
-        'label': 'Decurso de Pagamento Voluntário',
         'dias': 15,
     },
 }

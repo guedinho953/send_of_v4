@@ -16,7 +16,7 @@ Rota no sistema:
 | Contrarrazões ao Recurso Inominado | Contrarrazões | 10 dias úteis |
 | Impugnação / Cumprimento de Sentença | Impugnação/Cumprimento | 15 dias úteis |
 | Impugnação / Decurso do Prazo da Penhora | Impugnação/Penhora | 15 dias úteis |
-| Decurso de Pagamento Voluntário | Decurso de Pagamento Voluntário | 15 dias úteis |
+| Decurso do Prazo de Pagamento Voluntário | Decurso de Pagamento Voluntário | 15 dias úteis |
 
 ## Escolha manual da ação/modelo
 
@@ -39,7 +39,7 @@ Sentença` não é classificada automaticamente, mas passa a aparecer na
 fila para que a ação seja escolhida manualmente.
 
 A certidão de decurso de pagamento também aparece no seletor de modelos
-como **Decurso de Pagamento Voluntário — 15 dias**. Ao escolhê-la, o
+como **Decurso do Prazo de Pagamento Voluntário — 15 dias**. Ao escolhê-la, o
 sistema localiza automaticamente o despacho que determinou o pagamento,
 sem depender do tipo da petição. Também há atalhos **📄 Decurso de
 pagamento** no topo da página e em cada card, já com o processo preenchido.

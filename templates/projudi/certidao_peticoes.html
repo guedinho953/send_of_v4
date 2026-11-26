@@ -28,7 +28,7 @@
 <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
     <h1 class="section-title" style="font-size:22px; margin-bottom:6px;">📥 Fila de Petições</h1>
     <div style="display:flex; gap:8px;">
-        <a href="{% url 'projudi:certidao_decurso_pagamento' %}" class="btn btn-outline">📄 Decurso de pagamento</a>
+        <a href="{% url 'projudi:certidao_decurso_pagamento' %}" class="btn btn-outline">📄 Decurso do Prazo de Pagamento Voluntário</a>
         <a href="?atualizar=1" class="btn btn-outline">🔄 Atualizar fila</a>
         <a href="{% url 'projudi:certidao_dashboard' %}" class="btn btn-outline">← Certidões</a>
     </div>
@@ -38,7 +38,7 @@
     conforme a forma de intimação (DJEN, advogado, e-mail, AR ou mandado).
     A ação detectada é apenas uma sugestão: você pode trocar o modelo e ajustar
     a data/meio antes de gerar. Petições não classificadas aparecem para
-    escolha manual. O modelo **Decurso de Pagamento Voluntário** também está
+    escolha manual. O modelo **Decurso do Prazo de Pagamento Voluntário** também está
     no seletor; ao escolhê-lo, o sistema localiza automaticamente o despacho
     de pagamento. Há também atalhos **📄 Decurso de pagamento** no topo e nos
     cards.
@@ -212,7 +212,7 @@
             <a href="{{ item.documento_url }}" target="_blank" class="btn btn-sm btn-outline">📎 Ver petição</a>
             {% endif %}
             <a href="{% url 'projudi:certidao_decurso_pagamento' %}?processo={{ item.processo|urlencode }}"
-               class="btn btn-sm btn-outline">📄 Decurso de pagamento</a>
+               class="btn btn-sm btn-outline">📄 Decurso do Prazo de Pagamento Voluntário</a>
             <a href="{{ item.processo_url }}" target="_blank" class="btn btn-sm btn-outline">🔗 Processo</a>
         </div>
     </div>
