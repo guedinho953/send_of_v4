@@ -1,5 +1,15 @@
 # Planilha de ofícios no Google Docs
 
+> **Importante:** o link público sozinho **não** permite que o Django edite o
+> documento pela API. É preciso uma das duas opções abaixo:
+> **Apps Script** (recomendado; pode ficar “Qualquer pessoa” com token) ou
+> **conta de serviço** compartilhada como Editor.
+>
+> O sistema usa **Google Docs com uma tabela** (`docs.google.com/document/...`).
+> Se o seu link for uma **Google Sheets** (`docs.google.com/spreadsheets/...`),
+> o Apps Script atual (`DocumentApp`) não serve; será preciso adaptar o script
+> para `SpreadsheetApp`.
+
 O sistema pode ler o último número de ofício da tabela do Google Docs,
 somar 1 e inserir uma nova linha com:
 
@@ -36,7 +46,12 @@ python manage.py testar_planilha_oficios
 ```
 
 Essa opção usa a própria conta Gmail que já tem acesso ao documento e não
-precisa de conta de serviço nem chave JSON.
+precisa de conta de serviço nem chave JSON. “Qualquer pessoa” no App da Web
+é seguro o suficiente porque o script exige o `TOKEN`.
+
+> Se você só tem o link do documento, pode colá-lo em
+> `GOOGLE_OFICIOS_DOC_URL` no `.env` (o sistema extrai o ID). Mas isso ainda
+> exige a conta de serviço ou o Apps Script para autenticar a edição.
 
 ## Opção alternativa: conta de serviço
 
@@ -61,9 +76,14 @@ permissão de edição.
 
 ```env
 GOOGLE_SERVICE_ACCOUNT_FILE=/home/ivan/PythonProjects/send_of_v4/credentials/google-docs.json
+# ID puro ou link completo:
+GOOGLE_OFICIOS_DOC_URL=https://docs.google.com/document/d/SEU_ID/edit
 GOOGLE_OFICIOS_DOC_ID=1dY6yODJF0CFdbWZ2tH2f-cfvfyqq6RuKUo92NJE7JrY
 GOOGLE_OFICIOS_TABLE_INDEX=0
 ```
+
+No Windows, use o caminho do JSON, por exemplo
+`GOOGLE_SERVICE_ACCOUNT_FILE=C:\send_of_v4\credentials\google-docs.json`.
 
 `GOOGLE_OFICIOS_TABLE_INDEX` é o índice da tabela dentro do documento
 (0 = primeira tabela). Se omitido, o sistema tenta escolher a tabela cujo

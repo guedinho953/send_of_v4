@@ -29,8 +29,20 @@ class OficioPlanilhaError(Exception):
 class OficioPlanilhaService:
     SCOPES = ['https://www.googleapis.com/auth/documents']
 
+    @staticmethod
+    def _extrair_doc_id(valor):
+        """Aceita o ID puro ou o link completo do Google Docs."""
+        valor = (valor or '').strip()
+        m = re.search(r'/(?:document|spreadsheets)/d/([A-Za-z0-9_-]+)', valor)
+        return m.group(1) if m else valor
+
     def __init__(self, doc_id=None, credentials_file=None, table_index=None):
-        self.doc_id = doc_id or getattr(settings, 'GOOGLE_OFICIOS_DOC_ID', '')
+        doc_id = (
+            doc_id
+            or getattr(settings, 'GOOGLE_OFICIOS_DOC_URL', '')
+            or getattr(settings, 'GOOGLE_OFICIOS_DOC_ID', '')
+        )
+        self.doc_id = self._extrair_doc_id(doc_id)
         self.credentials_file = (
             credentials_file
             or getattr(settings, 'GOOGLE_SERVICE_ACCOUNT_FILE', '')

@@ -1,8 +1,48 @@
 import re
+import unicodedata
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 from datetime import datetime
 from pprint import pprint
+
+
+# Seções de partes que aparecem na página DadosProcesso. O título da seção
+# fica em um <strong> imediatamente antes da tabela.
+_SECOES_PARTES = {
+    'REQUERENTE': 'EXEQUENTE',
+    'PROMOVENTE': 'EXEQUENTE',
+    'EXEQUENTE': 'EXEQUENTE',
+    'AUTOR': 'EXEQUENTE',
+    'REQUERIDO': 'EXECUTADO',
+    'PROMOVIDO': 'EXECUTADO',
+    'EXECUTADO': 'EXECUTADO',
+    'REU': 'EXECUTADO',
+    'AUTOR DO FATO': 'EXECUTADO',
+    'TERCEIRO': 'TERCEIRO',
+    'TESTEMUNHA': 'TESTEMUNHA',
+    'AUTORIDADE': 'TERCEIRO',
+    'REPRESENTANTE': 'TERCEIRO',
+    'VITIMA': 'EXEQUENTE',
+}
+
+
+def _normalizar_titulo(texto):
+    texto = unicodedata.normalize('NFKD', str(texto or ''))
+    texto = ''.join(c for c in texto if not unicodedata.combining(c))
+    return re.sub(r'\s+', ' ', texto).strip().upper()
+
+
+def _tipo_tabela_partes(tabela, indice):
+    """Descobre a seção (Requerente/Requerido/Terceiro/Testemunha...).
+
+    O parser antigo usava só o índice da tabela e transformava todo mundo em
+    EXECUTADO. Isso fazia o SD PM da seção "Terceiro" virar réu.
+    """
+    for elemento in tabela.find_all_previous(['strong', 'b', 'th']):
+        titulo = _normalizar_titulo(elemento.get_text(' ', strip=True))
+        if titulo in _SECOES_PARTES:
+            return _SECOES_PARTES[titulo]
+    return 'EXEQUENTE' if indice == 0 else 'EXECUTADO'
 
 
 class ProcessoParser:
@@ -123,7 +163,7 @@ class ProcessoParser:
         revelia = False
 
         for i, tabela in enumerate(tabelas):
-            tipo = "EXEQUENTE" if i == 0 else "EXECUTADO"
+            tipo = _tipo_tabela_partes(tabela, i)
 
             linhas = tabela.find_all("tr", class_=["linhaClara", "linhaEscura"])
 
@@ -757,7 +797,7 @@ class ProcessoParser:
         tabelas = soup.find_all("table", class_="tabelaLista")
 
         for i, tabela in enumerate(tabelas):
-            tipo = "EXEQUENTE" if i == 0 else "EXECUTADO"
+            tipo = _tipo_tabela_partes(tabela, i)
 
             linhas = tabela.find_all("tr", class_=["linhaClara", "linhaEscura"])
 

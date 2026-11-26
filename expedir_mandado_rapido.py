@@ -111,7 +111,13 @@ def _criar_processo_da_mov(session, mov, proc_num):
             nome = p.get('nome', '').strip()
             if not nome:
                 continue
-            role = 'autor' if p.get('tipo', '').upper() in ('EXEQUENTE', 'PROMOVENTE') else 'reu'
+            _tipo_parte = (p.get('tipo', '') or '').upper()
+            if _tipo_parte in ('EXEQUENTE', 'PROMOVENTE', 'AUTOR', 'REQUERENTE'):
+                role = 'autor'
+            elif _tipo_parte in ('TERCEIRO', 'TESTEMUNHA', 'AUTORIDADE', 'REPRESENTANTE'):
+                role = 'terceiro'
+            else:
+                role = 'reu'
             end_parts = []
             for k in ('logradouro', 'bairro', 'cidade', 'uf'):
                 v = p.get(k, '')

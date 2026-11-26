@@ -184,6 +184,8 @@ GOOGLE_OFICIOS_DOC_ID = env(
     'GOOGLE_OFICIOS_DOC_ID',
     default='1dY6yODJF0CFdbWZ2tH2f-cfvfyqq6RuKUo92NJE7JrY',
 )
+# Aceita também o link completo do Google Docs; o serviço extrai o ID.
+GOOGLE_OFICIOS_DOC_URL = env('GOOGLE_OFICIOS_DOC_URL', default='')
 GOOGLE_OFICIOS_TABLE_INDEX = env.int('GOOGLE_OFICIOS_TABLE_INDEX', default=0)
 
 # Alternativa sem conta de serviço: Web App do Apps Script (roda com o Gmail

@@ -180,9 +180,14 @@ def _termos_busca(tipo):
 def _termos_modelo(tipo):
     """Termos usados para escolher o modelo no select codModelo do Projudi."""
     if _eh_20bpm(tipo):
-        # O Projudi pode não ter um modelo específico de 20 BPM; nesse caso
-        # usa o ofício RPA/genérico e cola o HTML confeccionado.
-        return ['20 BPM', '20º BPM', '20O BPM', 'RPA', 'OFICIO', 'COMUM']
+        # No Projudi o modelo aparece como "20º BATALHÃO - REQUISITAR
+        # POLICIAL"; "20 BPM" é o texto da linha. Mantém RPA/OFICIO/COMUM
+        # como fallback caso a vara não tenha o modelo específico.
+        return [
+            '20 BPM', '20º BPM', '20O BPM', '20º BATALHAO',
+            '20 BATALHAO', 'BATALHAO', 'REQUISITAR POLICIAL',
+            'REQUISICAO DE POLICIAL', 'RPA', 'OFICIO', 'COMUM',
+        ]
     return _termos_busca(tipo)
 
 
@@ -640,12 +645,44 @@ def _tem_patente_pm(nome):
     return bool(re.search(padrao, alvo))
 
 
-def _endereco_20bpm(party):
-    endereco = _normalizar(getattr(party, 'address', '') or '')
+def _endereco_texto_20bpm(texto):
+    """Endereço da Rua da Providência / 20º BPM = policial, em regra."""
+    endereco = _normalizar(texto or '')
     return any(k in endereco for k in (
+        'RUA DA PROVIDENCIA', 'RUA DA PROVIDÊNCIA',
         '20 BPM', '20O BPM', '20° BPM', 'BATALHAO 20',
         '20 BATALHAO', '20º BPM',
     ))
+
+
+def _endereco_20bpm(party):
+    return _endereco_texto_20bpm(getattr(party, 'address', ''))
+
+
+def _partes_terceiros_20bpm(proc, item=None, http_session=None):
+    """Lê as seções Terceiro/Testemunha da página do processo.
+
+    Réus e autores NÃO são objeto do ofício de apresentação de policiais.
+    """
+    url = (item or {}).get('procHref') or getattr(proc, 'projudi_url', '')
+    if not url or not http_session:
+        return []
+
+    try:
+        resposta = http_session.get(url, timeout=30)
+        if resposta.status_code != 200 or 'expirou' in resposta.text.lower():
+            return []
+        from projudiProcessNavigator import ProcessoParser
+        parser = ProcessoParser(resposta.text)
+        partes = parser.extrair_partes(parser.soup)
+    except Exception as e:
+        print(f'   ⚠️ Não foi possível reler as partes no Projudi: {e}')
+        return []
+
+    return [
+        p for p in partes
+        if (p.get('tipo') or '').upper() in ('TERCEIRO', 'TESTEMUNHA')
+    ]
 
 
 def _testemunha_especifica_20bpm(texto):
@@ -665,36 +702,61 @@ def _testemunha_especifica_20bpm(texto):
     return ''
 
 
-def _policiais_20bpm(proc, texto):
+def _policiais_20bpm(proc, texto, item=None, http_session=None):
+    """Nomes dos policiais para o ofício de apresentação do 20º BPM.
+
+    Fontes, nesta ordem:
+      1. seções "Terceiro" e "Testemunha" da página do processo;
+      2. partes do banco com papel ``terceiro``;
+      3. nomes citados expressamente após "testemunhas:" no despacho.
+
+    Réu/autor nunca entram, mesmo que morem no 20º BPM. Quem está nas seções
+    Terceiro/Testemunha e tem o endereço da Rua da Providência/20 BPM é
+    policial (regra informada pelo usuário).
+    """
     from processes.models import Party
 
     especifica = _testemunha_especifica_20bpm(texto)
     nomes = []
 
-    for party in Party.objects.filter(process=proc):
-        # O ofício do 20º BPM é para testemunhas/terceiros, não para o
-        # autor do fato, vítima, réu ou executado.
-        if party.role != 'terceiro':
-            continue
-
-        up = _normalizar(party.name)
-        sinais_pm = _tem_patente_pm(party.name)
-
-        # Inclui quem tem nome/patente de PM ou endereço no 20º BPM.
-        if not sinais_pm and not _endereco_20bpm(party):
-            continue
+    def _cabe(nome, endereco='', origem='secao'):
+        up = _normalizar(nome)
+        if not up:
+            return False
         if any(k in up for k in (
                 '20 BPM', 'POLICIA', 'MILITAR', 'BATALHAO', 'LOTADO',
                 'VITIMA', 'AUTOR', 'REU', 'EXECUTADO')):
-            continue
-
-        nome = party.name.strip()
+            return False
+        if not _tem_patente_pm(nome) and not _endereco_texto_20bpm(endereco):
+            return False
         if especifica and especifica not in up and up not in especifica:
-            continue
-        nomes.append(nome)
+            return False
+        return True
 
-    # Fallback: nomes citados após "testemunhas"/"arrolamento" no despacho.
+    # 1) Seções Terceiro/Testemunha da página atual do Projudi.
+    for parte in _partes_terceiros_20bpm(proc, item, http_session):
+        nome = (parte.get('nome') or '').strip()
+        endereco = ' '.join(str(parte.get(k) or '') for k in (
+            'logradouro', 'numero', 'complemento', 'bairro',
+            'cidade', 'uf', 'cep'))
+        if _cabe(nome, endereco):
+            nomes.append(nome)
+
+    # 2) Fallback no banco: somente papel terceiro.
     if not nomes:
+        for party in Party.objects.filter(process=proc, role='terceiro'):
+            if _cabe(party.name, party.address or ''):
+                nomes.append(party.name.strip())
+
+    # 3) Último recurso: nomes citados após "testemunhas"/"arrolamento".
+    #    Aqui exclui quem já é réu/autor no processo.
+    if not nomes:
+        bloqueados = {
+            _normalizar(p.name)
+            for p in Party.objects.filter(
+                process=proc, role__in=('reu', 'autor', 'executado',
+                                        'exequente'))
+        }
         m = re.search(
             r'(?:testemunhas?|arrolamento)[^:\n]{0,120}:\s*(.+)',
             texto, re.I,
@@ -702,9 +764,10 @@ def _policiais_20bpm(proc, texto):
         trecho = m.group(1) if m else ''
         for pedaco in re.split(r'[;,]|\s+e\s+', trecho):
             nome = re.sub(r'\s+', ' ', pedaco).strip(' .')
-            palavras = nome.split()
             up = _normalizar(nome)
-            if (2 <= len(palavras) <= 8
+            if any(up == b or (b and b in up) for b in bloqueados):
+                continue
+            if (2 <= len(nome.split()) <= 8
                     and re.search(r'[A-ZÀ-Ú]{2,}', nome)
                     and not any(k in up for k in (
                         'POLICIA', 'MILITAR', 'BPM', 'LOTADO',
@@ -713,9 +776,6 @@ def _policiais_20bpm(proc, texto):
                 if especifica and especifica not in up and up not in especifica:
                     continue
                 nomes.append(nome.upper())
-
-    if especifica and not nomes:
-        nomes.append(especifica)
 
     # Deduplica preservando a ordem.
     return list(dict.fromkeys(n for n in nomes if n))
@@ -728,42 +788,51 @@ def _data_audiencia_20bpm(texto):
         'setembro': 9, 'outubro': 10, 'novembro': 11, 'dezembro': 12,
     }
 
-    candidatos = []
+    candidatos = []  # (ano, mes, dia, hora, minuto, posicao)
 
+    # Aceita "28 de janeiro de 2027 às 14:00", com ou sem vírgula, "h"/"horas".
     for m in re.finditer(
-            r'(\d{1,2})\s+de\s+([a-zçãéíóú]+)\s+de\s+(\d{4})'
-            r'\s*(?:às|as|a partir das)\s*(\d{1,2})[:h](\d{2})',
+            r'(\d{1,2})\s+de\s+([a-zçãéíóúâêô]+)\s+de\s+(\d{4})'
+            r'[\s,;]*(?:às|as|a\s+partir\s+das)?\s*'
+            r'(\d{1,2})\s*[:hH]\s*(\d{2})(?:\s*h(?:oras?)?)?',
             texto, re.I):
         mes = meses.get(m.group(2).lower())
         if mes:
             candidatos.append((
                 int(m.group(3)), mes, int(m.group(1)),
-                int(m.group(4)), int(m.group(5)),
+                int(m.group(4)), int(m.group(5)), m.start(),
             ))
 
+    # Aceita "28/01/2027, às 14:00h".
     for m in re.finditer(
             r'(\d{1,2})/(\d{1,2})/(\d{4})'
-            r'\s*(?:às|as|a partir das)\s*(\d{1,2})[:h](\d{2})',
+            r'[\s,;]*(?:às|as|a\s+partir\s+das)?\s*'
+            r'(\d{1,2})\s*[:hH]\s*(\d{2})(?:\s*h(?:oras?)?)?',
             texto, re.I):
         candidatos.append((
             int(m.group(3)), int(m.group(2)), int(m.group(1)),
-            int(m.group(4)), int(m.group(5)),
+            int(m.group(4)), int(m.group(5)), m.start(),
         ))
 
     if not candidatos:
         return ''
 
-    ano, mes, dia, hora, minuto = candidatos[-1]
-    nome_mes = next(
-        (nome for nome, num in MESES_PT.items() if num == mes),
-        str(mes),
-    )
-    # Corrige a chave sem acento para o nome exibido.
+    # Prefere a data cujo contexto fala de audiência/designação/instrução.
+    def _contexto(pos):
+        return _normalizar(texto[max(0, pos - 250):pos + 250])
+
+    preferidos = [
+        c for c in candidatos
+        if any(k in _contexto(c[5]) for k in (
+            'AUDIENCIA', 'DESIGN', 'INSTRUCAO'))
+    ]
+    ano, mes, dia, hora, minuto, _ = (preferidos or candidatos)[-1]
+
     nome_mes = {
         1: 'Janeiro', 2: 'Fevereiro', 3: 'Março', 4: 'Abril',
         5: 'Maio', 6: 'Junho', 7: 'Julho', 8: 'Agosto',
         9: 'Setembro', 10: 'Outubro', 11: 'Novembro', 12: 'Dezembro',
-    }.get(mes, nome_mes)
+    }.get(mes, MESES_PT.get(str(mes), str(mes)))
     return f'{dia:02d} de {nome_mes} de {ano} às {hora:02d}:{minuto:02d}'
 
 
@@ -798,7 +867,8 @@ def _gerar_conteudo_20bpm(item, user, http_session,
             rag.despacho_ato or '',
             rag.despacho_observacao or '',
         ])
-    policiais = _policiais_20bpm(proc, texto)
+    policiais = _policiais_20bpm(
+        proc, texto, item=item, http_session=http_session)
 
     if not policiais:
         print('   ⚠️ Não encontrei os policiais/testemunhas do 20º BPM.')
@@ -1045,9 +1115,11 @@ JS_SELECIONAR_TIPO = r'''({name, termos, preferir}) => {
         }
         let score = 0;
         for (const alvo of alvosNorm) {
-            if (texto === alvo) score = Math.max(score, 3);
-            else if (texto.startsWith(alvo)) score = Math.max(score, 2);
-            else if (texto.includes(alvo)) score = Math.max(score, 1);
+            // Soma os termos (em vez de pegar só o maior) para o modelo
+            // "20º BATALHÃO - REQUISITAR POLICIAL" ganhar do "CÍVEL - OFÍCIO".
+            if (texto === alvo) score += 5;
+            else if (texto.startsWith(alvo)) score += 3;
+            else if (texto.includes(alvo)) score += 1;
         }
         // Preferência pelo conteúdo da ATA (ex.: SERVIÇO x PECUNIÁRIA).
         for (const pref of prefNorm) {
