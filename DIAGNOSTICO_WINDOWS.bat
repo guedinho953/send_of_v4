@@ -12,8 +12,12 @@ if not exist "%PYTHON%" (
 
 findstr /b /i "DATABASE_URL=postgres" .env >nul 2>&1
 if not errorlevel 1 (
-    echo [pg] Verificando PostgreSQL local...
-    powershell -NoProfile -ExecutionPolicy Bypass -File scripts\postgres_local_windows.ps1 >nul
+    if exist "pgdata\.send_of_local_pg" (
+        echo [pg] Verificando PostgreSQL local do projeto...
+        powershell -NoProfile -ExecutionPolicy Bypass -File scripts\postgres_local_windows.ps1 >nul
+    ) else (
+        echo [pg] PostgreSQL externo configurado; usando o servidor existente.
+    )
 )
 
 "%PYTHON%" manage.py diagnostico_firefox

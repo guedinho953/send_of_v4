@@ -71,10 +71,14 @@ if not exist ".env" (
 echo [6/6] Aplicando migracoes e coletando estaticos ...
 findstr /b /i "DATABASE_URL=postgres" .env >nul 2>&1
 if not errorlevel 1 (
-    echo [pg] Iniciando PostgreSQL local do projeto...
-    powershell -NoProfile -ExecutionPolicy Bypass -File scripts\postgres_local_windows.ps1
-    if errorlevel 1 (
-        echo [AVISO] PostgreSQL nao iniciou. Veja o erro acima.
+    if exist "pgdata\.send_of_local_pg" (
+        echo [pg] Iniciando PostgreSQL local do projeto...
+        powershell -NoProfile -ExecutionPolicy Bypass -File scripts\postgres_local_windows.ps1
+        if errorlevel 1 (
+            echo [AVISO] PostgreSQL nao iniciou. Veja o erro acima.
+        )
+    ) else (
+        echo [pg] PostgreSQL externo configurado; nao iniciando cluster local.
     )
 )
 "%PYTHON%" manage.py migrate --noinput

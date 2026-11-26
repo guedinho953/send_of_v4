@@ -12,16 +12,21 @@ if not exist "%PYTHON%" (
     if not exist "%PYTHON%" exit /b 1
 )
 
-REM Sobe o PostgreSQL local do projeto quando o .env usa postgres://
+REM Sobe o PostgreSQL LOCAL DO PROJETO apenas se ele existir (pgdata).
+REM Se o .env aponta para o pg_send_of do Docker/WSL, nao mexe em nada.
 findstr /b /i "DATABASE_URL=postgres" .env >nul 2>&1
 if not errorlevel 1 (
-    echo [pg] Verificando PostgreSQL local...
-    powershell -NoProfile -ExecutionPolicy Bypass -File scripts\postgres_local_windows.ps1
-    if errorlevel 1 (
-        echo [ERRO] Nao foi possivel iniciar o PostgreSQL local.
-        echo        Rode DIAGNOSTICO_WINDOWS.bat ou scripts\postgres_local_windows.ps1
-        pause
-        exit /b 1
+    if exist "pgdata\.send_of_local_pg" (
+        echo [pg] Verificando PostgreSQL local do projeto...
+        powershell -NoProfile -ExecutionPolicy Bypass -File scripts\postgres_local_windows.ps1
+        if errorlevel 1 (
+            echo [ERRO] Nao foi possivel iniciar o PostgreSQL local.
+            echo        Rode DIAGNOSTICO_WINDOWS.bat ou scripts\postgres_local_windows.ps1
+            pause
+            exit /b 1
+        )
+    ) else (
+        echo [pg] PostgreSQL externo configurado; usando o servidor existente.
     )
 )
 

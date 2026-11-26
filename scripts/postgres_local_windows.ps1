@@ -98,6 +98,13 @@ port = $Port
 "@ -Encoding ASCII
 }
 
+# Marcador: só clusters criados por este script são iniciados
+# automaticamente pelos .bat. Assim o pg_send_of do Docker/WSL não é tocado.
+$marcador = Join-Path $DataDir ".send_of_local_pg"
+if (-not (Test-Path $marcador)) {
+    Set-Content -Path $marcador -Value "send_of_v4 local postgres" -Encoding ASCII
+}
+
 # ------------------------------------------------------------
 # 2. start
 # ------------------------------------------------------------
