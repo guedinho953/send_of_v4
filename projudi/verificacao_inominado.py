@@ -1,0 +1,127 @@
+"""Detecção do recurso inominado e da intimação/DJEN no processo."""
+
+from __future__ import annotations
+
+import re
+import unicodedata
+from datetime import date, datetime
+from typing import Optional
+
+
+def _normalizar(texto) -> str:
+    texto = unicodedata.normalize('NFKD', str(texto or ''))
+    texto = ''.join(c for c in texto if not unicodedata.combining(c))
+    return re.sub(r'\s+', ' ', texto).strip().upper()
+
+
+def _texto_mov(mov) -> str:
+    return ' '.join(
+        str(mov.get(k) or '') for k in
+        ('ato', 'observacao', 'ato_normalizado', 'descricao')
+    )
+
+
+def evento_mov(mov) -> int:
+    try:
+        return int(str(mov.get('evento')).strip())
+    except (TypeError, ValueError):
+        return 0
+
+
+def data_mov(mov) -> Optional[date]:
+    valor = mov.get('data_obj')
+    if isinstance(valor, date):
+        return valor
+    if isinstance(valor, str):
+        for fmt in ('%Y-%m-%d', '%d/%m/%y', '%d/%m/%Y'):
+            try:
+                return datetime.strptime(valor[:10], fmt).date()
+            except ValueError:
+                continue
+    texto = str(mov.get('data_texto') or '')
+    m = re.search(r'(\d{1,2})/(\d{1,2})/(\d{2,4})', texto)
+    if m:
+        dia, mes, ano = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if ano < 100:
+            ano += 2000
+        try:
+            return date(ano, mes, dia)
+        except ValueError:
+            return None
+    return None
+
+
+def data_djen(mov) -> Optional[date]:
+    valor = mov.get('data_djen')
+    if isinstance(valor, date):
+        return valor
+    if isinstance(valor, str):
+        return data_mov({'data_obj': valor})
+    return None
+
+
+def achar_recurso_inominado(movs, evento=None):
+    """Localiza o evento de interposição do recurso inominado."""
+    candidatos = []
+    for mov in movs:
+        ev = evento_mov(mov)
+        if evento and ev != int(evento):
+            continue
+        texto = _normalizar(_texto_mov(mov))
+        if 'RECURSO INOMINADO' not in texto:
+            continue
+        # Não confundir com contrarrazões, julgamento ou decisão do recurso.
+        if any(k in texto for k in (
+                'CONTRARRAZOES', 'CONTRARRAZÕES', 'JULGAMENTO',
+                'DECISAO', 'DECISÃO', 'NAO CONHECIDO', 'NAO PROVIDO',
+                'DESPROVIDO', 'PROVIDO')):
+            continue
+        candidatos.append((ev, mov))
+
+    if not candidatos:
+        return None
+
+    # O evento mais recente de interposição (evita pegar petições antigas).
+    return max(candidatos, key=lambda item: item[0])[1]
+
+
+def achar_intimacao_djen(movs, evento_recurso):
+    """Localiza a disponibilização no DJEN anterior ao recurso.
+
+    Retorna (mov, data_disponibilizacao, origem) ou (None, None, None).
+    Prioriza o campo data_djen; se não houver, usa o movimento de
+    disponibilização/intimação como fallback.
+    """
+    candidatos_djen = []
+    candidatos_fallback = []
+
+    for mov in movs:
+        ev = evento_mov(mov)
+        if ev >= int(evento_recurso):
+            continue
+
+        texto = _normalizar(_texto_mov(mov))
+        d_djen = data_djen(mov)
+        d_mov = data_mov(mov)
+
+        if d_djen:
+            candidatos_djen.append((ev, mov, d_djen, 'DJEN'))
+            continue
+
+        if d_mov and 'DISPONIBILIZA' in texto:
+            candidatos_fallback.append(
+                (ev, mov, d_mov, 'disponibilização'))
+            continue
+
+        if d_mov and any(k in texto for k in (
+                'INTIMA', 'PUBLICA', 'CIENCIA', 'SENTENCA',
+                'JULGADA', 'DECISAO', 'DESPACHO')):
+            candidatos_fallback.append((ev, mov, d_mov, 'movimento'))
+
+    if candidatos_djen:
+        ev, mov, data, origem = max(candidatos_djen, key=lambda x: x[0])
+        return mov, data, origem
+    if candidatos_fallback:
+        ev, mov, data, origem = max(candidatos_fallback, key=lambda x: x[0])
+        return mov, data, origem
+    return None, None, None

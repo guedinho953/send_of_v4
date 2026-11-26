@@ -3,6 +3,7 @@
 import unittest
 from datetime import date
 
+from projudi.certidao_inominado import texto_certidao_inominado
 from projudi.prazo_service import PrazoService, TIPOS_PRAZO
 
 
@@ -56,6 +57,41 @@ class PrazoDjenTest(unittest.TestCase):
             date(2026, 11, 27), 'cumprimento_sentenca')
         self.assertEqual(r15.prazo_dias, 15)
         self.assertGreater(r15.ultimo_dia, r10.ultimo_dia)
+
+    def test_texto_certidao_inominado(self):
+        grat = texto_certidao_inominado(
+            evento_recurso='50', tempestivo=True,
+            preparo_status='gratuidade')
+        self.assertIn('evento 50', grat)
+        self.assertIn('TEMPESTIVO', grat)
+        self.assertIn(
+            'Não houve o PREPARO, em razão do pedido de assistência '
+            'judiciária gratuita.', grat)
+
+        completo = texto_certidao_inominado(
+            evento_recurso='50', tempestivo=True, preparo_status='completo')
+        self.assertIn('TEMPESTIVO e regularmente PREPARADO.', completo)
+
+        incompleto = texto_certidao_inominado(
+            evento_recurso='50', tempestivo=True,
+            preparo_status='incompleto')
+        self.assertIn('TEMPESTIVO, porém o PREPARO está INCOMPLETO.',
+                      incompleto)
+
+        nao_pago = texto_certidao_inominado(
+            evento_recurso='50', tempestivo=True,
+            preparo_status='nao_pago')
+        self.assertIn('TEMPESTIVO, porém NÃO HOUVE O PREPARO.', nao_pago)
+
+        intemp = texto_certidao_inominado(
+            evento_recurso='50', tempestivo=False)
+        self.assertIn('INTEMPESTIVO.', intemp)
+        self.assertNotIn('PREPARO', intemp)
+
+        sem_hab = texto_certidao_inominado(
+            evento_recurso='50', tempestivo=True, preparo_status='completo',
+            habilitacao_regular=False)
+        self.assertNotIn('habilitação dos advogados', sem_hab)
 
 
 if __name__ == '__main__':

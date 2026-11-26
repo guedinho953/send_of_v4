@@ -720,6 +720,14 @@ class SuspensaoPrazo(TenantModel, TimeStampedModel, ActiveModel):
 class PrazoDjenRecord(models.Model):
     """Memória de cálculo dos prazos DJEN (controle interno, não vai na certidão)."""
 
+    PREPARO_CHOICES = [
+        ('gratuidade', 'Gratuidade / assistência judiciária'),
+        ('completo', 'Preparo completo'),
+        ('incompleto', 'Preparo incompleto'),
+        ('nao_pago', 'Não houve preparo'),
+        ('nao_verificado', 'Não verificado'),
+    ]
+
     processo = models.CharField(
         'Processo (CNJ)', max_length=25, blank=True, db_index=True)
     parte = models.CharField('Parte', max_length=300, blank=True)
@@ -738,6 +746,16 @@ class PrazoDjenRecord(models.Model):
     data_decurso = models.DateField('Decurso/trânsito', null=True, blank=True)
     data_protocolo = models.DateField(
         'Protocolo', null=True, blank=True)
+    evento_recurso = models.CharField(
+        'Evento do recurso', max_length=20, blank=True)
+    evento_intimacao = models.CharField(
+        'Evento da intimação', max_length=20, blank=True)
+    preparo_status = models.CharField(
+        'Preparo', max_length=20, choices=PREPARO_CHOICES, blank=True)
+    habilitacao_regular = models.BooleanField(
+        'Habilitação regular', null=True, blank=True)
+    texto_certidao = models.TextField(
+        'Texto da certidão', blank=True)
     tempestivo = models.BooleanField(
         'Tempestivo', null=True, blank=True)
     motivo = models.TextField('Memória / motivo', blank=True)

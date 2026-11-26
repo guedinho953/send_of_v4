@@ -43,9 +43,22 @@
         <div><strong>Último dia</strong> {{ registro.ultimo_dia|date:"d/m/Y"|default:"—" }}</div>
         <div><strong>Decurso/trânsito</strong> {{ registro.data_decurso|date:"d/m/Y"|default:"—" }}</div>
         <div><strong>Protocolo</strong> {{ registro.data_protocolo|date:"d/m/Y"|default:"não informado" }}</div>
+        <div><strong>Evento do recurso</strong> {{ registro.evento_recurso|default:"—" }}</div>
+        <div><strong>Evento da intimação</strong> {{ registro.evento_intimacao|default:"—" }}</div>
+        <div><strong>Preparo</strong> {{ registro.get_preparo_status_display|default:"—" }}</div>
+        <div><strong>Habilitação</strong>
+            {% if registro.habilitacao_regular is None %}—
+            {% elif registro.habilitacao_regular %}regular
+            {% else %}omitida{% endif %}
+        </div>
         <div><strong>Servidor</strong> {{ registro.servidor|default:"—" }}</div>
         <div><strong>Registrado em</strong> {{ registro.created_at|date:"d/m/Y H:i" }}</div>
     </div>
+</div>
+
+<div class="box">
+    <h3 style="margin-top:0; color:#1e3a5f;">Texto da certidão</h3>
+    <div class="motivo">{{ registro.texto_certidao|default:"—"|linebreaksbr }}</div>
 </div>
 
 <div class="box">

@@ -17,15 +17,20 @@ from .models import (
 class PrazoDjenRecordAdmin(admin.ModelAdmin):
     list_display = [
         'created_at', 'processo', 'parte', 'tipo_prazo', 'prazo_dias',
-        'ultimo_dia', 'data_protocolo', 'status', 'servidor',
+        'ultimo_dia', 'data_protocolo', 'preparo_status', 'status',
+        'servidor',
     ]
-    list_filter = ['tipo_prazo', 'tempestivo', 'created_at']
-    search_fields = ['processo', 'parte', 'motivo']
+    list_filter = [
+        'tipo_prazo', 'tempestivo', 'preparo_status', 'created_at',
+    ]
+    search_fields = ['processo', 'parte', 'motivo', 'texto_certidao']
     readonly_fields = [
         'processo', 'parte', 'tipo_prazo', 'prazo_dias',
         'data_disponibilizacao', 'data_disponibilizacao_efetiva',
         'data_publicacao', 'data_inicio_contagem', 'ultimo_dia',
-        'data_decurso', 'data_protocolo', 'tempestivo', 'motivo',
+        'data_decurso', 'data_protocolo', 'evento_recurso',
+        'evento_intimacao', 'preparo_status', 'habilitacao_regular',
+        'texto_certidao', 'tempestivo', 'motivo',
         'prazo_info', 'certidao_path', 'servidor', 'created_at',
     ]
 

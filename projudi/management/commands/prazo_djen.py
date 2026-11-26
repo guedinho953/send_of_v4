@@ -17,6 +17,9 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.template import Context, Template
 
+from projudi.certidao_inominado import (
+    PREPARO_LABELS, texto_certidao_inominado,
+)
 from projudi.prazo_service import PrazoService, TIPOS_PRAZO
 
 DIAS_SEMANA = [
@@ -57,6 +60,23 @@ class Command(BaseCommand):
                             help='Sobrescreve os dias do tipo escolhido')
         parser.add_argument('--protocolo',
                             help='Data do protocolo do recurso (para tempestividade)')
+        parser.add_argument(
+            '--evento-recurso', default='infra',
+            help='Número do evento do recurso inominado (default: infra)')
+        parser.add_argument('--evento-intimacao', default='',
+                            help='Número do evento da intimação/comunicação')
+        parser.add_argument(
+            '--preparo',
+            choices=[
+                'gratuidade', 'completo', 'incompleto',
+                'insuficiente', 'nao_pago',
+            ],
+            help=(
+                'Preparo do recurso inominado. Obrigatório se TEMPESTIVO; '
+                'se INTEMPESTIVO, não é verificado.'))
+        parser.add_argument(
+            '--habilitacao', choices=['regular', 'omitir'], default='regular',
+            help='Cláusula de habilitação dos advogados (default: regular)')
         parser.add_argument('--processo', help='Número CNJ')
         parser.add_argument('--parte', help='Nome da parte')
         parser.add_argument('--servidor', default='IVAN GUEDES DA SILVA')
@@ -66,6 +86,8 @@ class Command(BaseCommand):
                             help='Só calcula, sem gerar HTML')
 
     def handle(self, *args, **options):
+        if options.get('preparo') == 'insuficiente':
+            options['preparo'] = 'incompleto'
         dispo = _parse_data(options['disponibilizacao'])
         protocolo = (
             _parse_data(options['protocolo'])
@@ -92,6 +114,31 @@ class Command(BaseCommand):
 
         res = svc.contar_prazo_djen(dispo, prazo)
 
+        tempestivo = (protocolo <= res.ultimo_dia) if protocolo else None
+        preparo_status = 'nao_verificado'
+        habilitacao_regular = options['habilitacao'] == 'regular'
+        texto_certidao = ''
+
+        if options['tipo'] == 'inominado' and protocolo:
+            if tempestivo and not options['preparo']:
+                raise CommandError(
+                    'Recurso inominado TEMPESTIVO: informe --preparo '
+                    '(gratuidade, completo, incompleto ou nao_pago).')
+            if not tempestivo:
+                if options['preparo']:
+                    self.stdout.write(self.style.WARNING(
+                        'Recurso INTEMPESTIVO: o preparo não é verificado; '
+                        '--preparo ignorado.'))
+            else:
+                preparo_status = options['preparo']
+
+            texto_certidao = texto_certidao_inominado(
+                evento_recurso=options['evento_recurso'],
+                tempestivo=bool(tempestivo),
+                preparo_status=preparo_status,
+                habilitacao_regular=habilitacao_regular,
+            )
+
         self.stdout.write('=' * 70)
         self.stdout.write('CONTAGEM DJEN — ' + str(info['label']).upper())
         self.stdout.write('=' * 70)
@@ -112,12 +159,26 @@ class Command(BaseCommand):
                 f'Decurso (1º útil após) ...: {_fmt(res.data_decurso)}')
 
         if protocolo:
-            tempestivo = protocolo <= res.ultimo_dia
             self.stdout.write(
                 f'Protocolo ................: {_fmt(protocolo)}')
             self.stdout.write(self.style.SUCCESS(
                 f'Tempestividade ...........: '
                 f'{"TEMPESTIVO" if tempestivo else "INTEMPESTIVO"}'))
+            if options['tipo'] == 'inominado':
+                self.stdout.write(
+                    f'Evento do recurso ........: '
+                    f'{options["evento_recurso"]}')
+                if tempestivo:
+                    self.stdout.write(
+                        f'Preparo ..................: '
+                        f'{PREPARO_LABELS.get(preparo_status, preparo_status)}')
+                else:
+                    self.stdout.write(
+                        'Preparo ..................: não verificado '
+                        '(intempestivo)')
+                self.stdout.write(
+                    f'Habilitação ..............: '
+                    f'{"regular" if habilitacao_regular else "omitida"}')
         else:
             tipo_certidao = (
                 'certidão de trânsito' if info['transito']
@@ -134,12 +195,26 @@ class Command(BaseCommand):
         self.stdout.write('prazo_info (JSON):')
         self.stdout.write(str(res.to_dict()))
 
+        if texto_certidao:
+            self.stdout.write('')
+            self.stdout.write('Texto da certidão:')
+            self.stdout.write(texto_certidao)
+
         certidao_path = ''
         if not options['sem_html']:
             certidao_path = self._gerar_html(
-                res, protocolo, options, info)
+                res, protocolo, options, info,
+                texto_certidao=texto_certidao,
+                preparo_status=preparo_status,
+                habilitacao_regular=habilitacao_regular,
+            )
         self._registrar_log(
-            res, protocolo, info, options, certidao_path)
+            res, protocolo, info, options, certidao_path,
+            texto_certidao=texto_certidao,
+            preparo_status=preparo_status,
+            habilitacao_regular=habilitacao_regular,
+            tempestivo=tempestivo,
+        )
 
     def _tenant(self, options):
         if options['tenant']:
@@ -183,7 +258,8 @@ class Command(BaseCommand):
             )
         return texto
 
-    def _motivo(self, res, protocolo, info):
+    def _motivo(self, res, protocolo, info, preparo_status='',
+                habilitacao_regular=None, evento_recurso='', tipo=''):
         """Memória completa, só para controle (não vai na certidão)."""
         linhas = [
             f'Disponibilização bruta: {_fmt(res.data_disponibilizacao)}',
@@ -203,6 +279,19 @@ class Command(BaseCommand):
                 f'({"TEMPESTIVO" if tempestivo else "INTEMPESTIVO"})')
         else:
             linhas.append('Protocolo: não informado')
+
+        if tipo == 'inominado':
+            linhas.append(f'Evento do recurso: {evento_recurso or "infra"}')
+            if protocolo and protocolo > res.ultimo_dia:
+                linhas.append('Preparo: não verificado (recurso intempestivo)')
+            else:
+                linhas.append(
+                    f'Preparo: '
+                    f'{PREPARO_LABELS.get(preparo_status, preparo_status)}')
+            linhas.append(
+                'Habilitação dos advogados: '
+                f'{"regular" if habilitacao_regular else "omitida"}')
+
         linhas.append(
             'Dias contados: ' + ', '.join(
                 d.strftime('%d/%m/%Y') for d in res.dias_contados))
@@ -211,11 +300,22 @@ class Command(BaseCommand):
                 d.strftime('%d/%m/%Y') for d in res.dias_excluidos))
         return '\n'.join(linhas)
 
-    def _registrar_log(self, res, protocolo, info, options, certidao_path=''):
+    def _registrar_log(
+        self, res, protocolo, info, options, certidao_path='',
+        texto_certidao='', preparo_status='', habilitacao_regular=None,
+        tempestivo=None,
+    ):
         from projudi.models import PrazoDjenRecord
 
-        tempestivo = (protocolo <= res.ultimo_dia) if protocolo else None
-        motivo = self._motivo(res, protocolo, info)
+        if tempestivo is None:
+            tempestivo = (protocolo <= res.ultimo_dia) if protocolo else None
+        motivo = self._motivo(
+            res, protocolo, info,
+            preparo_status=preparo_status,
+            habilitacao_regular=habilitacao_regular,
+            evento_recurso=options['evento_recurso'],
+            tipo=options['tipo'],
+        )
         registro_id = None
         try:
             rec = PrazoDjenRecord.objects.create(
@@ -231,6 +331,11 @@ class Command(BaseCommand):
                 ultimo_dia=res.ultimo_dia,
                 data_decurso=res.data_decurso,
                 data_protocolo=protocolo,
+                evento_recurso=options['evento_recurso'] or '',
+                evento_intimacao=options.get('evento_intimacao') or '',
+                preparo_status=preparo_status or '',
+                habilitacao_regular=habilitacao_regular,
+                texto_certidao=texto_certidao or '',
                 tempestivo=tempestivo,
                 motivo=motivo,
                 prazo_info=res.to_dict(),
@@ -257,6 +362,11 @@ class Command(BaseCommand):
                 'tipo_prazo': options['tipo'],
                 'prazo_dias': res.prazo_dias,
                 'tempestivo': tempestivo,
+                'evento_recurso': options['evento_recurso'] or '',
+                'evento_intimacao': options.get('evento_intimacao') or '',
+                'preparo_status': preparo_status or '',
+                'habilitacao_regular': habilitacao_regular,
+                'texto_certidao': texto_certidao or '',
                 'motivo': motivo,
                 'prazo_info': res.to_dict(),
                 'certidao_path': certidao_path,
@@ -269,51 +379,77 @@ class Command(BaseCommand):
         except Exception as e:
             self.stderr.write(f'⚠️ Não foi possível gravar o log: {e}')
 
-    def _gerar_html(self, res, protocolo, options, info):
+    def _gerar_html(self, res, protocolo, options, info,
+                    texto_certidao='', preparo_status='',
+                    habilitacao_regular=None):
+        from html import escape as html_escape
         from processes.models import DocumentTemplate
 
+        nome_tpl = (
+            'Certidão de Recurso Inominado (COJE)'
+            if texto_certidao
+            else 'Certidão de Tempestividade / Trânsito (DJEN)'
+        )
         tpl = DocumentTemplate.objects.filter(
-            name='Certidão de Tempestividade / Trânsito (DJEN)',
-            active=True,
-        ).first()
+            name=nome_tpl, active=True).first()
 
         ctx = {
             'processo': options['processo'] or '—',
             'parte': options['parte'] or 'as partes',
             'observacao_prazo': self._observacao(res, protocolo, info),
+            'texto_certidao': texto_certidao,
             'data': date.today().strftime('%d/%m/%Y'),
             'servidor': options['servidor'],
         }
 
-        titulo = (
-            'CERTIDÃO DE TRÂNSITO EM JULGADO'
-            if info['transito'] else 'CERTIDÃO DE PRAZO'
-        )
+        if texto_certidao:
+            titulo = 'CERTIDÃO'
+        else:
+            titulo = (
+                'CERTIDÃO DE TRÂNSITO EM JULGADO'
+                if info['transito'] else 'CERTIDÃO DE PRAZO'
+            )
 
         if tpl:
             html = Template(tpl.html_template).render(Context(ctx))
-            html = html.replace(
-                'CERTIDÃO DE TEMPESTIVIDADE E TRÂNSITO', titulo)
+            if not texto_certidao:
+                html = html.replace(
+                    'CERTIDÃO DE TEMPESTIVIDADE E TRÂNSITO', titulo)
             nome_template = tpl.name
         else:
-            html = (
-                '<div style="font-family:Times New Roman,serif;font-size:12pt;">'
-                f'<h3>{titulo}</h3>'
-                f'<p>Processo: {ctx["processo"]}</p>'
-                f'<p>Para: {ctx["parte"]}</p>'
-                f'<p>Certifico que, referente ao processo em epígrafe, '
-                f'{ctx["observacao_prazo"]}</p>'
-                f'<p>Paulo Afonso-BA, {ctx["data"]}.<br>'
-                f'{ctx["servidor"]}</p></div>'
-            )
+            if texto_certidao:
+                html = (
+                    '<div style="font-family:Times New Roman,serif;font-size:12pt;">'
+                    '<h3>CERTIDÃO</h3>'
+                    f'<p>Processo: {html_escape(ctx["processo"])}</p>'
+                    f'<p>Para: {html_escape(ctx["parte"])}</p>'
+                    f'<p>{html_escape(texto_certidao)}</p>'
+                    f'<p>Paulo Afonso-BA, {ctx["data"]}.<br>'
+                    f'{html_escape(ctx["servidor"])}</p></div>'
+                )
+            else:
+                html = (
+                    '<div style="font-family:Times New Roman,serif;font-size:12pt;">'
+                    f'<h3>{titulo}</h3>'
+                    f'<p>Processo: {ctx["processo"]}</p>'
+                    f'<p>Para: {ctx["parte"]}</p>'
+                    f'<p>Certifico que, referente ao processo em epígrafe, '
+                    f'{ctx["observacao_prazo"]}</p>'
+                    f'<p>Paulo Afonso-BA, {ctx["data"]}.<br>'
+                    f'{ctx["servidor"]}</p></div>'
+                )
             nome_template = '(fallback)'
 
         pasta = Path(settings.BASE_DIR) / 'var'
         pasta.mkdir(parents=True, exist_ok=True)
         saida = Path(options['saida']) if options['saida'] else (
             pasta / f'certidao_{options["tipo"]}_'
-            f'{res.data_disponibilizacao.isoformat()}.html')
+            f'{res.data_disponibilizacao.isoformat()}_'
+            f'{datetime.now().strftime("%H%M%S")}.html')
         saida.parent.mkdir(parents=True, exist_ok=True)
+
+        cabecalho = texto_certidao or self._observacao(
+            res, protocolo, info)
 
         pagina = f"""<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8">
@@ -325,7 +461,7 @@ box-shadow:0 2px 12px rgba(0,0,0,.2);}}
 border:1px solid #f59e0b;font-family:Arial,sans-serif;font-size:13px;}}
 </style></head><body>
 <div class="aviso"><strong>PREVIEW — CONFERIR ANTES DE EXPEDIR.</strong>
-Template: {nome_template}. {self._observacao(res, protocolo, info)}</div>
+Template: {nome_template}. {cabecalho}</div>
 <div class="folha">{html}</div>
 </body></html>"""
         saida.write_text(pagina, encoding='utf-8')

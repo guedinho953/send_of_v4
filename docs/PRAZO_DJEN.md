@@ -67,6 +67,39 @@ REM Cumprimento de sentença (15 dias úteis)
 O comando gera um **preview HTML** da certidão em `var/`; ele **não expede** nada
 no Projudi. O usuário confere a memória de contagem e assina.
 
+## Certidão de recurso inominado (busca automática)
+
+O comando abaixo percorre as movimentações/petições do processo, localiza o
+**recurso inominado** e a **disponibilização no DJEN** anterior a ele, calcula
+o prazo e gera a certidão. Você informa apenas o processo e o preparo:
+
+```bat
+python manage.py certidao_inominado ^
+  --processo 0000000-00.0000.8.05.0191 ^
+  --preparo gratuidade
+```
+
+`--preparo` aceita:
+
+| Valor | Texto da certidão |
+|-------|-------------------|
+| `gratuidade` | TEMPESTIVO. Não houve o PREPARO, em razão do pedido de assistência judiciária gratuita. |
+| `completo` | TEMPESTIVO e regularmente PREPARADO. |
+| `incompleto` / `insuficiente` | TEMPESTIVO, porém o PREPARO está INCOMPLETO. |
+| `nao_pago` | TEMPESTIVO, porém NÃO HOUVE O PREPARO. |
+
+Se o recurso for **INTEMPESTIVO**, o preparo não é verificado/mencionado.
+
+Se a busca automática não achar o evento/data, use os sobreposições:
+
+```bat
+python manage.py certidao_inominado --processo ... --preparo completo ^
+  --evento-recurso 50 --data-disponibilizacao 28/11/2026 ^
+  --data-protocolo 15/12/2026
+```
+
+Também é possível informar `--url` com a URL `DadosProcesso` do Projudi.
+
 ## Dashboard de certidões
 
 Acesse **Certidões** no menu ou:
@@ -79,8 +112,8 @@ O dashboard mostra:
 
 - cards de **Total / Tempestivas / Intempestivas / Sem protocolo**;
 - filtros por status, tipo e busca (processo, parte ou motivo);
-- tabela com processo, parte, tipo, último dia, protocolo, status e
-  as **razões** (resumidas);
+- tabela com processo, parte, tipo, último dia, protocolo, preparo,
+  status e as **razões** (resumidas);
 - botão **Detalhe** com a memória completa e os dias contados/excluídos;
 - botão **Preview** para abrir o HTML da certidão.
 
