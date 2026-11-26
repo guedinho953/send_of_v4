@@ -55,6 +55,40 @@ def _procurar_campo_senha(page, timeout=10):
     return None
 
 
+def _texto_latin1(texto):
+    """Normaliza texto para o encoding do Projudi (ISO-8859-1).
+
+    Substitui pontuação tipográfica (travessão, aspas curvas, reticências)
+    por equivalentes ASCII e remove caracteres que não existem em latin-1,
+    evitando os "?" na observação da movimentação.
+    """
+    texto = str(texto or '')
+    substituicoes = {
+        '\u2014': '-',   # travessão
+        '\u2013': '-',   # meia-risca
+        '\u2012': '-',
+        '\u2018': "'",
+        '\u2019': "'",
+        '\u201c': '"',
+        '\u201d': '"',
+        '\u2026': '...',
+        '\u00a0': ' ',
+        '\u2022': '-',
+        '\u200b': '',
+    }
+    for origem, destino in substituicoes.items():
+        texto = texto.replace(origem, destino)
+
+    saida = []
+    for char in texto:
+        try:
+            char.encode('latin-1')
+            saida.append(char)
+        except UnicodeEncodeError:
+            saida.append(' ')
+    return ''.join(saida)
+
+
 def _logar_frames(page):
     """Log de debug: descreve TODOS os frames da página no momento da
     assinatura — para documentar qual iframe hospeda o diálogo (senha +
@@ -373,7 +407,10 @@ class MovimentacaoService:
                 # NÃO incluir o parte_nome automaticamente aqui (o nome na obs
                 # é decidido pelo chamador — parte_na_observacao etc.). Evita
                 # nome duplicado e o mojibake do separador em-dash no Projudi.
-                obs_texto = record.observacao or f"Cumprimento de {record.act_verb}"
+                obs_texto = _texto_latin1(
+                    record.observacao
+                    or f"Cumprimento de {record.act_verb}"
+                )
                 page.fill('#observacao', obs_texto[:500])
                 time.sleep(0.5)
 
@@ -1162,8 +1199,8 @@ class MovimentacaoService:
                 # ─── PASSO 6: Observação ──
                 obs_texto = record.observacao or f"Cumprimento de {record.act_verb}"
                 if record.parte_nome:
-                    obs_texto += f" — {record.parte_nome}"
-                page.fill('#observacao', obs_texto[:500])
+                    obs_texto += f" - {record.parte_nome}"
+                page.fill('#observacao', _texto_latin1(obs_texto)[:500])
                 time.sleep(0.5)
 
                 # (Cumprimento já ativado no PASSO 2 — não repetir o clique
@@ -1569,7 +1606,7 @@ class MovimentacaoService:
         else:
             payload['descCategoriaMovimentacao'] = record.descricao_movimentacao or 'TD - Tipo Documental'
         if record.observacao:
-            payload['observacao'] = record.observacao[:500]
+            payload['observacao'] = _texto_latin1(record.observacao[:500])
 
         # Concluir.x e Concluir.y (obrigatório para input type=image)
         payload['Concluir.x'] = '10'
@@ -1594,12 +1631,9 @@ class MovimentacaoService:
         _time.sleep(1)
         multipart = {}
         for k, v in payload.items():
-            # A observação carrega acentos (ç, ã, é...). Envia em UTF-8 para
-            # o Projudi renderizar corretamente; demais campos seguem latin-1.
-            if k == 'observacao':
-                val_bytes = str(v).encode('utf-8', errors='replace')
-            else:
-                val_bytes = str(v).encode('latin-1', errors='replace')
+            # Projudi usa ISO-8859-1. A observação é sanitizada antes para
+            # não gerar "?" em travessão, aspas curvas ou emojis.
+            val_bytes = str(v).encode('latin-1', errors='replace')
             multipart[k] = (None, val_bytes)
 
         resp = session.post(post_url, files=multipart, timeout=15)
@@ -2267,7 +2301,7 @@ class MovimentacaoService:
 
                 # ─── PASSO 4: Preencher observação ───
                 try:
-                    page.fill('#observacao', observacao[:500])
+                    page.fill('#observacao', _texto_latin1(observacao)[:500])
                     time.sleep(0.5)
                     print('   ✅ Observação preenchida')
                 except Exception as e:

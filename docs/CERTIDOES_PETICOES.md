@@ -167,6 +167,11 @@ que é salva em `Process.projudi_url`. É dessa URL que a juntada extrai o
 número interno do processo; sem ela, o Projudi retorna
 **“Número Projudi não encontrado”**.
 
+A observação da movimentação é normalizada para **ISO-8859-1 (latin-1)**.
+Travessão (`—`), aspas curvas e reticências são convertidos para
+equivalentes ASCII antes do envio, e caracteres fora do latin-1 são
+removidos. Isso evita os `?` no texto da observação no Projudi.
+
 ## Assinatura
 
 A fila de petições tem um seletor de assinatura no topo:
