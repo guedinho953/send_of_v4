@@ -69,7 +69,7 @@ if not exist ".env" (
 )
 
 echo [6/6] Aplicando migracoes e coletando estaticos ...
-findstr /i "postgres://" .env >nul 2>&1
+findstr /b /i "DATABASE_URL=postgres" .env >nul 2>&1
 if not errorlevel 1 (
     echo [pg] Iniciando PostgreSQL local do projeto...
     powershell -NoProfile -ExecutionPolicy Bypass -File scripts\postgres_local_windows.ps1

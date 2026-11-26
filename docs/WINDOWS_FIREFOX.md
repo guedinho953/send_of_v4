@@ -88,14 +88,15 @@ Se algo falhar, rode **`DIAGNOSTICO_WINDOWS.bat`**. Ele mostra:
 | `PLAYWRIGHT_FIREFOX_EXECUTABLE` | Build compatível do Firefox (normalmente vazio). |
 
 O `env.windows.example` vem com `DATABASE_URL=sqlite:///db.sqlite3`, então
-**não é necessário Docker/PostgreSQL** para uso local. A instalação atual em
-`D:\send_of_v4_win` está configurada para o **PostgreSQL local** (veja abaixo).
+**não é necessário Docker/PostgreSQL** para uso local. A instalação em
+`D:\send_of_v4_win` usa **SQLite como principal** (com o espelho aplicado) e
+deixa o **PostgreSQL local** como opção de espelhamento (veja abaixo).
 
 ---
 
 ## 4. Banco de dados no Windows
 
-### 4.1 PostgreSQL local do projeto (recomendado para espelhar o Docker)
+### 4.1 PostgreSQL local do projeto (opcional, para espelhamento)
 
 O PostgreSQL 15 já instalado no Windows **não** é o `pg_send_of` (o banco dele
 é outro, de 2023). Para não depender de admin nem do serviço do Windows, o
@@ -120,8 +121,9 @@ E rode:
 .venv\Scripts\python.exe manage.py migrate
 ```
 
-O `RODAR_WINDOWS.bat` detecta `postgres://` no `.env` e sobe o cluster
-automaticamente. `PARAR_POSTGRES.bat` encerra.
+O `RODAR_WINDOWS.bat` detecta `DATABASE_URL=postgres...` no `.env` e sobe o
+cluster automaticamente. `PARAR_POSTGRES.bat` encerra. Com
+`DATABASE_URL=sqlite:///db.sqlite3` (padrão), nada de PostgreSQL é iniciado.
 
 ### 4.2 Copiar o espelho SQLite para o PostgreSQL
 
@@ -154,15 +156,22 @@ lados. Tabelas novas (que o espelho antigo não tinha) ficam vazias.
 > nova, instale o PostgreSQL 16 ou use `pg_dump --no-owner --no-privileges`
 > em uma versão compatível. O script de exportação já usa essas opções.
 
-### 4.4 Voltar para SQLite
+### 4.4 Alternar entre SQLite e PostgreSQL
 
-No `.env`:
+SQLite (padrão):
 
 ```env
 DATABASE_URL=sqlite:///db.sqlite3
 ```
 
-O banco `db.sqlite3` continua na raiz do projeto (com o espelho aplicado).
+PostgreSQL local:
+
+```env
+DATABASE_URL=postgres://send_of:send_of@127.0.0.1:5433/sccj
+```
+
+O banco `db.sqlite3` continua na raiz do projeto (com o espelho aplicado)
+independentemente do modo escolhido.
 
 ---
 

@@ -14,12 +14,16 @@ Login inicial: **`admin@local` / `admin123`**.
 
 ### Banco
 
-A instalação atual usa o **PostgreSQL local do projeto** (porta 5433,
-`.\pgdata`), com os dados do espelho SQLite já copiados (70 ofícios).
-O launcher sobe o PostgreSQL automaticamente.
+Por padrão usa **SQLite** (`db.sqlite3`), com os dados do espelho (70 ofícios).
+O PostgreSQL local do projeto (`.\pgdata`, porta 5433) fica como opção para
+espelhamento/uso futuro.
 
-- Parar: `PARAR_POSTGRES.bat`
-- Voltar para SQLite: no `.env`, `DATABASE_URL=sqlite:///db.sqlite3`
+- Ativar PostgreSQL: troque no `.env` para
+  `DATABASE_URL=postgres://send_of:send_of@127.0.0.1:5433/sccj`
+  e rode `RODAR_WINDOWS.bat` (ele sobe o cluster).
+- Espelhar SQLite -> PostgreSQL:
+  `python manage.py copiar_dados_sqlite --origem db.sqlite3 --limpar`
+- Parar o PostgreSQL: `PARAR_POSTGRES.bat`
 - Restaurar o banco real do Docker: `RESTAURAR_BANCO_POSTGRES.bat`
   (gere o dump no Ubuntu com `scripts/exportar_dump_postgres_ubuntu.sh`)
 
