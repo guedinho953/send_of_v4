@@ -27,6 +27,39 @@ from typing import Dict, List, Optional, Tuple
 RECESSO_INICIO: Tuple[int, int] = (12, 20)
 RECESSO_FIM: Tuple[int, int] = (1, 22)
 
+# Tipos iniciais de prazo para as certidões semiautomáticas.
+TIPOS_PRAZO: Dict[str, Dict[str, object]] = {
+    'inominado': {
+        'dias': 10,
+        'label': 'Recurso inominado',
+        'transito': True,
+        'ato': 'recurso inominado',
+        'protocolo_frase': 'O recurso inominado foi protocolado',
+    },
+    'contrarrazoes_inominado': {
+        'dias': 10,
+        'label': 'Contrarrazões a recurso inominado',
+        'transito': False,
+        'ato': 'contrarrazões',
+        'protocolo_frase': 'As contrarrazões foram protocoladas',
+    },
+    'cumprimento_sentenca': {
+        'dias': 15,
+        'label': 'Cumprimento de sentença',
+        'transito': False,
+        'ato': 'manifestação/cumprimento',
+        'protocolo_frase': (
+            'A manifestação de cumprimento de sentença foi protocolada'),
+    },
+    'pagamento_impugnacao_penhora': {
+        'dias': 15,
+        'label': 'Pagamento ou impugnação de penhora',
+        'transito': False,
+        'ato': 'pagamento ou impugnação',
+        'protocolo_frase': 'A manifestação foi protocolada',
+    },
+}
+
 # Feriados nacionais fixos (mês, dia). Móveis (carnaval, sexta santa,
 # corpus christi) devem ser passados via feriados_extra por ano.
 FERIADOS_NACIONAIS_FIXOS: List[Tuple[int, int]] = [
@@ -53,6 +86,11 @@ class ResultadoPrazo:
     dias_excluidos: List[date] = field(default_factory=list)
     modo: str = 'uteis'
     djen: bool = False
+    # Preenchidos pelo fluxo DJEN (disponibilização -> publicação -> início).
+    data_disponibilizacao: Optional[date] = None
+    data_disponibilizacao_efetiva: Optional[date] = None
+    data_publicacao: Optional[date] = None
+    data_inicio_contagem: Optional[date] = None
 
     @property
     def vencido(self) -> bool:
@@ -81,16 +119,50 @@ class ResultadoPrazo:
             'dias_contados': [d.isoformat() for d in self.dias_contados],
             'dias_excluidos': [d.isoformat() for d in self.dias_excluidos],
             'vencido': self.vencido,
+            'data_disponibilizacao': (
+                self.data_disponibilizacao.isoformat()
+                if self.data_disponibilizacao else None),
+            'data_disponibilizacao_efetiva': (
+                self.data_disponibilizacao_efetiva.isoformat()
+                if self.data_disponibilizacao_efetiva else None),
+            'data_publicacao': (
+                self.data_publicacao.isoformat()
+                if self.data_publicacao else None),
+            'data_inicio_contagem': (
+                self.data_inicio_contagem.isoformat()
+                if self.data_inicio_contagem else None),
         }
 
     def relatorio(self) -> str:
         """Texto amigável estilo contador manual do 2ª VSJ."""
         modo_txt = self.modo
         if self.djen:
-            modo_txt = f'{self.modo} (DJEN: 1º dia da intimação + 1º útil após não contam)'
+            if self.data_publicacao:
+                modo_txt = (
+                    'DJEN: disponibilização → publicação → início')
+            else:
+                modo_txt = (
+                    'DJEN: 1º dia da intimação + 1º útil após não contam')
         elif self.modo == 'decadencial':
             modo_txt = 'decadencial (conta todos os dias, sem suspensão)'
-        linhas = [f'Prazo contado {len(self.dias_contados)} dias ({modo_txt})']
+        linhas = []
+        if self.data_disponibilizacao:
+            linhas.append(
+                f'Disponibilização: '
+                f'{self.data_disponibilizacao.strftime("%d/%m/%Y")}')
+        if self.data_disponibilizacao_efetiva:
+            linhas.append(
+                f'Considerada disponível: '
+                f'{self.data_disponibilizacao_efetiva.strftime("%d/%m/%Y")}')
+        if self.data_publicacao:
+            linhas.append(
+                f'Publicação (DJEN): '
+                f'{self.data_publicacao.strftime("%d/%m/%Y")}')
+        if self.data_inicio_contagem:
+            linhas.append(
+                f'Início do prazo: '
+                f'{self.data_inicio_contagem.strftime("%d/%m/%Y")}')
+        linhas.append(f'Prazo contado {len(self.dias_contados)} dias ({modo_txt})')
         for i, d in enumerate(self.dias_contados, 1):
             linhas.append(f' {i}º - dia, {d.strftime("%d/%m/%Y")}')
         if self.dias_excluidos:
@@ -282,6 +354,92 @@ class PrazoService:
             dias_excluidos=excluidos,
             modo=modo,
             djen=djen,
+        )
+
+    def _proximo_dia_util(self, data: date, incluir: bool = False) -> date:
+        """Próximo dia útil (ou a própria data, se incluir=True e for útil)."""
+        d = data if incluir else data + timedelta(days=1)
+        while not self.is_dia_util(d):
+            d += timedelta(days=1)
+        return d
+
+    def contar_prazo_tipo(
+        self,
+        data_disponibilizacao: date,
+        tipo: str,
+    ) -> ResultadoPrazo:
+        """Conta o prazo DJEN usando um dos TIPOS_PRAZO."""
+        info = TIPOS_PRAZO.get(tipo)
+        if not info:
+            raise ValueError(
+                f'Tipo de prazo desconhecido: {tipo!r}. '
+                f'Use: {", ".join(sorted(TIPOS_PRAZO))}')
+        return self.contar_prazo_djen(
+            data_disponibilizacao, int(info['dias']))
+
+    def contar_prazo_djen(
+        self,
+        data_disponibilizacao: date,
+        prazo_dias: int,
+    ) -> ResultadoPrazo:
+        """Conta prazo pela regra do DJEN informada pela 2ª VSJ:
+
+        1. disponibilização em sábado/domingo/feriado/dia sem expediente é
+           considerada no primeiro dia útil seguinte;
+        2. publicação no DJEN = primeiro dia útil seguinte à disponibilização
+           considerada;
+        3. início do prazo = primeiro dia útil seguinte à publicação
+           (exclui-se a publicação; o dia de início conta como 1º dia);
+        4. o vencimento é o N-ésimo dia útil contado a partir do início;
+        5. o trânsito/decurso é o primeiro dia útil seguinte ao vencimento.
+        """
+        if prazo_dias <= 0:
+            raise ValueError('prazo_dias deve ser > 0')
+
+        disponibilizacao_efetiva = data_disponibilizacao
+        if not self.is_dia_util(disponibilizacao_efetiva):
+            disponibilizacao_efetiva = self._proximo_dia_util(
+                disponibilizacao_efetiva, incluir=True)
+
+        publicacao = self._proximo_dia_util(
+            disponibilizacao_efetiva, incluir=False)
+        inicio = self._proximo_dia_util(publicacao, incluir=False)
+
+        contados: List[date] = []
+        excluidos: List[date] = []
+        atual = inicio
+        while len(contados) < prazo_dias:
+            if self.is_dia_util(atual):
+                contados.append(atual)
+            else:
+                excluidos.append(atual)
+            atual += timedelta(days=1)
+
+        ultimo = contados[-1]
+        decurso = self._proximo_dia_util(ultimo, incluir=False)
+
+        # Para o relatório, registra os dias entre a disponibilização bruta
+        # e o início que não entraram na contagem.
+        cursor = data_disponibilizacao
+        while cursor < inicio:
+            if cursor not in excluidos and cursor not in contados:
+                excluidos.append(cursor)
+            cursor += timedelta(days=1)
+        excluidos = sorted(set(excluidos))
+
+        return ResultadoPrazo(
+            data_inicio=data_disponibilizacao,
+            prazo_dias=prazo_dias,
+            ultimo_dia=ultimo,
+            data_decurso=decurso,
+            dias_contados=contados,
+            dias_excluidos=excluidos,
+            modo='uteis',
+            djen=True,
+            data_disponibilizacao=data_disponibilizacao,
+            data_disponibilizacao_efetiva=disponibilizacao_efetiva,
+            data_publicacao=publicacao,
+            data_inicio_contagem=inicio,
         )
 
     # ------------------------------------------------------------------
