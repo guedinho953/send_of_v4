@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.utils.html import format_html
 from datetime import date
 
 from .models import (
@@ -8,7 +9,41 @@ from .models import (
     CumprimentoRecord, CumprimentoLog,
     MovimentacaoRecord, MovimentacaoLog,
     Feriado, SuspensaoPrazo,
+    PrazoDjenRecord,
 )
+
+
+@admin.register(PrazoDjenRecord)
+class PrazoDjenRecordAdmin(admin.ModelAdmin):
+    list_display = [
+        'created_at', 'processo', 'parte', 'tipo_prazo', 'prazo_dias',
+        'ultimo_dia', 'data_protocolo', 'status', 'servidor',
+    ]
+    list_filter = ['tipo_prazo', 'tempestivo', 'created_at']
+    search_fields = ['processo', 'parte', 'motivo']
+    readonly_fields = [
+        'processo', 'parte', 'tipo_prazo', 'prazo_dias',
+        'data_disponibilizacao', 'data_disponibilizacao_efetiva',
+        'data_publicacao', 'data_inicio_contagem', 'ultimo_dia',
+        'data_decurso', 'data_protocolo', 'tempestivo', 'motivo',
+        'prazo_info', 'certidao_path', 'servidor', 'created_at',
+    ]
+
+    def has_add_permission(self, request):
+        return False
+
+    def status(self, obj):
+        if obj.tempestivo is True:
+            return format_html(
+                '<span style="color:#047857;font-weight:bold;">{}</span>',
+                'TEMPESTIVO')
+        if obj.tempestivo is False:
+            return format_html(
+                '<span style="color:#b91c1c;font-weight:bold;">{}</span>',
+                'INTEMPESTIVO')
+        return 'SEM PROTOCOLO'
+
+    status.short_description = 'Tempestividade'
 
 
 @admin.register(ProjudiSession)

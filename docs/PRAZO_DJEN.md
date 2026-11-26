@@ -67,6 +67,29 @@ REM Cumprimento de sentença (15 dias úteis)
 O comando gera um **preview HTML** da certidão em `var/`; ele **não expede** nada
 no Projudi. O usuário confere a memória de contagem e assina.
 
+## Dashboard de certidões
+
+Acesse **Certidões** no menu ou:
+
+```
+http://127.0.0.1:8000/projudi/certidoes/
+```
+
+O dashboard mostra:
+
+- cards de **Total / Tempestivas / Intempestivas / Sem protocolo**;
+- filtros por status, tipo e busca (processo, parte ou motivo);
+- tabela com processo, parte, tipo, último dia, protocolo, status e
+  as **razões** (resumidas);
+- botão **Detalhe** com a memória completa e os dias contados/excluídos;
+- botão **Preview** para abrir o HTML da certidão.
+
+A certidão leva apenas a conclusão e as datas essenciais. As razões completas
+ficam registradas em:
+
+- `PrazoDjenRecord` (banco) — visível no dashboard e no admin;
+- `var/prazo_djen.jsonl` (uma linha JSON por cálculo).
+
 ## Template
 
 `Certidão de Tempestividade / Trânsito (DJEN)`, criado pela migração

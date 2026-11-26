@@ -9,6 +9,7 @@ Uso:
     python manage.py prazo_djen --disponibilizacao 28/11/2026 --processo 0002803-76.2025.8.05.0191 --parte "FULANO"
 """
 
+import json
 from datetime import date, datetime
 from pathlib import Path
 
@@ -37,6 +38,10 @@ def _fmt(data):
     if not data:
         return ''
     return f'{data.strftime("%d/%m/%Y")} ({DIAS_SEMANA[data.weekday()]})'
+
+
+def _fmt_curta(data):
+    return data.strftime('%d/%m/%Y') if data else ''
 
 
 class Command(BaseCommand):
@@ -129,8 +134,12 @@ class Command(BaseCommand):
         self.stdout.write('prazo_info (JSON):')
         self.stdout.write(str(res.to_dict()))
 
+        certidao_path = ''
         if not options['sem_html']:
-            self._gerar_html(res, protocolo, options, info)
+            certidao_path = self._gerar_html(
+                res, protocolo, options, info)
+        self._registrar_log(
+            res, protocolo, info, options, certidao_path)
 
     def _tenant(self, options):
         if options['tenant']:
@@ -147,32 +156,118 @@ class Command(BaseCommand):
         return Tenant.objects.first()
 
     def _observacao(self, res, protocolo, info):
+        """Texto enxuto da certidão (o detalhe fica no controle/log)."""
         texto = (
-            f'Intimação eletrônica (DJEN): disponibilização em '
-            f'{_fmt(res.data_disponibilizacao)}, considerada em '
-            f'{_fmt(res.data_disponibilizacao_efetiva)}; publicação no DJEN '
-            f'em {_fmt(res.data_publicacao)}; início do prazo em '
-            f'{_fmt(res.data_inicio_contagem)}; prazo de '
-            f'{res.prazo_dias} dias úteis para {str(info["label"]).lower()}; '
-            f'último dia do prazo em {_fmt(res.ultimo_dia)}.'
+            f'Intimação eletrônica (DJEN) — prazo de {res.prazo_dias} dias '
+            f'úteis para {str(info["label"]).lower()}. Publicação em '
+            f'{_fmt_curta(res.data_publicacao)}; início em '
+            f'{_fmt_curta(res.data_inicio_contagem)}; vencimento em '
+            f'{_fmt_curta(res.ultimo_dia)}.'
         )
         if protocolo:
             tempestivo = protocolo <= res.ultimo_dia
             texto += (
-                f' {info["protocolo_frase"]} em {_fmt(protocolo)}, '
+                f' {info["protocolo_frase"]} em {_fmt_curta(protocolo)}, '
                 f'{"dentro" if tempestivo else "fora"} do prazo '
                 f'({"TEMPESTIVO" if tempestivo else "INTEMPESTIVO"}).'
             )
         elif info['transito']:
             texto += (
                 f' Não havendo {info["ato"]}, o trânsito em julgado ocorre '
-                f'em {_fmt(res.data_decurso)}.'
+                f'em {_fmt_curta(res.data_decurso)}.'
             )
         else:
             texto += (
-                f' O decurso do prazo ocorre em {_fmt(res.data_decurso)}.'
+                f' O decurso do prazo ocorre em '
+                f'{_fmt_curta(res.data_decurso)}.'
             )
         return texto
+
+    def _motivo(self, res, protocolo, info):
+        """Memória completa, só para controle (não vai na certidão)."""
+        linhas = [
+            f'Disponibilização bruta: {_fmt(res.data_disponibilizacao)}',
+            f'Disponibilização considerada: '
+            f'{_fmt(res.data_disponibilizacao_efetiva)}',
+            f'Publicação DJEN: {_fmt(res.data_publicacao)}',
+            f'Início do prazo: {_fmt(res.data_inicio_contagem)}',
+            f'Prazo: {res.prazo_dias} dias úteis ({info["label"]})',
+            f'Último dia: {_fmt(res.ultimo_dia)}',
+            f'Decurso/trânsito: {_fmt(res.data_decurso)}',
+        ]
+        if protocolo:
+            tempestivo = protocolo <= res.ultimo_dia
+            linhas.append(
+                f'Protocolo: {_fmt(protocolo)} — '
+                f'{"dentro" if tempestivo else "fora"} do prazo '
+                f'({"TEMPESTIVO" if tempestivo else "INTEMPESTIVO"})')
+        else:
+            linhas.append('Protocolo: não informado')
+        linhas.append(
+            'Dias contados: ' + ', '.join(
+                d.strftime('%d/%m/%Y') for d in res.dias_contados))
+        linhas.append(
+            'Dias excluídos: ' + ', '.join(
+                d.strftime('%d/%m/%Y') for d in res.dias_excluidos))
+        return '\n'.join(linhas)
+
+    def _registrar_log(self, res, protocolo, info, options, certidao_path=''):
+        from projudi.models import PrazoDjenRecord
+
+        tempestivo = (protocolo <= res.ultimo_dia) if protocolo else None
+        motivo = self._motivo(res, protocolo, info)
+        registro_id = None
+        try:
+            rec = PrazoDjenRecord.objects.create(
+                processo=options['processo'] or '',
+                parte=options['parte'] or '',
+                tipo_prazo=options['tipo'],
+                prazo_dias=res.prazo_dias,
+                data_disponibilizacao=res.data_disponibilizacao,
+                data_disponibilizacao_efetiva=(
+                    res.data_disponibilizacao_efetiva),
+                data_publicacao=res.data_publicacao,
+                data_inicio_contagem=res.data_inicio_contagem,
+                ultimo_dia=res.ultimo_dia,
+                data_decurso=res.data_decurso,
+                data_protocolo=protocolo,
+                tempestivo=tempestivo,
+                motivo=motivo,
+                prazo_info=res.to_dict(),
+                certidao_path=certidao_path,
+                servidor=options['servidor'],
+            )
+            registro_id = rec.id
+            self.stdout.write('')
+            self.stdout.write(self.style.SUCCESS(
+                f'Controle registrado: #{rec.id} '
+                f'(admin: /admin/projudi/prazodjenrecord/)'))
+        except Exception as e:
+            self.stderr.write(
+                f'⚠️ Não foi possível registrar no banco: {e}')
+
+        try:
+            pasta = Path(settings.BASE_DIR) / 'var'
+            pasta.mkdir(parents=True, exist_ok=True)
+            log = pasta / 'prazo_djen.jsonl'
+            payload = {
+                'id': registro_id,
+                'processo': options['processo'] or '',
+                'parte': options['parte'] or '',
+                'tipo_prazo': options['tipo'],
+                'prazo_dias': res.prazo_dias,
+                'tempestivo': tempestivo,
+                'motivo': motivo,
+                'prazo_info': res.to_dict(),
+                'certidao_path': certidao_path,
+                'servidor': options['servidor'],
+            }
+            with log.open('a', encoding='utf-8') as f:
+                f.write(json.dumps(
+                    payload, ensure_ascii=False, default=str) + '\n')
+            self.stdout.write(f'Log de controle: {log}')
+        except Exception as e:
+            self.stderr.write(f'⚠️ Não foi possível gravar o log: {e}')
 
     def _gerar_html(self, res, protocolo, options, info):
         from processes.models import DocumentTemplate
@@ -238,3 +333,4 @@ Template: {nome_template}. {self._observacao(res, protocolo, info)}</div>
         self.stdout.write('')
         self.stdout.write(self.style.SUCCESS(f'Preview: {saida}'))
         self.stdout.write('Abra no Firefox e confira antes de lançar no Projudi.')
+        return str(saida)

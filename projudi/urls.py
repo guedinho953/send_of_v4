@@ -4,6 +4,7 @@ from . import oficio_views
 from . import mandado_views
 from . import cumprimento_views
 from . import movimentacao_views
+from . import certidao_views
 
 app_name = 'projudi'
 
@@ -70,6 +71,11 @@ urlpatterns = [
     path('cumprimentos/<int:pk>/dispensar/', cumprimento_views.CumprimentoDispensarView.as_view(), name='cumprimento_dispensar'),
     path('cumprimentos/executar-todos/', cumprimento_views.CumprimentoBatchView.as_view(), name='cumprimento_batch'),
     path('cumprimentos/<int:pk>/logs/json/', cumprimento_views.CumprimentoLogsJsonView.as_view(), name='cumprimento_logs_json'),
+
+    # Dashboard de certidões/prazos DJEN (controle interno)
+    path('certidoes/', certidao_views.CertidaoDashboardView.as_view(), name='certidao_dashboard'),
+    path('certidoes/<int:pk>/', certidao_views.CertidaoDetailView.as_view(), name='certidao_detail'),
+    path('certidoes/<int:pk>/preview/', certidao_views.CertidaoPreviewView.as_view(), name='certidao_preview'),
 
     # Aba Movimentações (NOVO — atos internos via Mov581)
     path('movimentacoes/dashboard/', movimentacao_views.MovimentacaoDashboardView.as_view(), name='movimentacao_dashboard'),

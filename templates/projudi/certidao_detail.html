@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Certidão #{{ registro.id }} — Send of v4{% endblock %}
+
+{% block extra_css %}
+<style>
+    .tag-status { display:inline-block; padding:4px 12px; border-radius:12px; font-size:11px; font-weight:700; text-transform:uppercase; }
+    .tag-tempestivo { background:#d1fae5; color:#065f46; }
+    .tag-intempestivo { background:#fee2e2; color:#991b1b; }
+    .tag-sem_protocolo { background:#e5e7eb; color:#374151; }
+    .box { background:#fff; border-radius:10px; padding:18px 20px; box-shadow:0 2px 6px rgba(0,0,0,.06); margin-bottom:16px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px 24px; font-size:13px; }
+    .grid div { padding:4px 0; border-bottom:1px dashed #f1f5f9; }
+    .grid strong { color:#475569; display:inline-block; min-width:140px; }
+    .motivo { white-space:pre-wrap; font-size:13px; line-height:1.6; color:#334155; }
+    .dia { display:inline-block; background:#f1f5f9; color:#334155; border-radius:4px; padding:2px 6px; margin:2px; font-size:12px; }
+    .dia.excluido { background:#fef2f2; color:#991b1b; }
+    pre.json { background:#0f172a; color:#e2e8f0; padding:14px; border-radius:8px; overflow:auto; font-size:12px; }
+    .acoes { display:flex; gap:8px; flex-wrap:wrap; }
+    .btn-sm { padding:6px 12px; font-size:12px; border-radius:6px; border:1px solid #d1d5db; background:#fff; color:#374151; text-decoration:none; }
+    .btn-sm:hover { background:#f3f4f6; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px;">
+    <h1 class="section-title" style="margin:0;">Certidão #{{ registro.id }}</h1>
+    <span class="tag-status tag-{{ status_classe }}">{{ status_label }}</span>
+    <a class="btn-sm" href="{% url 'projudi:certidao_dashboard' %}" style="margin-left:auto;">← Voltar</a>
+</div>
+
+<div class="box">
+    <h3 style="margin-top:0; color:#1e3a5f;">Dados</h3>
+    <div class="grid">
+        <div><strong>Processo</strong> {{ registro.processo|default:"—" }}</div>
+        <div><strong>Parte</strong> {{ registro.parte|default:"—" }}</div>
+        <div><strong>Tipo</strong> {{ tipo_label|default:registro.tipo_prazo }}</div>
+        <div><strong>Prazo</strong> {{ registro.prazo_dias }} dias úteis</div>
+        <div><strong>Disponibilização</strong> {{ registro.data_disponibilizacao|date:"d/m/Y"|default:"—" }}</div>
+        <div><strong>Considerada em</strong> {{ registro.data_disponibilizacao_efetiva|date:"d/m/Y"|default:"—" }}</div>
+        <div><strong>Publicação DJEN</strong> {{ registro.data_publicacao|date:"d/m/Y"|default:"—" }}</div>
+        <div><strong>Início do prazo</strong> {{ registro.data_inicio_contagem|date:"d/m/Y"|default:"—" }}</div>
+        <div><strong>Último dia</strong> {{ registro.ultimo_dia|date:"d/m/Y"|default:"—" }}</div>
+        <div><strong>Decurso/trânsito</strong> {{ registro.data_decurso|date:"d/m/Y"|default:"—" }}</div>
+        <div><strong>Protocolo</strong> {{ registro.data_protocolo|date:"d/m/Y"|default:"não informado" }}</div>
+        <div><strong>Servidor</strong> {{ registro.servidor|default:"—" }}</div>
+        <div><strong>Registrado em</strong> {{ registro.created_at|date:"d/m/Y H:i" }}</div>
+    </div>
+</div>
+
+<div class="box">
+    <h3 style="margin-top:0; color:#1e3a5f;">Razões / memória de cálculo</h3>
+    <div class="motivo">{{ registro.motivo|default:"Sem memória registrada." }}</div>
+</div>
+
+<div class="box">
+    <h3 style="margin-top:0; color:#1e3a5f;">Dias contados</h3>
+    {% for d in dias_contados_br %}<span class="dia">{{ d }}</span>{% empty %}<span style="color:#6b7280;">—</span>{% endfor %}
+    <h3 style="color:#1e3a5f; margin-bottom:6px;">Dias excluídos</h3>
+    {% for d in dias_excluidos_br %}<span class="dia excluido">{{ d }}</span>{% empty %}<span style="color:#6b7280;">—</span>{% endfor %}
+</div>
+
+<div class="box">
+    <details>
+        <summary style="cursor:pointer; font-weight:600; color:#1e3a5f;">Cálculo bruto (JSON)</summary>
+        <pre class="json">{{ prazo_info_pretty }}</pre>
+    </details>
+</div>
+
+<div class="acoes">
+    {% if preview_disponivel %}
+        <a class="btn-sm" href="{% url 'projudi:certidao_preview' registro.id %}" target="_blank">🖨️ Abrir preview</a>
+    {% endif %}
+    <a class="btn-sm" href="{% url 'admin:projudi_prazodjenrecord_change' registro.id %}">Ver no Admin</a>
+</div>
+{% endblock %}

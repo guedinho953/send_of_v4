@@ -715,3 +715,54 @@ class SuspensaoPrazo(TenantModel, TimeStampedModel, ActiveModel):
         if self.data_inicio == self.data_fim:
             return f'{self.nome} ({self.data_inicio})'
         return f'{self.nome} ({self.data_inicio} a {self.data_fim})'
+
+
+class PrazoDjenRecord(models.Model):
+    """Memória de cálculo dos prazos DJEN (controle interno, não vai na certidão)."""
+
+    processo = models.CharField(
+        'Processo (CNJ)', max_length=25, blank=True, db_index=True)
+    parte = models.CharField('Parte', max_length=300, blank=True)
+    tipo_prazo = models.CharField('Tipo de prazo', max_length=40, blank=True)
+    prazo_dias = models.PositiveSmallIntegerField(
+        'Prazo (dias úteis)', default=0)
+    data_disponibilizacao = models.DateField(
+        'Disponibilização', null=True, blank=True)
+    data_disponibilizacao_efetiva = models.DateField(
+        'Disponibilização considerada', null=True, blank=True)
+    data_publicacao = models.DateField(
+        'Publicação DJEN', null=True, blank=True)
+    data_inicio_contagem = models.DateField(
+        'Início do prazo', null=True, blank=True)
+    ultimo_dia = models.DateField('Último dia', null=True, blank=True)
+    data_decurso = models.DateField('Decurso/trânsito', null=True, blank=True)
+    data_protocolo = models.DateField(
+        'Protocolo', null=True, blank=True)
+    tempestivo = models.BooleanField(
+        'Tempestivo', null=True, blank=True)
+    motivo = models.TextField('Memória / motivo', blank=True)
+    prazo_info = models.JSONField(
+        'Cálculo (JSON)', default=dict, blank=True)
+    certidao_path = models.CharField(
+        'Arquivo da certidão', max_length=500, blank=True)
+    servidor = models.CharField('Servidor', max_length=200, blank=True)
+    created_at = models.DateTimeField('Criado em', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Controle de Prazo DJEN'
+        verbose_name_plural = 'Controles de Prazo DJEN'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return (
+            f'{self.processo or "sem processo"} — {self.tipo_prazo} — '
+            f'{self.ultimo_dia or "s/ prazo"}'
+        )
+
+    @property
+    def status_tempestividade(self):
+        if self.tempestivo is True:
+            return 'TEMPESTIVO'
+        if self.tempestivo is False:
+            return 'INTEMPESTIVO'
+        return 'SEM PROTOCOLO'

@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block title %}Certidões e Prazos — Send of v4{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .stat-card { background: #fff; border-radius: 10px; padding: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.06); border-left: 4px solid; text-align: center; }
+    .stat-card h4 { margin: 0; font-size: 28px; color: #1e3a5f; font-weight: 700; }
+    .stat-card p { margin: 4px 0 0; font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-card.total { border-left-color: #2563eb; }
+    .stat-card.tempestivas { border-left-color: #059669; }
+    .stat-card.intempestivas { border-left-color: #dc2626; }
+    .stat-card.sem { border-left-color: #6b7280; }
+    .filtro-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+    .filtro-btn { padding: 6px 14px; border-radius: 20px; font-size: 13px; border: 1px solid #e5e7eb; background: #fff; color: #374151; cursor: pointer; text-decoration: none; }
+    .filtro-btn.active { background: #2563eb; color: white; border-color: #2563eb; }
+    .filtro-btn:hover:not(.active) { background: #f9fafb; }
+    .tabela { width: 100%; border-collapse: collapse; background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 6px rgba(0,0,0,0.06); font-size: 13px; }
+    .tabela th { background: #f8fafc; color: #475569; text-align: left; padding: 10px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: .4px; border-bottom: 1px solid #e5e7eb; }
+    .tabela td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+    .tabela tr:hover td { background: #f8fafc; }
+    .tag-status { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 10px; font-weight: 700; text-transform: uppercase; white-space: nowrap; }
+    .tag-tempestivo { background: #d1fae5; color: #065f46; }
+    .tag-intempestivo { background: #fee2e2; color: #991b1b; }
+    .tag-sem_protocolo { background: #e5e7eb; color: #374151; }
+    .btn-sm { padding: 4px 10px; font-size: 12px; border-radius: 5px; border: 1px solid #d1d5db; background: #fff; color: #374151; text-decoration: none; display: inline-block; }
+    .btn-sm:hover { background: #f3f4f6; }
+    .motivo { color: #6b7280; font-size: 12px; line-height: 1.35; max-width: 360px; }
+    .empty-state { text-align: center; padding: 48px 20px; color: #6b7280; background: #fff; border-radius: 10px; }
+    .aviso { background:#eff6ff; border:1px solid #bfdbfe; color:#1e3a8a; padding:10px 14px; border-radius:8px; margin-bottom:16px; font-size:13px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1 class="section-title">📑 Certidões e Prazos DJEN</h1>
+
+<div class="aviso">
+    Controle interno das certidões. A certidão leva só a conclusão; a
+    <strong>memória de cálculo completa</strong> fica registrada no detalhe e em
+    <code>var/prazo_djen.jsonl</code>.
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card total"><h4>{{ total }}</h4><p>Total</p></div>
+    <div class="stat-card tempestivas"><h4>{{ tempestivas }}</h4><p>Tempestivas</p></div>
+    <div class="stat-card intempestivas"><h4>{{ intempestivas }}</h4><p>Intempestivas</p></div>
+    <div class="stat-card sem"><h4>{{ sem_protocolo }}</h4><p>Sem protocolo</p></div>
+</div>
+
+<div class="filtro-bar">
+    <a class="filtro-btn {% if not filtro_status %}active{% endif %}"
+       href="{% url 'projudi:certidao_dashboard' %}?tipo={{ filtro_tipo|urlencode }}&q={{ busca|urlencode }}">Todos</a>
+    <a class="filtro-btn {% if filtro_status == 'tempestivo' %}active{% endif %}"
+       href="{% url 'projudi:certidao_dashboard' %}?status=tempestivo&tipo={{ filtro_tipo|urlencode }}&q={{ busca|urlencode }}">Tempestivas</a>
+    <a class="filtro-btn {% if filtro_status == 'intempestivo' %}active{% endif %}"
+       href="{% url 'projudi:certidao_dashboard' %}?status=intempestivo&tipo={{ filtro_tipo|urlencode }}&q={{ busca|urlencode }}">Intempestivas</a>
+    <a class="filtro-btn {% if filtro_status == 'sem_protocolo' %}active{% endif %}"
+       href="{% url 'projudi:certidao_dashboard' %}?status=sem_protocolo&tipo={{ filtro_tipo|urlencode }}&q={{ busca|urlencode }}">Sem protocolo</a>
+
+    <form method="get" style="display:flex; gap:6px; align-items:center; margin-left:auto;">
+        <input type="hidden" name="status" value="{{ filtro_status }}">
+        <input type="text" name="q" value="{{ busca }}" placeholder="processo, parte ou motivo"
+               style="padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px; width:230px;">
+        <select name="tipo" onchange="this.form.submit()"
+                style="padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px;">
+            <option value="">Todos os tipos</option>
+            {% for t in tipos %}
+                <option value="{{ t.valor }}" {% if filtro_tipo == t.valor %}selected{% endif %}>{{ t.label }} ({{ t.dias }} dias)</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn-sm">Filtrar</button>
+    </form>
+</div>
+
+{% if registros %}
+<table class="tabela">
+    <thead>
+        <tr>
+            <th>Data</th>
+            <th>Processo</th>
+            <th>Parte</th>
+            <th>Tipo</th>
+            <th>Último dia</th>
+            <th>Protocolo</th>
+            <th>Status</th>
+            <th>Razões / ações</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in registros %}
+        <tr>
+            <td>{{ r.created_at|date:"d/m/Y H:i" }}</td>
+            <td><strong>{{ r.processo|default:"—" }}</strong></td>
+            <td>{{ r.parte|default:"—"|truncatechars:40 }}</td>
+            <td>{{ r.tipo_label }}<br><span style="color:#6b7280;">{{ r.prazo_dias }} dias úteis</span></td>
+            <td>{{ r.ultimo_dia|date:"d/m/Y"|default:"—" }}</td>
+            <td>{{ r.data_protocolo|date:"d/m/Y"|default:"—" }}</td>
+            <td><span class="tag-status tag-{{ r.status_classe }}">{{ r.status_label }}</span></td>
+            <td>
+                <div class="motivo">{{ r.motivo|truncatechars:140 }}</div>
+                <div style="margin-top:6px;">
+                    <a class="btn-sm" href="{% url 'projudi:certidao_detail' r.id %}">Detalhe</a>
+                    {% if r.certidao_path %}
+                        <a class="btn-sm" href="{% url 'projudi:certidao_preview' r.id %}" target="_blank">Preview</a>
+                    {% endif %}
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="empty-state">
+    <h3>Nenhuma certidão registrada</h3>
+    <p>Gere um prazo com <code>python manage.py prazo_djen ...</code>.</p>
+</div>
+{% endif %}
+
+<p style="margin-top:16px; font-size:12px; color:#6b7280;">
+    <a href="{% url 'admin:projudi_prazodjenrecord_changelist' %}">Abrir no Admin</a>
+    · Log: <code>var/prazo_djen.jsonl</code>
+</p>
+{% endblock %}

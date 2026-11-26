@@ -115,6 +115,13 @@
             <a href="{% url 'projudi:retorno_list' %}" class="btn btn-outline">Lista</a>
         </div>
 
+        <div class="card" style="border-left-color: #0f766e;">
+            <h3>Certidões e Prazos</h3>
+            <p>Controle semiautomático de prazos DJEN, tempestividade e trânsito em julgado.</p>
+            <a href="{% url 'projudi:certidao_dashboard' %}" class="btn" style="background:linear-gradient(135deg,#0f766e,#14b8a6); color:white;">📑 Dashboard de Certidões</a>
+            <a href="{% url 'admin:projudi_prazodjenrecord_changelist' %}" class="btn btn-outline">Admin</a>
+        </div>
+
         <div class="card" style="border-left-color: #7c3aed;">
             <h3>Comandos</h3>
             <p>Lista de comandos judiciais extraidos dos documentos.</p>
