@@ -18,6 +18,13 @@ from __future__ import annotations
 import os
 from typing import Any, Dict
 
+try:
+    # Garante que o .env seja carregado mesmo em scripts executados fora do
+    # Django (o módulo lê PLAYWRIGHT_HEADLESS etc.).
+    import firefox_config  # noqa: F401
+except ImportError:
+    pass
+
 
 def _env_bool(nome: str, padrao: bool = False) -> bool:
     valor = os.environ.get(nome)
