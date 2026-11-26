@@ -172,6 +172,41 @@ Travessão (`—`), aspas curvas e reticências são convertidos para
 equivalentes ASCII antes do envio, e caracteres fora do latin-1 são
 removidos. Isso evita os `?` no texto da observação no Projudi.
 
+## Certidão de inexistência de custas da execução
+
+Essa certidão fica na área de **Certidões**, dentro do grupo
+**“Certidões vindas das movimentações”**, como tarefa específica:
+
+```text
+/projudi/certidoes/movimentacoes/custas/inexistencia/
+```
+
+Ela não é gerada pela varredura automática das movimentações; o usuário
+a produz sob demanda para o processo informado.
+
+Campos:
+
+- processo;
+- parte (opcional);
+- movimentação (opcional);
+- URL do processo no Projudi (opcional, usada para juntar);
+- assinante.
+
+Template:
+
+```text
+Certidão de Inexistência de Custas da Execução
+```
+
+O corpo público certifica que não existem custas processuais relativas à
+execução pendentes de recolhimento. Depois da prévia, o botão
+**Apenas juntar certidão** insere o documento no Projudi pelo mesmo fluxo
+de juntada das demais certidões.
+
+Outros comandos de custas (cálculo/cobrança, custas recolhidas ou
+inexistência por decisão específica) podem ser adicionados como novas
+tarefas nesse mesmo grupo.
+
 ## Assinatura
 
 A fila de petições tem um seletor de assinatura no topo:

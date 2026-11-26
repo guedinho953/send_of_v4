@@ -12,6 +12,7 @@ from django.views import View
 from django.views.generic import TemplateView
 
 from .assinantes import ASSINANTE_PADRAO, ASSINANTES
+from .certidao_constants import NOME_CERTIDAO_CUSTAS
 from .cumprimento_service import CumprimentoService
 from .peticao_service import TIPOS, PeticaoQueueService
 
@@ -726,3 +727,146 @@ class CertidaoPeticaoJuntarIntimarView(LoginRequiredMixin, View):
             )
         messages.success(request, mensagem)
         return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
+
+
+class CertidaoMovimentacaoCustasView(LoginRequiredMixin, View):
+    """Gera a Certidão de Inexistência de Custas da Execução.
+
+    Pensada para o fluxo de movimentações: o usuário informa o processo,
+    a parte (opcional), a movimentação (opcional) e a URL do Projudi para
+    que a certidão possa ser juntada sem depender da busca por CNJ.
+    """
+
+    template_name = 'projudi/certidao_movimentacao_custas.html'
+    nome_template = NOME_CERTIDAO_CUSTAS
+
+    def _contexto(self, **extra):
+        context = {
+            'assinante_padrao': ASSINANTE_PADRAO,
+            'assinantes': [
+                {'chave': chave, 'nome': dados[0], 'cargo': dados[1]}
+                for chave, dados in ASSINANTES.items()
+            ],
+        }
+        context.update(extra)
+        return context
+
+    def get(self, request):
+        return render(request, self.template_name, self._contexto(
+            processo=(request.GET.get('processo') or '').strip(),
+            parte=(request.GET.get('parte') or '').strip(),
+            descricao_movimentacao=(
+                request.GET.get('descricao_movimentacao') or ''
+            ).strip(),
+            processo_url=(request.GET.get('processo_url') or '').strip(),
+        ))
+
+    def post(self, request):
+        from django.template import Context, Template
+        from base.utils import normalize_process_number
+        from processes.models import (
+            DocumentTemplate, GeneratedDocument, Process,
+        )
+
+        processo = (request.POST.get('processo') or '').strip()
+        parte = (request.POST.get('parte') or '').strip()
+        descricao_movimentacao = (
+            request.POST.get('descricao_movimentacao') or ''
+        ).strip()
+        processo_url = (request.POST.get('processo_url') or '').strip()
+
+        if not processo:
+            messages.error(request, 'Informe o número do processo.')
+            return HttpResponseRedirect(
+                reverse('projudi:certidao_movimentacao_custas')
+            )
+
+        assinante = (
+            request.POST.get('assinante') or ASSINANTE_PADRAO
+        ).strip()
+        if assinante == 'outro':
+            servidor = (
+                request.POST.get('assinante_nome') or ''
+            ).strip() or 'Ivan Guedes da Silva'
+            servidor_cargo = (
+                request.POST.get('assinante_cargo') or ''
+            ).strip() or 'Secretário em Substituição'
+        else:
+            servidor, servidor_cargo = ASSINANTES.get(
+                assinante, ASSINANTES[ASSINANTE_PADRAO]
+            )
+
+        try:
+            template = DocumentTemplate.objects.get(
+                name=self.nome_template, active=True
+            )
+            proc = Process.objects.filter(number=processo).first()
+            if not proc:
+                proc = Process.objects.create(
+                    number=processo,
+                    number_normalized=normalize_process_number(processo),
+                    tenant=request.user.tenant,
+                    status='analyzing',
+                    projudi_url=processo_url,
+                )
+            elif processo_url and not proc.projudi_url:
+                proc.projudi_url = processo_url
+                proc.save(update_fields=['projudi_url'])
+            elif not processo_url and proc.projudi_url:
+                processo_url = proc.projudi_url
+
+            ctx = {
+                'processo': processo,
+                'parte': parte,
+                'descricao_movimentacao': descricao_movimentacao,
+                'data': date.today().strftime('%d/%m/%Y'),
+                'servidor': servidor,
+                'servidor_cargo': servidor_cargo,
+            }
+            html = Template(template.html_template).render(Context(ctx))
+
+            seq = GeneratedDocument.proximo_numero(template)
+            doc = GeneratedDocument.objects.create(
+                tenant=request.user.tenant,
+                process=proc,
+                template=template,
+                sequential_number=seq,
+                year=date.today().year,
+                recipient_name='Certidão: Inexistência de Custas da Execução',
+                html_content=html,
+            )
+        except Exception as exc:
+            messages.error(request, f'Erro ao gerar a certidão: {exc}')
+            return HttpResponseRedirect(
+                reverse('projudi:certidao_movimentacao_custas')
+            )
+
+        return render(request, 'projudi/certidao_peticao_preview.html', {
+            'documento': doc,
+            'html_content': html,
+            'item': {
+                'processo': processo,
+                'processo_url': processo_url,
+                'tipo': 'custas_execucao',
+                'eh_recurso': False,
+                'pode_intimar': False,
+                'tipo_label': 'Inexistência de Custas da Execução',
+                'situacao_recurso': '',
+                'situacao_label': '',
+                'recorrente': '',
+                'evento_recurso': '',
+                'evento_recurso_numero': '',
+                'evento_intimacao': '',
+                'origem_intimacao': '',
+                'origem_intimacao_label': '',
+                'observacao_juntada': '',
+                'polo_sugerido': 'autores',
+                'polo_recorrente': '',
+                'dias': '',
+                'data_envio': None,
+                'data_inicio': None,
+                'meio_label': '',
+                'ultimo_dia': None,
+                'data_decurso': None,
+            },
+        })

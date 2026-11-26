@@ -177,12 +177,20 @@
 </div>
 {% endif %}
 
-{% if certidoes_movimentacoes %}
+{% if not origem_atual or origem_atual == 'movimentacao' %}
 <div class="section-title">🔄 Certidões vindas das movimentações</div>
 <div class="section-sub">
-    Nasceram da varredura direta de movimentações do Projudi
-    ({{ total_movimentacoes }} no total).
+    Certidões geradas a partir das movimentações do Projudi.
+    As tarefas específicas ficam separadas aqui para não executar tudo de uma vez.
 </div>
+<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
+    <a href="{% url 'projudi:certidao_movimentacao_custas' %}"
+       class="btn btn-sm" style="background:#0891b2; color:white;">
+        📄 Gerar certidão de inexistência de custas
+    </a>
+</div>
+
+{% if certidoes_movimentacoes %}
 {% for c in certidoes_movimentacoes %}
 <div class="cert-card movimentacao {{ c.status }}">
     <div class="cert-header">
@@ -192,6 +200,7 @@
             <div class="cert-meta">
                 <span class="tag-origem movimentacao">Movimentação</span>
                 {% if c.act_verb %} | {{ c.act_verb }}{% endif %}
+                {% if c.descricao_movimentacao %} | {{ c.descricao_movimentacao }}{% endif %}
                 | 🕒 {{ c.created_at|date:"d/m/Y H:i" }}
             </div>
         </div>
@@ -227,10 +236,11 @@
     {% endif %}
 </div>
 {% endfor %}
-{% elif not origem_atual or origem_atual == 'movimentacao' %}
+{% else %}
 <div class="empty-state">
     📭 Nenhuma certidão de movimentação encontrada.
 </div>
+{% endif %}
 {% endif %}
 
 <div id="overlayFila" style="display:none; position:fixed; inset:0; background:rgba(255,255,255,0.88); z-index:9999; align-items:center; justify-content:center; flex-direction:column; gap:14px;">
