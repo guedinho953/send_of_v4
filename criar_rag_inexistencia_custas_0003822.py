@@ -1,6 +1,6 @@
 """Cria RAGExample de inexistência de custas da execução.
 
-Processo de referência: 0003822-83.2026.8.05.0191.
+Processo de referência: 0003822-20.2025.8.05.0191.
 O RAG usa como âncora o despacho de extinção da fase de execução e
 associa o template "Certidão de Inexistência de Custas da Execução".
 
@@ -22,10 +22,10 @@ django.setup()
 from base.utils import normalize_process_number  # noqa: E402
 from processes.models import DocumentTemplate, Process, RAGExample  # noqa: E402
 
-PROCESSO = '0003822-83.2026.8.05.0191'
+PROCESSO = '0003822-20.2025.8.05.0191'
 PROCESSO_URL = (
     'https://projudi.tjba.jus.br/projudi/listagens/'
-    'DadosProcesso?numeroProcesso=41020265518812'
+    'DadosProcesso?numeroProcesso=41020254766562'
 )
 TENANT_ID = 1
 TEMPLATE_NOME = 'Certidão de Inexistência de Custas da Execução'

@@ -257,6 +257,7 @@ class CertidaoGerarViaRagView(LoginRequiredMixin, View):
         )
         from processes.models import Process, RAGExample
         from .cumprimento_service import CumprimentoService
+        from .processo_lookup import localizar_processo
 
         processo = (request.POST.get('processo') or '').strip()
         rag_id = (request.POST.get('rag_id') or '').strip()
@@ -268,13 +269,15 @@ class CertidaoGerarViaRagView(LoginRequiredMixin, View):
             return HttpResponseRedirect(reverse('projudi:certidao_dashboard'))
 
         digitos = normalize_process_number(processo)
-        if len(digitos) != 20:
+        if len(digitos) < 15:
             messages.error(
                 request,
-                'Número do processo inválido. Use o formato '
-                '0000000-00.0000.8.00.0000.'
+                'Número do processo inválido. Informe o CNJ completo ou '
+                'somente os dígitos.'
             )
             return HttpResponseRedirect(reverse('projudi:certidao_dashboard'))
+        # Aceita o número sem os zeros à esquerda (ex.: 38222020258050191).
+        digitos = digitos.zfill(20)
         processo = format_process_number(digitos)
 
         rag = RAGExample.objects.filter(
@@ -302,13 +305,22 @@ class CertidaoGerarViaRagView(LoginRequiredMixin, View):
         if proc is None:
             proc = Process.objects.filter(number=processo).first()
 
+        # Se o processo ainda não tem URL (ou nem está cadastrado),
+        # localiza automaticamente pelo número na busca interna do Projudi.
+        if proc is None or not proc.projudi_url:
+            localizado = localizar_processo(request.user, processo)
+            if localizado:
+                processo = localizado['numero']
+                digitos = normalize_process_number(processo)
+                processo_url = localizado['url']
+
         if proc is None:
             if not processo_url:
                 messages.error(
                     request,
-                    'Processo não cadastrado. Informe a URL do Projudi '
-                    '(DadosProcesso?numeroProcesso=...) para localizar o '
-                    'número interno.'
+                    'Processo não localizado no Projudi pelo número '
+                    f'{processo}. Confira o CNJ ou informe a URL '
+                    'DadosProcesso?numeroProcesso=...'
                 )
                 return HttpResponseRedirect(
                     reverse('projudi:certidao_dashboard')
@@ -328,11 +340,15 @@ class CertidaoGerarViaRagView(LoginRequiredMixin, View):
             elif not processo_url and proc.projudi_url:
                 processo_url = proc.projudi_url
 
+        if not processo_url and proc.projudi_url:
+            processo_url = proc.projudi_url
+
         if not processo_url:
             messages.error(
                 request,
-                'A URL do processo no Projudi não está cadastrada. '
-                'Informe a URL DadosProcesso?numeroProcesso=...'
+                'O processo foi encontrado, mas não foi possível obter a '
+                'URL interna do Projudi. Informe a URL '
+                'DadosProcesso?numeroProcesso=...'
             )
             return HttpResponseRedirect(reverse('projudi:certidao_dashboard'))
 
