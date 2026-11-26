@@ -97,10 +97,11 @@
                 {% endif %}
                 <div class="pet-meta">
                     <strong>Envio:</strong> {{ item.data_envio_fmt }}
-                    &nbsp;|&nbsp; <strong>{% if item.tipo == 'recurso_inominado' %}Intimação da sentença{% else %}Intimação{% endif %}:</strong>
+                    &nbsp;|&nbsp; <strong>{% if item.tipo == 'recurso_inominado' %}Intimação considerada{% else %}Intimação{% endif %}:</strong>
                     {{ item.meio_label }}
                     {% if item.data_intimacao_fmt %} em {{ item.data_intimacao_fmt }}{% endif %}
                     {% if item.evento_intimacao %} (evento {{ item.evento_intimacao }}){% endif %}
+                    {% if item.origem_intimacao_label %} — {{ item.origem_intimacao_label }}{% endif %}
                     {% if item.recorrente %}<br><strong>Recorrente:</strong> {{ item.recorrente }}{% endif %}
                 </div>
             </div>
@@ -118,6 +119,9 @@
         {% if item.prazo %}
         <div class="prazo-box">
             <strong>Início:</strong> {{ item.data_inicio_fmt }}
+            {% if item.origem_intimacao == 'embargos' %}
+            <span style="color:#7c3aed; font-weight:600;">· marco: embargos de declaração</span>
+            {% endif %}
             &nbsp;|&nbsp; <strong>Término:</strong> {{ item.ultimo_dia_fmt }}
             &nbsp;|&nbsp; <strong>Decurso:</strong> {{ item.data_decurso_fmt }}
         </div>
@@ -138,6 +142,7 @@
                 <input type="hidden" name="data_inicio" value="{{ item.data_inicio_fmt }}">
                 <input type="hidden" name="meio_intimacao" value="{{ item.meio_intimacao }}">
                 <input type="hidden" name="meio_label" value="{{ item.meio_label }}">
+                <input type="hidden" name="origem_intimacao" value="{{ item.origem_intimacao }}">
                 <input type="hidden" name="documento_texto" value="{{ item.documento_texto }}">
                 {% if item.tipo == 'recurso_inominado' %}
                 <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:6px; width:100%;">
@@ -149,7 +154,7 @@
                     </select>
                     <label style="font-size:12px; color:#374151;">Evento do recurso:</label>
                     <input type="text" name="evento_recurso" value="{{ item.evento_recurso }}" placeholder="ex.: 55" style="width:80px; padding:5px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px;">
-                    <label style="font-size:12px; color:#374151;">Evento da intimação da sentença:</label>
+                    <label style="font-size:12px; color:#374151;">Evento da intimação (sentença/embargos):</label>
                     <input type="text" name="evento_intimacao" value="{{ item.evento_intimacao }}" placeholder="ex.: 48" style="width:80px; padding:5px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px;">
                 </div>
                 <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:6px; width:100%;">

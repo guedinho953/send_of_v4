@@ -44,7 +44,7 @@
     <strong>🔒 Dados internos (não integram o corpo público da certidão)</strong>
     <div style="margin-top:6px; line-height:1.6;">
         <strong>Evento do recurso:</strong> {{ item.evento_recurso }}
-        {% if item.evento_intimacao %}| <strong>Evento da intimação da sentença:</strong> {{ item.evento_intimacao }}{% endif %}
+        {% if item.evento_intimacao %}| <strong>Evento da intimação ({{ item.origem_intimacao_label|default:"sentença/embargos" }}):</strong> {{ item.evento_intimacao }}{% endif %}
         {% if item.recorrente %}| <strong>Recorrente:</strong> {{ item.recorrente }}{% endif %}
         <br><strong>Observação para juntada:</strong> {{ item.observacao_juntada }}
     </div>

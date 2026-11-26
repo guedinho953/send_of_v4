@@ -138,6 +138,33 @@ def _classificar_meio(texto):
     return 'intimacao'
 
 
+def _norm_nome(texto):
+    """Normaliza nome para comparação (sem acentos/pontuação)."""
+    return re.sub(r'[^A-Z0-9 ]+', ' ', _norm(texto)).strip()
+
+
+def _eh_embargos_declaracao(texto):
+    """True para decisão/intimação de embargos de declaração.
+
+    Exclui a simples juntada da petição de embargos (sem decisão).
+    Aceita acolhidos, não acolhidos, rejeitados ou julgados.
+    """
+    up = _norm(texto)
+    if 'EMBARGOS' not in up:
+        return False
+    if 'DECLARA' not in up:
+        return False
+    tem_resultado = any(k in up for k in (
+        'ACOLHID', 'NAO-ACOLHID', 'NÃO-ACOLHID', 'REJEITAD', 'JULGAD',
+    ))
+    if not tem_resultado:
+        return False
+    if ('JUNTADA DE PETICAO' in up
+            or 'PETICAO DE EMBARGOS' in up):
+        return False
+    return True
+
+
 class PeticaoQueueService:
     def __init__(self, user):
         self.user = user
@@ -263,15 +290,22 @@ class PeticaoQueueService:
         self._cache_intimacao[chave] = evento
         return evento
 
-    def _intimacao_da_sentenca(self, session, processo_url, data_envio):
-        """Data/meio da intimação da SENTENÇA para o recurso inominado.
+    def _intimacao_da_sentenca(self, session, processo_url, data_envio,
+                                recorrente=''):
+        """Data/meio da intimação que abre o prazo do recurso inominado.
 
-        O prazo do recurso inominado conta da intimação da sentença ao
-        recorrente, não da data em que o recurso foi protocolado.
+        Regra:
+          - sem embargos de declaração: intimação da sentença;
+          - com embargos de declaração: intimação da decisão dos embargos
+            (acolhidos, não acolhidos, rejeitados ou julgados), que substitui
+            a intimação da sentença como marco inicial.
+
+        O prazo conta da intimação ao recorrente, não da data em que o
+        recurso foi protocolado.
         """
         if not processo_url:
             return {}
-        chave = f'sentenca:{processo_url}'
+        chave = f'sentenca:{processo_url}:{_norm_nome(recorrente)}'
         if chave in self._cache_intimacao:
             return self._cache_intimacao[chave]
 
@@ -284,7 +318,14 @@ class PeticaoQueueService:
             soup = BeautifulSoup(resposta.text, 'html.parser')
             candidatos = []
             candidatos_genericos = []
+            candidatos_recorrente = []
+            genericos_recorrente = []
             eventos_recurso = []
+            embargos_intimacoes = []
+            embargos_recorrente = []
+            embargos_decisoes = []
+            nome_busca = _norm_nome(recorrente)
+            filtrar_recorrente = len(nome_busca) >= 5
 
             for tr in soup.find_all('tr'):
                 tds = tr.find_all('td', recursive=False)
@@ -292,30 +333,37 @@ class PeticaoQueueService:
                     continue
                 texto = _texto_linha(tr)
                 up = _norm(texto)
-
-                if 'RECURSO INOMINADO' in up:
-                    data_rec = _parse_data(texto)
-                    ev_rec = tds[0].get_text(' ', strip=True)
-                    if data_rec and ev_rec.isdigit():
-                        eventos_recurso.append((
-                            abs((data_rec - data_envio).days),
-                            data_rec,
-                            ev_rec,
-                        ))
-
-                if 'INTIMA' not in up and 'DISPONIBILIZ' not in up:
-                    continue
-
                 data_mov = _parse_data(texto)
                 if not data_mov:
-                    continue
-                # A intimação da sentença é anterior ao recurso.
-                if data_envio and data_mov > data_envio:
                     continue
 
                 evento = tds[0].get_text(' ', strip=True)
                 if not evento.isdigit():
                     evento = ''
+
+                eh_embargos = _eh_embargos_declaracao(texto)
+                eh_intimacao = ('INTIMA' in up or 'DISPONIBILIZ' in up)
+
+                if 'RECURSO INOMINADO' in up and data_envio and evento:
+                    eventos_recurso.append((
+                        abs((data_mov - data_envio).days),
+                        data_mov,
+                        evento,
+                    ))
+
+                # A intimação/decisão considerada é anterior ao recurso.
+                if data_envio and data_mov > data_envio:
+                    continue
+
+                if not eh_intimacao:
+                    if eh_embargos:
+                        embargos_decisoes.append({
+                            'data': data_mov,
+                            'data_mov': data_mov,
+                            'evento': evento,
+                            'texto': texto[:500],
+                        })
+                    continue
 
                 meio = _classificar_meio(texto)
                 data_base = data_mov
@@ -337,18 +385,64 @@ class PeticaoQueueService:
                     'texto': texto[:500],
                 }
 
+                pertence_recorrente = (
+                    filtrar_recorrente
+                    and nome_busca in _norm_nome(texto)
+                )
+                if eh_embargos:
+                    embargos_intimacoes.append(item)
+                    if pertence_recorrente:
+                        embargos_recorrente.append(item)
                 if any(k in up for k in (
                         'SENTENCA', 'JULGADA', 'JULGADO',
                         'HOMOLOG', 'ACORDAO')):
                     candidatos.append(item)
+                    if pertence_recorrente:
+                        candidatos_recorrente.append(item)
                 candidatos_genericos.append(item)
+                if pertence_recorrente:
+                    genericos_recorrente.append(item)
 
-            # Prefere a intimação que referencia a sentença; se não houver,
-            # usa a última intimação anterior ao recurso.
-            lista = candidatos or candidatos_genericos
-            if lista:
-                lista.sort(key=lambda c: (c['data'], c['data_mov']))
-                resultado = lista[-1]
+            # 1) Intimação que referencia diretamente os embargos: é o marco.
+            if embargos_intimacoes:
+                lista_embargos = embargos_recorrente or embargos_intimacoes
+                lista_embargos.sort(
+                    key=lambda c: (c['data'], c['data_mov'])
+                )
+                resultado = dict(lista_embargos[-1])
+                resultado['origem'] = 'embargos'
+            # 2) Há decisão de embargos, mas a intimação não veio rotulada:
+            #    usa a última intimação posterior à decisão dos embargos.
+            elif embargos_decisoes:
+                embargos_decisoes.sort(
+                    key=lambda d: (d['data'], d['data_mov'])
+                )
+                ultima_decisao = embargos_decisoes[-1]
+                base_genericos = (
+                    genericos_recorrente or candidatos_genericos
+                )
+                posteriores = [
+                    c for c in base_genericos
+                    if c['data_mov'] >= ultima_decisao['data_mov']
+                ]
+                if posteriores:
+                    posteriores.sort(
+                        key=lambda c: (c['data'], c['data_mov'])
+                    )
+                    resultado = dict(posteriores[-1])
+                    resultado['origem'] = 'embargos'
+            # 3) Sem embargos: prevalece a intimação da sentença.
+            else:
+                lista = (
+                    candidatos_recorrente
+                    or candidatos
+                    or genericos_recorrente
+                    or candidatos_genericos
+                )
+                if lista:
+                    lista.sort(key=lambda c: (c['data'], c['data_mov']))
+                    resultado = dict(lista[-1])
+                    resultado['origem'] = 'sentenca'
 
             if eventos_recurso:
                 eventos_recurso.sort(key=lambda e: (e[0], e[1]))
@@ -361,11 +455,12 @@ class PeticaoQueueService:
         return resultado
 
     def _intimacao_do_processo(self, session, processo_url, data_envio,
-                               tipo=None):
+                               tipo=None, recorrente=''):
         """Localiza a intimação mais próxima e o meio usado."""
         if tipo == 'recurso_inominado':
             return self._intimacao_da_sentenca(
-                session, processo_url, data_envio
+                session, processo_url, data_envio,
+                recorrente=recorrente,
             )
         if not processo_url:
             return {}
@@ -571,6 +666,14 @@ class PeticaoQueueService:
                     if intimacao.get('data') else ''
                 ),
                 'evento_intimacao': intimacao.get('evento', ''),
+                'origem_intimacao': intimacao.get('origem', ''),
+                'origem_intimacao_label': (
+                    'Embargos de declaração'
+                    if intimacao.get('origem') == 'embargos'
+                    else 'Sentença'
+                    if intimacao.get('origem') == 'sentenca'
+                    else ''
+                ),
                 'data_inicio': data_inicio,
                 'data_inicio_fmt': data_inicio.strftime('%d/%m/%Y'),
                 'meio_intimacao': fluxo_intimacao,
@@ -611,16 +714,17 @@ class PeticaoQueueService:
 
     def _analisar_item(self, cookies, base):
         session = self._nova_sessao(cookies)
+        recorrente = self._recorrente_do_documento(
+            session,
+            base['documento_url'],
+            base['documento_texto'],
+        )
         intimacao = self._intimacao_do_processo(
             session,
             base['processo_url'],
             base['data_envio'],
             tipo=base['tipo'],
-        )
-        recorrente = self._recorrente_do_documento(
-            session,
-            base['documento_url'],
-            base['documento_texto'],
+            recorrente=recorrente,
         )
         evento_recurso = ''
         if base['tipo'] == 'recurso_inominado':

@@ -42,8 +42,19 @@ A contagem é feita a partir da **intimação da sentença ao recorrente**:
 4. compara a **data de protocolo do recurso** com o último dia do prazo;
 5. marca **TEMPESTIVO** ou **INTEMPESTIVO**.
 
-O evento do protocolo do recurso é identificado no processo e pode ser
-ajustado na tela.
+**Embargos de declaração:** se houver embargos antes do recurso, o marco
+inicial passa a ser a **intimação da decisão dos embargos** (acolhidos,
+não acolhidos, rejeitados ou julgados), e não a intimação da sentença
+original. O sistema:
+
+1. procura uma intimação que referencie os embargos de declaração;
+2. se não encontrar rotulada, usa a última intimação posterior à decisão
+   dos embargos;
+3. só usa a intimação da sentença quando não há embargos.
+
+O evento do protocolo do recurso e o evento da intimação considerada
+(sentença ou embargos) são identificados no processo e podem ser ajustados
+na tela.
 
 ### Demais tipos
 1. Procura a primeira intimação **após a data de envio** da petição.
@@ -62,8 +73,8 @@ Para **recurso inominado**, a tela permite escolher:
 O corpo público segue o modelo do Ofício Circular nº 034/2015/COJE, com
 `TEMPESTIVO`, `PREPARADO` ou `INTEMPESTIVO` em negrito.
 
-Os dados privados (evento da intimação da sentença, data da intimação,
-último dia do prazo, decurso e recorrente) ficam:
+Os dados privados (evento da intimação considerada — sentença ou embargos —,
+data da intimação, último dia do prazo, decurso e recorrente) ficam:
 
 - no log `projudi.certidoes`;
 - na observação para juntada exibida na prévia;

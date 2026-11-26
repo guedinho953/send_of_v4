@@ -113,6 +113,9 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
 
         meio = (request.POST.get('meio_intimacao') or 'intimacao').strip()
         meio_label = (request.POST.get('meio_label') or '').strip()
+        origem_intimacao = (
+            request.POST.get('origem_intimacao') or ''
+        ).strip()
         recorrente = (request.POST.get('recorrente') or '').strip()
         documento = (request.POST.get('documento_texto') or '').strip()
 
@@ -236,8 +239,19 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
             f'{data_inicio.strftime("%d/%m/%Y")} ({rotulo_meio})'
         )
         if eh_recurso:
+            origem_intimacao_label = (
+                'Embargos de declaração'
+                if origem_intimacao == 'embargos'
+                else 'Sentença'
+            )
+            origem_obs = (
+                'dos embargos de declaração'
+                if origem_intimacao == 'embargos'
+                else 'da sentença'
+            )
             observacao_juntada += (
-                f'; evento da intimação da sentença: {evento_intimacao}; '
+                f'; evento da intimação {origem_obs}: '
+                f'{evento_intimacao}; '
                 f'recorrente: {recorrente or "não identificado"}.'
             )
         else:
@@ -343,6 +357,12 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
                 'evento_recurso': evento_recurso,
                 'evento_recurso_numero': evento_recurso_numero,
                 'evento_intimacao': evento_intimacao,
+                'origem_intimacao': origem_intimacao,
+                'origem_intimacao_label': (
+                    'Embargos de declaração'
+                    if origem_intimacao == 'embargos'
+                    else 'Sentença'
+                ) if eh_recurso else '',
                 'observacao_juntada': observacao_juntada,
                 'polo_sugerido': polo_sugerido,
                 'dias': info['dias'],
@@ -407,6 +427,8 @@ class CertidaoPeticaoPreviewView(LoginRequiredMixin, TemplateView):
                     if eh_recurso else ''
                 ),
                 'evento_intimacao': '',
+                'origem_intimacao': '',
+                'origem_intimacao_label': '',
                 'observacao_juntada': '',
                 'polo_sugerido': 'autores',
                 'dias': '',
