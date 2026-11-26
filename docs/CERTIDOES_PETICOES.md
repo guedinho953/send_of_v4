@@ -33,16 +33,47 @@ Função: `CumprimentoService.contar_prazo_por_fluxo`.
 
 ## Data de início
 
+### Recurso Inominado
+A contagem é feita a partir da **intimação da sentença ao recorrente**:
+
+1. localiza a sentença e a respectiva intimação (DJEN/advogado/e-mail/AR);
+2. para DJEN, usa a data de **disponibilização**;
+3. calcula 10 dias úteis;
+4. compara a **data de protocolo do recurso** com o último dia do prazo;
+5. marca **TEMPESTIVO** ou **INTEMPESTIVO**.
+
+O evento do protocolo do recurso é identificado no processo e pode ser
+ajustado na tela.
+
+### Demais tipos
 1. Procura a primeira intimação **após a data de envio** da petição.
-2. Para DJEN, usa a data de **disponibilização**, se estiver no texto.
-3. Se não localizar nenhuma intimação, usa a **data de envio** como fallback
-   e avisa na tela: “Data de envio (intimação não localizada no processo)”.
+2. Se não localizar, usa a data de envio como fallback.
 
 ## Geração
 
-O botão **Gerar certidão** monta o HTML usando o template
-**Certidão de Prazo** (com `recorrente`, quando encontrado no nome do
-documento) e salva em `GeneratedDocument`.
+O botão **Gerar certidão** monta o HTML e salva em `GeneratedDocument`.
+
+Para **recurso inominado**, a tela permite escolher:
+
+- **Tempestivo — pedido de gratuidade**;
+- **Tempestivo — preparo integral**;
+- **Intempestivo**.
+
+O corpo público segue o modelo do Ofício Circular nº 034/2015/COJE, com
+`TEMPESTIVO`, `PREPARADO` ou `INTEMPESTIVO` em negrito.
+
+Os dados privados (evento da intimação da sentença, data da intimação,
+último dia do prazo, decurso e recorrente) ficam:
+
+- no log `projudi.certidoes`;
+- na observação para juntada exibida na prévia;
+- fora do corpo público da certidão.
 
 A certidão é exibida em tela para impressão. A inserção automática no
 Projudi/Mov581 é uma etapa separada, que pode ser adicionada depois.
+
+## Desempenho
+
+A primeira leitura consulta a fila e os processos no Projudi e pode levar
+até ~30 segundos. O resultado fica em cache por 5 minutos. O botão
+**Atualizar fila** força nova leitura.

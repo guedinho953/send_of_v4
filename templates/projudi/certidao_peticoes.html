@@ -27,11 +27,16 @@
 {% block content %}
 <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
     <h1 class="section-title" style="font-size:22px; margin-bottom:6px;">📥 Fila de Petições</h1>
-    <a href="{% url 'projudi:certidao_dashboard' %}" class="btn btn-outline">← Certidões</a>
+    <div style="display:flex; gap:8px;">
+        <a href="?atualizar=1" class="btn btn-outline">🔄 Atualizar fila</a>
+        <a href="{% url 'projudi:certidao_dashboard' %}" class="btn btn-outline">← Certidões</a>
+    </div>
 </div>
 <p style="font-size:13px; color:#6b7280; margin:0 0 16px;">
     Lida diretamente de <code>JuntadaPeticao</code>. O prazo é contado em dias úteis
     conforme a forma de intimação (DJEN, advogado, e-mail, AR ou mandado).
+    A primeira leitura consulta o Projudi e pode levar até 30 segundos; depois
+    fica em cache por 5 minutos.
 </p>
 
 {% if messages %}
@@ -67,12 +72,22 @@
             <div>
                 <div class="pet-processo">{{ item.processo }}</div>
                 <span class="pet-tipo">{{ item.tipo_label }} — {{ item.dias }} dias úteis</span>
+                {% if item.tipo == 'recurso_inominado' %}
+                    {% if item.tempestivo %}
+                        <span style="display:inline-block; margin-left:6px; background:#d1fae5; color:#065f46; border-radius:10px; padding:2px 9px; font-size:11px; font-weight:700;">TEMPESTIVO</span>
+                    {% elif item.tempestivo == False %}
+                        <span style="display:inline-block; margin-left:6px; background:#fee2e2; color:#991b1b; border-radius:10px; padding:2px 9px; font-size:11px; font-weight:700;">INTEMPESTIVO</span>
+                    {% else %}
+                        <span style="display:inline-block; margin-left:6px; background:#e5e7eb; color:#374151; border-radius:10px; padding:2px 9px; font-size:11px; font-weight:700;">INDETERMINADO</span>
+                    {% endif %}
+                {% endif %}
                 <div class="pet-meta">
                     <strong>Envio:</strong> {{ item.data_envio_fmt }}
-                    &nbsp;|&nbsp; <strong>Intimação:</strong>
+                    &nbsp;|&nbsp; <strong>{% if item.tipo == 'recurso_inominado' %}Intimação da sentença{% else %}Intimação{% endif %}:</strong>
                     {{ item.meio_label }}
                     {% if item.data_intimacao_fmt %} em {{ item.data_intimacao_fmt }}{% endif %}
-                    {% if item.recorrente %}<br><strong>Parte/recorrente:</strong> {{ item.recorrente }}{% endif %}
+                    {% if item.evento_intimacao %} (evento {{ item.evento_intimacao }}){% endif %}
+                    {% if item.recorrente %}<br><strong>Recorrente:</strong> {{ item.recorrente }}{% endif %}
                 </div>
             </div>
             <div style="text-align:right; font-size:12px; color:#6b7280;">
@@ -105,8 +120,27 @@
                 <input type="hidden" name="data_inicio" value="{{ item.data_inicio_fmt }}">
                 <input type="hidden" name="meio_intimacao" value="{{ item.meio_intimacao }}">
                 <input type="hidden" name="meio_label" value="{{ item.meio_label }}">
-                <input type="hidden" name="recorrente" value="{{ item.recorrente }}">
                 <input type="hidden" name="documento_texto" value="{{ item.documento_texto }}">
+                {% if item.tipo == 'recurso_inominado' %}
+                <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:6px; width:100%;">
+                    <label style="font-size:12px; color:#374151;"><strong>Situação do recurso:</strong></label>
+                    <select name="situacao_recurso" style="padding:5px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px;">
+                        <option value="gratuidade">Tempestivo — pedido de gratuidade</option>
+                        <option value="preparo">Tempestivo — preparo integral</option>
+                        <option value="intempestivo">Intempestivo</option>
+                    </select>
+                    <label style="font-size:12px; color:#374151;">Evento do recurso:</label>
+                    <input type="text" name="evento_recurso" value="{{ item.evento_recurso }}" placeholder="ex.: 55" style="width:80px; padding:5px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px;">
+                    <label style="font-size:12px; color:#374151;">Evento da intimação da sentença:</label>
+                    <input type="text" name="evento_intimacao" value="{{ item.evento_intimacao }}" placeholder="ex.: 48" style="width:80px; padding:5px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px;">
+                </div>
+                <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:6px; width:100%;">
+                    <label style="font-size:12px; color:#374151;">Recorrente:</label>
+                    <input type="text" name="recorrente" value="{{ item.recorrente }}" placeholder="nome do recorrente" style="flex:1; min-width:220px; padding:5px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px;">
+                </div>
+                {% else %}
+                <input type="hidden" name="recorrente" value="{{ item.recorrente }}">
+                {% endif %}
                 <button type="submit" class="btn btn-sm" style="background:#7c3aed; color:white;">
                     📄 Gerar certidão
                 </button>

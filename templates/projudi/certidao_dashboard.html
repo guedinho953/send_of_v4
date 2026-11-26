@@ -85,7 +85,7 @@
         {% csrf_token %}
         <button type="submit" class="btn btn-orange">🔄 Sincronizar Movimentações</button>
     </form>
-    <a href="{% url 'projudi:certidao_peticoes' %}" class="btn" style="background:#7c3aed; color:white;">📥 Fila de Petições</a>
+    <a href="{% url 'projudi:certidao_peticoes' %}" id="link-fila-peticoes" class="btn" style="background:#7c3aed; color:white;">📥 Fila de Petições</a>
     <a href="{% url 'projudi:movimentacao_dashboard' %}" class="btn btn-outline">📋 Todas as Movimentações</a>
     <a href="{% url 'projudi:cumprimento_dashboard' %}" class="btn btn-outline">📬 Cumprimentos</a>
 </div>
@@ -233,4 +233,21 @@
 </div>
 {% endif %}
 
+<div id="overlayFila" style="display:none; position:fixed; inset:0; background:rgba(255,255,255,0.88); z-index:9999; align-items:center; justify-content:center; flex-direction:column; gap:14px;">
+    <div style="width:42px; height:42px; border:4px solid #ddd6fe; border-top-color:#7c3aed; border-radius:50%; animation:girar 0.9s linear infinite;"></div>
+    <div style="font-size:14px; color:#5b21b6; font-weight:600;">Lendo a fila de petições no Projudi...</div>
+    <div style="font-size:12px; color:#6b7280;">A primeira leitura pode levar até 30 segundos. Depois fica em cache por 5 minutos.</div>
+</div>
+<style>
+@keyframes girar { to { transform: rotate(360deg); } }
+</style>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('link-fila-peticoes')?.addEventListener('click', function () {
+    document.getElementById('overlayFila').style.display = 'flex';
+});
+</script>
 {% endblock %}

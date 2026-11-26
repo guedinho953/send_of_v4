@@ -58,7 +58,13 @@
 
 {% block content %}
 
-<h1 class="section-title">📋 Oficios Judiciais</h1>
+<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+    <h1 class="section-title" style="margin-bottom:0;">📋 Oficios Judiciais</h1>
+    <a href="{% url 'projudi:certidao_dashboard' %}" class="btn" style="background:linear-gradient(135deg,#7c3aed,#a855f7); color:white; font-weight:600; box-shadow:0 2px 8px rgba(124,58,237,0.35);">
+        📄 Dashboard de Certidões
+    </a>
+</div>
+<div style="margin-bottom:20px;"></div>
 
 {% if messages %}
     {% for message in messages %}

@@ -12,6 +12,11 @@
             Intimação: {{ item.meio_label }}
             {% if item.data_inicio %} em {{ item.data_inicio|date:"d/m/Y" }}{% endif %}
         </div>
+        {% if item.situacao_label %}
+        <div style="font-size:13px; color:#5b21b6; margin-top:4px;">
+            <strong>Situação:</strong> {{ item.situacao_label }}
+        </div>
+        {% endif %}
         <div style="font-size:13px; color:#374151; margin-top:4px;">
             Término: <strong>{{ item.ultimo_dia|date:"d/m/Y" }}</strong>
             | Decurso: <strong>{{ item.data_decurso|date:"d/m/Y" }}</strong>
@@ -29,6 +34,18 @@
         {{ html_content|safe }}
     </div>
 </div>
+
+{% if item.observacao_juntada %}
+<div style="margin-top:16px; background:#fffbeb; border-left:4px solid #f59e0b; border-radius:6px; padding:12px 14px; font-size:12px; color:#92400e;">
+    <strong>🔒 Dados internos (não integram o corpo público da certidão)</strong>
+    <div style="margin-top:6px; line-height:1.6;">
+        <strong>Evento do recurso:</strong> {{ item.evento_recurso }}
+        {% if item.evento_intimacao %}| <strong>Evento da intimação da sentença:</strong> {{ item.evento_intimacao }}{% endif %}
+        {% if item.recorrente %}| <strong>Recorrente:</strong> {{ item.recorrente }}{% endif %}
+        <br><strong>Observação para juntada:</strong> {{ item.observacao_juntada }}
+    </div>
+</div>
+{% endif %}
 
 {% if documento %}
 <div style="margin-top:10px; font-size:12px; color:#6b7280;">

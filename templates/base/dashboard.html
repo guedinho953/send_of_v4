@@ -140,7 +140,8 @@
             <h3>Certidões</h3>
             <p>Certidões separadas por origem: análises de petições e movimentações. Inclui a fila de petições com prazos por tipo de intimação.</p>
             <a href="{% url 'projudi:certidao_dashboard' %}" class="btn" style="background:linear-gradient(135deg,#7c3aed,#a855f7); color:white; box-shadow:0 2px 8px rgba(124,58,237,0.4);">📄 Dashboard Certidões</a>
-            <a href="{% url 'projudi:certidao_peticoes' %}" class="btn btn-outline">📥 Fila de Petições</a>
+            <a href="{% url 'projudi:certidao_peticoes' %}" class="btn btn-outline"
+               onclick="this.innerHTML='⏳ Lendo fila...'; this.style.pointerEvents='none';">📥 Fila de Petições</a>
         </div>
 
         <div class="card" style="border-left-color: #6366f1;">
