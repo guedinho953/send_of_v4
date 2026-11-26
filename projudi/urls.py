@@ -76,6 +76,7 @@ urlpatterns = [
     # Aba Certidões (separadas por origem: petição x movimentação)
     path('certidoes/dashboard/', certidao_views.CertidaoDashboardView.as_view(), name='certidao_dashboard'),
     path('certidoes/rastrear-rag/', certidao_views.CertidaoRastrearRagView.as_view(), name='certidao_rastrear_rag'),
+    path('certidoes/rag/gerar/', certidao_views.CertidaoGerarViaRagView.as_view(), name='certidao_gerar_rag'),
     path('certidoes/rag/<int:pk>/executar/', certidao_views.CertidaoExecutarRagView.as_view(), name='certidao_executar_rag'),
     path('certidoes/rag/executar-pendentes/', certidao_views.CertidaoExecutarRagPendentesView.as_view(), name='certidao_executar_rag_pendentes'),
     path('certidoes/peticoes/', certidao_peticao_views.CertidaoPeticaoQueueView.as_view(), name='certidao_peticoes'),

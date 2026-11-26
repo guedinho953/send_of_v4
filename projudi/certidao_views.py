@@ -64,7 +64,20 @@ class CertidaoDashboardView(LoginRequiredMixin, TemplateView):
         elif origem == 'movimentacao':
             peticoes = peticoes.none()
 
+        from processes.models import RAGExample
+        rags_certidao = (
+            RAGExample.objects
+            .filter(
+                active=True,
+                suggested_templates__template_type='certidao',
+                suggested_templates__active=True,
+            )
+            .distinct()
+            .order_by('-created_at')[:50]
+        )
+
         context.update({
+            'rags_certidao': rags_certidao,
             'total': qs.count(),
             'total_peticoes': total_peticoes,
             'total_movimentacoes': total_movimentacoes,
@@ -186,6 +199,119 @@ class CertidaoRastrearRagView(LoginRequiredMixin, View):
                 )
         except Exception as exc:
             messages.error(request, f'Erro ao rastrear RAG: {exc}')
+
+        return HttpResponseRedirect(reverse('projudi:certidao_dashboard'))
+
+
+class CertidaoGerarViaRagView(LoginRequiredMixin, View):
+    """Gera a certidão de uma RAG diretamente para um processo.
+
+    Diferente da fila de movimentações, aqui o documento da certidão é
+    montado a partir do template vinculado à RAG e inserido/assinado no
+    Projudi via `CumprimentoService.executar_cumprimento`.
+    """
+
+    def post(self, request):
+        from base.utils import normalize_process_number
+        from processes.models import Process, RAGExample
+        from .cumprimento_service import CumprimentoService
+
+        processo = (request.POST.get('processo') or '').strip()
+        rag_id = (request.POST.get('rag_id') or '').strip()
+        processo_url = (request.POST.get('processo_url') or '').strip()
+        forcar = request.POST.get('forcar') == '1'
+
+        if not processo or not rag_id.isdigit():
+            messages.error(request, 'Informe o processo e a RAG.')
+            return HttpResponseRedirect(reverse('projudi:certidao_dashboard'))
+
+        rag = RAGExample.objects.filter(
+            pk=int(rag_id), active=True
+        ).first()
+        if not rag:
+            messages.error(request, 'RAG não encontrada ou inativa.')
+            return HttpResponseRedirect(reverse('projudi:certidao_dashboard'))
+
+        template = (
+            rag.suggested_templates
+            .filter(template_type='certidao', active=True)
+            .first()
+        )
+        if not template:
+            messages.error(
+                request,
+                'Esta RAG não tem template de certidão vinculado.'
+            )
+            return HttpResponseRedirect(reverse('projudi:certidao_dashboard'))
+
+        proc, _ = Process.objects.get_or_create(
+            number=processo,
+            defaults={
+                'number_normalized': normalize_process_number(processo),
+                'tenant': request.user.tenant,
+                'status': 'analyzing',
+                'projudi_url': processo_url,
+            },
+        )
+        if processo_url and not proc.projudi_url:
+            proc.projudi_url = processo_url
+            proc.save(update_fields=['projudi_url'])
+        elif not processo_url and proc.projudi_url:
+            processo_url = proc.projudi_url
+
+        existente = CumprimentoRecord.objects.filter(
+            user=request.user,
+            processo=processo,
+            rag_example=rag,
+            template_used=template,
+            status='cumprido',
+        ).first()
+        if existente and not forcar:
+            messages.warning(
+                request,
+                f'Já existe certidão cumprida para este processo '
+                f'(#{existente.id}). Marque "Gerar novamente" para repetir.'
+            )
+            return HttpResponseRedirect(reverse('projudi:certidao_dashboard'))
+
+        record = CumprimentoRecord.objects.create(
+            processo=processo,
+            numero_processo_cnj=processo,
+            fluxo='movimentacao_simples',
+            fluxo_justificativa=(
+                'Certidão gerada diretamente pela RAG '
+                f'#{rag.id} — {rag.despacho_ato}'
+            ),
+            act_verb=(rag.despacho_ato or 'certifique-se')[:50],
+            snippet=(rag.despacho_observacao or '')[:2000],
+            template_used=template,
+            rag_example=rag,
+            url_processo=processo_url,
+            status='pendente',
+            user=request.user,
+        )
+
+        service = CumprimentoService(request.user)
+        try:
+            service.executar_cumprimento(record)
+            record.refresh_from_db()
+            if record.status == 'cumprido':
+                messages.success(
+                    request,
+                    f'✅ {template.name} gerada e assinada no Projudi '
+                    f'para o processo {processo}.'
+                )
+            else:
+                messages.warning(
+                    request,
+                    f'⚠️ A certidão do processo {processo} terminou com '
+                    f'status {record.get_status_display()}.'
+                )
+        except Exception as exc:
+            messages.error(
+                request,
+                f'Erro ao gerar a certidão via RAG: {exc}'
+            )
 
         return HttpResponseRedirect(reverse('projudi:certidao_dashboard'))
 

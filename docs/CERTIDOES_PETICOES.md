@@ -204,6 +204,33 @@ A geração da certidão em si continua usando `CumprimentoService` e o
 `MovimentacaoRecord` gerado entra em **Certidões vindas das movimentações**
 com `origem='movimentacao'`.
 
+## Gerar certidão via RAG (documento no Projudi)
+
+Na seção **Certidões de despacho (RAG)** existe o formulário:
+
+```text
+📄 Gerar certidão via RAG diretamente no Projudi
+```
+
+Ele recebe:
+
+- processo;
+- RAG (somente RAGs ativas com template de certidão vinculado);
+- URL do Projudi (opcional; usa a URL já salva no processo);
+- opção “Gerar novamente”.
+
+O sistema cria um `CumprimentoRecord`, usa o template de certidão da RAG e
+executa `CumprimentoService.executar_cumprimento`: o documento é montado,
+inserido no Projudi e assinado.
+
+Diferença importante:
+
+- **Fila de Movimentações → Executar pendentes** registra apenas o Mov581;
+- **Gerar certidão via RAG** gera o documento da certidão.
+
+Novos modelos cadastrados como `DocumentTemplate` do tipo `certidao` e
+vinculados a uma `RAGExample` aparecem automaticamente no seletor de RAG.
+
 ## Fila de Movimentações
 
 Rota:

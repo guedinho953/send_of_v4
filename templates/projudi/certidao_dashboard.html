@@ -206,6 +206,50 @@
     {% endif %}
 </div>
 
+{% if rags_certidao %}
+<div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px 14px; margin-bottom:14px;">
+    <div style="font-size:13px; font-weight:600; color:#1e3a5f; margin-bottom:6px;">
+        📄 Gerar certidão via RAG diretamente no Projudi
+    </div>
+    <div style="font-size:11px; color:#6b7280; margin-bottom:8px;">
+        Usa o template de certidão vinculado à RAG. O documento é inserido
+        e assinado no Projudi, diferente do “Executar pendentes” da fila de
+        movimentações (que só registra Mov581).
+    </div>
+    <form method="post" action="{% url 'projudi:certidao_gerar_rag' %}"
+          onsubmit="return confirm('Gerar e assinar esta certidão no Projudi?');">
+        {% csrf_token %}
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:end;">
+            <div>
+                <label style="display:block; font-size:11px; color:#374151; margin-bottom:3px;">Processo</label>
+                <input name="processo" required placeholder="0000000-00.0000.8.05.0191"
+                       style="padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px; min-width:210px;">
+            </div>
+            <div>
+                <label style="display:block; font-size:11px; color:#374151; margin-bottom:3px;">RAG</label>
+                <select name="rag_id" required
+                        style="padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px; max-width:360px;">
+                    {% for r in rags_certidao %}
+                    <option value="{{ r.id }}">#{{ r.id }} — {{ r.despacho_ato|truncatechars:70 }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label style="display:block; font-size:11px; color:#374151; margin-bottom:3px;">URL do Projudi (opcional)</label>
+                <input name="processo_url" placeholder="DadosProcesso?numeroProcesso=..."
+                       style="padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px; min-width:240px;">
+            </div>
+            <label style="font-size:11px; color:#6b7280; display:flex; align-items:center; gap:4px;">
+                <input type="checkbox" name="forcar" value="1"> Gerar novamente
+            </label>
+            <button type="submit" class="btn btn-sm" style="background:#059669; color:white;">
+                📄 Gerar e assinar via RAG
+            </button>
+        </div>
+    </form>
+</div>
+{% endif %}
+
 {% if certidoes_rag %}
 {% for c in certidoes_rag %}
 <div class="cert-card movimentacao {{ c.status }}">
