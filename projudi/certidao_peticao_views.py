@@ -1048,6 +1048,7 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
                 'processo': resultado['processo'],
                 'executado': resultado['executado'],
                 'evento_despacho': resultado['evento_despacho'],
+                'evento_intimacao': resultado['evento_intimacao'],
                 'data_intimacao': resultado['data_intimacao'].strftime(
                     '%d/%m/%Y'
                 ),

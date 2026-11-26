@@ -509,7 +509,8 @@ O corpo público da certidão usa o seguinte texto:
 Certifico, para os devidos fins, o decurso do prazo de 15 (quinze) dias
 para o pagamento voluntário do débito referente ao Cumprimento de
 Sentença/Impugnação, referente ao Despacho (evento n.º 78), tendo
-decorrido o prazo em 26/11/2026, data da intimação: 02/11/2026.
+decorrido o prazo em 26/11/2026, data da intimação: 02/11/2026
+(evento 84).
 ```
 
 Se o prazo **já decorreu**, a prévia permite juntar a certidão pelo fluxo
