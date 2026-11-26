@@ -127,6 +127,13 @@ class CertidaoRastrearRagView(LoginRequiredMixin, View):
         service = CumprimentoService(request.user)
         somente_hoje = request.POST.get('hoje') == '1'
         try:
+            paginas = int(request.POST.get('paginas') or 10)
+        except (ValueError, TypeError):
+            paginas = 10
+        paginas = max(1, min(paginas, 30))
+        rag_id_raw = (request.POST.get('rag_id') or '').strip()
+        rag_filtro_id = int(rag_id_raw) if rag_id_raw.isdigit() else None
+        try:
             result = service.projudi_service._get_session_from_cookies()
             if not result:
                 messages.error(
@@ -142,7 +149,9 @@ class CertidaoRastrearRagView(LoginRequiredMixin, View):
             client.session = session
             client.cookies = cookies_dict
 
-            pages = client.obter_paginas_finais_movimentacoes(quantidade=3)
+            pages = client.obter_paginas_finais_movimentacoes(
+                quantidade=paginas
+            )
             movs = []
             for pagina in pages:
                 data = {'pagina': str(pagina), 'loginJuiz': ''}
@@ -174,28 +183,59 @@ class CertidaoRastrearRagView(LoginRequiredMixin, View):
                 movs, session, cookies_dict,
                 templates_validos=templates_certidao,
             )
+            if rag_filtro_id:
+                decisoes = [
+                    decisao for decisao in decisoes
+                    if getattr(decisao.get('rag'), 'id', None) == rag_filtro_id
+                ]
 
+            executar_auto = request.POST.get('executar') == '1'
             importados = 0
+            executados = 0
+            falhas = 0
+            processos = set()
             for decisao in decisoes:
                 try:
                     record = service.importar_cumprimento(decisao)
-                    if record:
-                        importados += 1
+                    if not record:
+                        continue
+                    importados += 1
+                    processos.add(record.processo)
+
+                    if (executar_auto
+                            and record.status == 'pendente'
+                            and getattr(record, 'template_used', None)
+                            and record.template_used.template_type == 'certidao'):
+                        service.executar_cumprimento(record)
+                        record.refresh_from_db()
+                        if record.status == 'cumprido':
+                            executados += 1
+                        else:
+                            falhas += 1
                 except Exception as exc:
                     print(f'[CertidaoRAG] Erro importando: {exc}')
 
             if importados:
                 sufixo = ' de hoje' if somente_hoje else ''
-                messages.success(
-                    request,
+                lista_proc = ', '.join(sorted(processos)[:8])
+                msg = (
                     f'🔎 {importados} certidão(ões) de RAG{sufixo} '
-                    'identificada(s). Confira a lista e execute somente as '
-                    'certidões desejadas.'
+                    f'localizada(s). Processos: {lista_proc}.'
                 )
+                if executar_auto:
+                    msg += (
+                        f' {executados} gerada(s)/juntada(s) no Projudi, '
+                        f'{falhas} falha(s).'
+                    )
+                else:
+                    msg += (
+                        ' Clique em "Executar certidão" para gerar e juntar.'
+                    )
+                messages.success(request, msg)
             else:
                 messages.info(
                     request,
-                    'Nenhuma certidão de RAG nova foi identificada.'
+                    'Nenhuma certidão de RAG nova foi localizada.'
                 )
         except Exception as exc:
             messages.error(request, f'Erro ao rastrear RAG: {exc}')
@@ -298,8 +338,8 @@ class CertidaoGerarViaRagView(LoginRequiredMixin, View):
             if record.status == 'cumprido':
                 messages.success(
                     request,
-                    f'✅ {template.name} gerada e assinada no Projudi '
-                    f'para o processo {processo}.'
+                    f'✅ {template.name} gerada, assinada e juntada no '
+                    f'Projudi para o processo {processo}.'
                 )
             else:
                 messages.warning(
@@ -335,7 +375,8 @@ class CertidaoExecutarRagView(LoginRequiredMixin, View):
             if record.status == 'cumprido':
                 messages.success(
                     request,
-                    f'✅ Certidão do processo {record.processo} cumprida.'
+                    f'✅ Certidão do processo {record.processo} gerada e '
+                    'juntada no Projudi.'
                 )
             else:
                 messages.warning(
@@ -393,7 +434,7 @@ class CertidaoExecutarRagPendentesView(LoginRequiredMixin, View):
 
         messages.success(
             request,
-            f'Certidões processadas: {cumpridas} cumprida(s), '
-            f'{falhas} falha(s).'
+            f'Certidões geradas e juntadas: {cumpridas}; '
+            f'falhas: {falhas}.'
         )
         return HttpResponseRedirect(reverse('projudi:certidao_dashboard'))

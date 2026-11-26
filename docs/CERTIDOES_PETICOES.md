@@ -225,6 +225,29 @@ Para aparecer em **Gerar certidão via RAG**, ele precisa ser vinculado a uma
 `RAGExample` em `suggested_templates`. O vínculo ainda é feito no Django
 Admin (ou por script), mas o modelo em si é cadastrado na área de Certidões.
 
+## Localizar despacho modelo e juntar a certidão
+
+Na seção **Certidões de despacho (RAG)** existe o formulário:
+
+```text
+🔎 Localizar despacho modelo
+```
+
+Opções:
+
+- RAG específica ou todas as RAGs de certidão;
+- quantidade de páginas de movimentações (1 a 30);
+- somente hoje;
+- **gerar e juntar automaticamente**.
+
+O sistema baixa os documentos das movimentações, compara com o texto das
+RAGs, importa as certidões localizadas e, quando a opção automática está
+marcada, executa cada certidão: monta o documento com o template, assina e
+junta no processo via Mov581.
+
+Sem a opção automática, os cartões aparecem na lista para revisão e o
+botão **📄 Gerar e juntar certidão** faz a execução individual.
+
 ## Gerar certidão via RAG (documento no Projudi)
 
 Na seção **Certidões de despacho (RAG)** existe o formulário:

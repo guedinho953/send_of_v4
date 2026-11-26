@@ -187,13 +187,31 @@
 </div>
 <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
     <form method="post" action="{% url 'projudi:certidao_rastrear_rag' %}"
-          onsubmit="return confirm('Rastrear as movimentações por RAG e importar somente certidões?');">
+          onsubmit="return confirm('Localizar o despacho modelo, importar e (se marcado) gerar e juntar a certidão no Projudi?');"
+          style="display:flex; gap:8px; flex-wrap:wrap; align-items:end; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px;">
         {% csrf_token %}
+        <div>
+            <label style="display:block; font-size:11px; color:#374151; margin-bottom:3px;">RAG</label>
+            <select name="rag_id" style="padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px; max-width:340px;">
+                <option value="">Todas as RAGs de certidão</option>
+                {% for r in rags_certidao %}
+                <option value="{{ r.id }}">#{{ r.id }} — {{ r.despacho_ato|truncatechars:60 }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label style="display:block; font-size:11px; color:#374151; margin-bottom:3px;">Páginas</label>
+            <input type="number" name="paginas" value="10" min="1" max="30"
+                   style="width:70px; padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px;">
+        </div>
+        <label style="font-size:11px; color:#6b7280; display:flex; align-items:center; gap:4px;">
+            <input type="checkbox" name="hoje" value="1"> somente hoje
+        </label>
+        <label style="font-size:11px; color:#065f46; display:flex; align-items:center; gap:4px;">
+            <input type="checkbox" name="executar" value="1"> gerar e juntar automaticamente
+        </label>
         <button type="submit" class="btn btn-sm" style="background:#0891b2; color:white;">
-            🔎 Rastrear RAG do despacho (certidões)
-        </button>
-        <button type="submit" name="hoje" value="1" class="btn btn-sm btn-outline">
-            📅 Rastrear RAG de hoje
+            🔎 Localizar despacho modelo
         </button>
     </form>
     {% if rag_pendentes %}
@@ -201,7 +219,7 @@
           onsubmit="return confirm('Executar somente as certidões de RAG pendentes/falhas?');">
         {% csrf_token %}
         <button type="submit" class="btn btn-sm btn-green">
-            ▶️ Executar certidões pendentes ({{ rag_pendentes }})
+            📄 Gerar e juntar certidões pendentes ({{ rag_pendentes }})
         </button>
     </form>
     {% endif %}
@@ -277,7 +295,7 @@
         <form method="post" action="{% url 'projudi:certidao_executar_rag' c.pk %}" style="display:inline;"
               onsubmit="return confirm('Executar somente esta certidão?');">
             {% csrf_token %}
-            <button type="submit" class="btn btn-sm btn-green">▶️ Executar certidão</button>
+            <button type="submit" class="btn btn-sm btn-green">📄 Gerar e juntar certidão</button>
         </form>
         {% endif %}
         {% if c.url_processo %}
