@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}Movimentação {{ movimentacao.processo }} — Send of v4{% endblock %}
+
+{% block extra_css %}
+<style>
+    .detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+    .detail-item { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 7px; padding: 10px 12px; }
+    .detail-item .rotulo { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: .4px; }
+    .detail-item .valor { font-size: 13px; color: #1f2937; margin-top: 4px; word-break: break-word; }
+    .tag-status { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+    .tag-pendente { background: #fef3c7; color: #92400e; }
+    .tag-processando { background: #ede9fe; color: #5b21b6; }
+    .tag-cumprido { background: #d1fae5; color: #065f46; }
+    .tag-falha { background: #fee2e2; color: #991b1b; }
+    .tag-dispensado { background: #f3e8ff; color: #6b21a8; }
+    .log-entry { font-size: 12px; padding: 8px 12px; border-radius: 6px; margin-bottom: 6px; }
+    .log-info { background: #eff6ff; border-left: 3px solid #3b82f6; }
+    .log-execucao { background: #f0fdf4; border-left: 3px solid #22c55e; }
+    .log-erro { background: #fef2f2; border-left: 3px solid #ef4444; }
+    .btn-sm { padding: 5px 12px; font-size: 12px; border-radius: 5px; }
+    .btn-green { background: #059669; color: white; }
+    .btn-green:hover { background: #047857; }
+    .btn-outline { background: transparent; border: 1px solid #d1d5db; color: #374151; }
+    .btn-outline:hover { background: #f3f4f6; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:16px;">
+    <div>
+        <h1 class="section-title" style="font-size:22px; margin:0;">🔄 Detalhes da Movimentação</h1>
+        <p style="font-size:13px; color:#6b7280; margin:4px 0 0;">
+            {{ movimentacao.processo }}{% if movimentacao.numero_processo_cnj %} · {{ movimentacao.numero_processo_cnj }}{% endif %}
+        </p>
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <a href="{% url 'projudi:movimentacao_dashboard' %}" class="btn btn-outline">← Dashboard</a>
+        <a href="{% url 'projudi:movimentacao_list' %}" class="btn btn-outline">📋 Lista</a>
+        {% if movimentacao.url_processo %}
+        <a href="{{ movimentacao.url_processo }}" target="_blank" class="btn btn-outline">🔗 Abrir no Projudi</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card" style="margin-bottom:16px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
+        <div>
+            <strong style="font-size:16px; color:#1e3a5f;">
+                {{ movimentacao.act_verb|default:"Movimentação" }}
+            </strong>
+            {% if movimentacao.descricao_movimentacao %}
+            <span style="font-size:13px; color:#6b7280;"> — {{ movimentacao.descricao_movimentacao }}</span>
+            {% endif %}
+        </div>
+        <span class="tag-status tag-{{ movimentacao.status }}">{{ movimentacao.get_status_display }}</span>
+    </div>
+
+    <div class="detail-grid">
+        <div class="detail-item">
+            <div class="rotulo">Processo interno</div>
+            <div class="valor">{{ movimentacao.processo }}</div>
+        </div>
+        <div class="detail-item">
+            <div class="rotulo">Nº CNJ</div>
+            <div class="valor">{{ movimentacao.numero_processo_cnj|default:"—" }}</div>
+        </div>
+        <div class="detail-item">
+            <div class="rotulo">Categoria</div>
+            <div class="valor">{{ movimentacao.get_categoria_display }}</div>
+        </div>
+        <div class="detail-item">
+            <div class="rotulo">Código da movimentação</div>
+            <div class="valor">{{ movimentacao.codigo_movimentacao|default:"—" }}</div>
+        </div>
+        <div class="detail-item">
+            <div class="rotulo">Parte</div>
+            <div class="valor">{{ movimentacao.parte_nome|default:"—" }}{% if movimentacao.parte_papel %} ({{ movimentacao.parte_papel }}){% endif %}</div>
+        </div>
+        <div class="detail-item">
+            <div class="rotulo">Criada em</div>
+            <div class="valor">{{ movimentacao.created_at|date:"d/m/Y H:i" }}</div>
+        </div>
+        <div class="detail-item">
+            <div class="rotulo">Atualizada em</div>
+            <div class="valor">{{ movimentacao.updated_at|date:"d/m/Y H:i" }}</div>
+        </div>
+    </div>
+
+    {% if movimentacao.observacao %}
+    <div style="margin-top:14px;">
+        <div class="rotulo" style="font-size:11px; color:#6b7280; text-transform:uppercase; letter-spacing:.4px;">Observação</div>
+        <div style="margin-top:6px; font-size:13px; color:#374151; background:#f9fafb; border:1px solid #e5e7eb; border-radius:7px; padding:10px 12px; line-height:1.5;">
+            {{ movimentacao.observacao|linebreaksbr }}
+        </div>
+    </div>
+    {% endif %}
+
+    <div style="display:flex; gap:8px; margin-top:16px; flex-wrap:wrap;">
+        {% if movimentacao.pode_executar %}
+        <form method="post" action="{% url 'projudi:movimentacao_executar' movimentacao.pk %}" style="display:inline;">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-green">▶️ Executar movimentação</button>
+        </form>
+        {% endif %}
+        {% if not movimentacao.dispensado %}
+        <form method="post" action="{% url 'projudi:movimentacao_dispensar' movimentacao.pk %}" style="display:inline;"
+              onsubmit="return confirm('Dispensar esta movimentação?');">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-outline" style="color:#6b21a8;">🚫 Dispensar</button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="section-title" style="font-size:17px; margin-bottom:12px;">📝 Logs</div>
+    {% if logs %}
+        {% for log in logs %}
+        <div class="log-entry log-{{ log.tipo }}">
+            <strong>{{ log.created_at|date:"d/m/Y H:i" }}</strong>
+            <span class="tag" style="margin-left:6px;">{{ log.tipo|upper }}</span>
+            <div style="margin-top:4px;">{{ log.mensagem|linebreaksbr }}</div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div style="font-size:13px; color:#6b7280;">Nenhum log registrado.</div>
+    {% endif %}
+</div>
+{% endblock %}
