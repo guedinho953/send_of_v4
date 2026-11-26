@@ -98,6 +98,7 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
             return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
 
         processo = (request.POST.get('processo') or '').strip()
+        processo_url = (request.POST.get('processo_url') or '').strip()
         if not processo:
             messages.error(request, 'Processo não informado.')
             return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
@@ -262,7 +263,13 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
                     number_normalized=normalize_process_number(processo),
                     tenant=request.user.tenant,
                     status='analyzing',
+                    projudi_url=processo_url,
                 )
+            elif processo_url and not proc.projudi_url:
+                # Guarda a URL do Projudi para a juntada encontrar o número
+                # interno do processo (numeroProcesso=...).
+                proc.projudi_url = processo_url
+                proc.save(update_fields=['projudi_url'])
 
             ctx = {
                 'processo': processo,
@@ -320,6 +327,7 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
             'html_content': html,
             'item': {
                 'processo': processo,
+                'processo_url': processo_url,
                 'tipo': tipo,
                 'eh_recurso': eh_recurso,
                 'situacao_recurso': situacao_recurso,
@@ -378,6 +386,9 @@ class CertidaoPeticaoPreviewView(LoginRequiredMixin, TemplateView):
             'html_content': doc.html_content,
             'item': {
                 'processo': doc.process.number if doc.process else '',
+                'processo_url': (
+                    doc.process.projudi_url if doc.process else ''
+                ),
                 'tipo': '',
                 'eh_recurso': eh_recurso,
                 'situacao_recurso': situacao,
@@ -496,7 +507,13 @@ class CertidaoPeticaoJuntarIntimarView(LoginRequiredMixin, View):
         ).strip()
         recorrente = (request.POST.get('recorrente') or '').strip()
         processo = doc.process.number
-        url_processo = doc.process.projudi_url or ''
+        url_processo = (
+            doc.process.projudi_url
+            or (request.POST.get('processo_url') or '').strip()
+        )
+        if url_processo and not doc.process.projudi_url:
+            doc.process.projudi_url = url_processo
+            doc.process.save(update_fields=['projudi_url'])
 
         logger = logging.getLogger('projudi.certidoes')
         service = MovimentacaoService(request.user)
@@ -548,9 +565,20 @@ class CertidaoPeticaoJuntarIntimarView(LoginRequiredMixin, View):
                 return self._preview_redirect(doc)
 
             if not certidao_juntada:
+                motivo = ''
+                try:
+                    ultimo_erro = (
+                        record.logs.filter(tipo='erro')
+                        .order_by('-created_at').first()
+                    )
+                    if ultimo_erro and ultimo_erro.mensagem:
+                        motivo = f' Motivo: {ultimo_erro.mensagem}'
+                except Exception:
+                    pass
                 messages.error(
                     request,
-                    'A certidão não foi juntada. A intimação não foi realizada.'
+                    'A certidão não foi juntada.'
+                    f'{motivo} A intimação não foi realizada.'
                 )
                 return self._preview_redirect(doc)
 

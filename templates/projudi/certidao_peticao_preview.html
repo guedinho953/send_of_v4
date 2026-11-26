@@ -67,6 +67,7 @@
           onsubmit="return confirm('Esta ação será executada no Projudi. Deseja continuar?');">
         {% csrf_token %}
         <input type="hidden" name="documento_id" value="{{ documento.id }}">
+        <input type="hidden" name="processo_url" value="{{ item.processo_url }}">
         <input type="hidden" name="observacao_juntada" value="{{ item.observacao_juntada }}">
         <input type="hidden" name="recorrente" value="{{ item.recorrente }}">
 

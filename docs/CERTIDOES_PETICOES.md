@@ -122,6 +122,11 @@ marcada como juntada e a prévia salva é reaberta automaticamente
 (`/projudi/certidoes/peticoes/<id>/preview/`) para usar o botão
 **Apenas intimar** e repetir somente a intimação.
 
+A fila envia a URL do processo no Projudi (`DadosProcesso?numeroProcesso=...`),
+que é salva em `Process.projudi_url`. É dessa URL que a juntada extrai o
+número interno do processo; sem ela, o Projudi retorna
+**“Número Projudi não encontrado”**.
+
 ## Assinatura
 
 A fila de petições tem um seletor de assinatura no topo:

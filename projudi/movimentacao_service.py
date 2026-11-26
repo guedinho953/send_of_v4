@@ -1485,6 +1485,24 @@ class MovimentacaoService:
         if m:
             return m.group(1)
 
+        # Fallback: URL do Projudi salva no cadastro do Process.
+        try:
+            from base.utils import normalize_process_number
+            from processes.models import Process
+            proc = Process.objects.filter(number=record.processo).first()
+            if not proc and record.numero_processo_cnj:
+                proc = Process.objects.filter(
+                    number_normalized=normalize_process_number(
+                        record.numero_processo_cnj
+                    )
+                ).first()
+            if proc and proc.projudi_url:
+                m = re.search(r'numeroProcesso=(\d+)', proc.projudi_url)
+                if m:
+                    return m.group(1)
+        except Exception:
+            pass
+
         # Fallback: busca no Projudi
         if record.numero_processo_cnj:
             result = self.projudi_service._get_session_from_cookies()
