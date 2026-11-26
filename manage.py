@@ -7,6 +7,10 @@ import sys
 def main():
     """Run administrative tasks."""
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
+    # O Projudi é acessado com Playwright sync API dentro de views síncronas.
+    # O Playwright abre um event loop no mesmo thread; sem esta flag, os logs
+    # no banco dentro do bloco disparam SynchronousOnlyOperation.
+    os.environ.setdefault('DJANGO_ALLOW_ASYNC_UNSAFE', 'true')
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:

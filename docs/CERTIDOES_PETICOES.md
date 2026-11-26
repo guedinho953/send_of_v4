@@ -72,6 +72,18 @@ Os dados privados (evento da intimação da sentença, data da intimação,
 A certidão é exibida em tela para impressão. Na própria prévia é possível
 juntá-la ao Projudi e/ou realizar a intimação (veja abaixo).
 
+## Layout
+
+A certidão de **Recurso Inominado** usa o brasão do TJBA acima do cabeçalho,
+no mesmo padrão dos ofícios e da Certidão de Prazo:
+
+```text
+https://projudi.tjba.jus.br/projudi/imagens/brasaoPetroBranco.jpg
+```
+
+O corpo da certidão foi ampliado para **12pt** (título 15pt, cabeçalho
+13pt/11pt, rodapé 8pt) para melhor leitura na prévia e no Projudi.
+
 ## Juntar a certidão e intimar
 
 Na prévia da certidão de **Recurso Inominado** existem as ações:
@@ -94,6 +106,9 @@ contrarrazões ao Recurso Inominado (evento XX), no prazo de
 
 - `prazo_intimacao='3'` (10 dias), `motivo_intimacao='3'`;
 - `polo_intimacao='autores' | 'res'`;
+- usa o mesmo fluxo de intimação das partes autoras/réus, passando o
+  número interno do Projudi (`proc_projudi`, extraído da URL
+  `DadosProcesso?numeroProcesso=...`);
 - o número do evento é extraído do corpo da certidão
   (“recurso inominado interposto no evento XX”).
 

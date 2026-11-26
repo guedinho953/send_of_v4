@@ -515,6 +515,13 @@ class CertidaoPeticaoJuntarIntimarView(LoginRequiredMixin, View):
             doc.process.projudi_url = url_processo
             doc.process.save(update_fields=['projudi_url'])
 
+        # Número interno do Projudi (14 dígitos) — obrigatório para a
+        # intimação no MovimentarProcesso. Vem da URL DadosProcesso.
+        proc_projudi = ''
+        m_proc = re.search(r'numeroProcesso=(\d+)', url_processo)
+        if m_proc:
+            proc_projudi = m_proc.group(1)
+
         logger = logging.getLogger('projudi.certidoes')
         service = MovimentacaoService(request.user)
 
@@ -591,6 +598,15 @@ class CertidaoPeticaoJuntarIntimarView(LoginRequiredMixin, View):
 
         # ── 2. Intimação conforme a situação da certidão ────────────
         if acao in ('intimar', 'juntar_intimar'):
+            if not proc_projudi:
+                messages.error(
+                    request,
+                    'A URL interna do processo no Projudi não está '
+                    'cadastrada. Gere a certidão novamente pela fila para '
+                    'atualizar o cadastro antes de intimar.'
+                )
+                return self._preview_redirect(doc)
+
             evento_recurso = _evento_recurso_certidao(doc.html_content)
             texto_evento = (
                 f' (evento {evento_recurso})' if evento_recurso else ''
@@ -633,10 +649,13 @@ class CertidaoPeticaoJuntarIntimarView(LoginRequiredMixin, View):
                     observacao=observacao_intimacao,
                     codigo_mov='581',
                     descricao_mov='Intimação',
+                    proc_projudi=proc_projudi,
                     prazo_intimacao=prazo_codigo,
                     motivo_intimacao='3',
                     polo_intimacao=polo,
+                    fallback_polo=polo,
                     natureza_override='civel',
+                    tipo_intimacao='geral',
                 )
             except Exception as exc:
                 logger.exception(
