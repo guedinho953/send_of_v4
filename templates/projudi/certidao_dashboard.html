@@ -333,6 +333,10 @@
        class="btn btn-sm" style="background:#0891b2; color:white;">
         📄 Gerar certidão de inexistência de custas
     </a>
+    <a href="{% url 'projudi:certidao_decurso_pagamento' %}"
+       class="btn btn-sm" style="background:#7c3aed; color:white;">
+        📄 Decurso de pagamento (15 dias)
+    </a>
 </div>
 
 {% if certidoes_movimentacoes %}

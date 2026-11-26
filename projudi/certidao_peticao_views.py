@@ -881,3 +881,217 @@ class CertidaoMovimentacaoCustasView(LoginRequiredMixin, View):
                 'data_decurso': None,
             },
         })
+
+
+class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
+    """Gera a certidão de decurso do prazo de pagamento voluntário."""
+
+    template_name = 'projudi/certidao_decurso_pagamento.html'
+    nome_template = 'Certidão de Decurso de Prazo para Pagamento Voluntário'
+
+    def _contexto(self, **extra):
+        context = {
+            'assinante_padrao': ASSINANTE_PADRAO,
+            'assinantes': [
+                {'chave': chave, 'nome': dados[0], 'cargo': dados[1]}
+                for chave, dados in ASSINANTES.items()
+            ],
+        }
+        context.update(extra)
+        return context
+
+    def get(self, request):
+        return render(request, self.template_name, self._contexto(
+            processo=(request.GET.get('processo') or '').strip(),
+            evento=(request.GET.get('evento') or '').strip(),
+            executado=(request.GET.get('executado') or '').strip(),
+        ))
+
+    def post(self, request):
+        from django.template import Context, Template
+        from base.utils import normalize_process_number
+        from processes.models import (
+            DocumentTemplate, GeneratedDocument, Process,
+        )
+        from .decurso_pagamento_service import DecursoPagamentoService
+
+        processo = (request.POST.get('processo') or '').strip()
+        evento = (request.POST.get('evento') or '').strip()
+        executado = (request.POST.get('executado') or '').strip()
+        if not processo or not evento.isdigit():
+            messages.error(request, 'Informe o processo e o evento do despacho.')
+            return HttpResponseRedirect(
+                reverse('projudi:certidao_decurso_pagamento')
+            )
+
+        assinante = (
+            request.POST.get('assinante') or ASSINANTE_PADRAO
+        ).strip()
+        if assinante == 'outro':
+            servidor = (
+                request.POST.get('assinante_nome') or ''
+            ).strip() or 'Ivan Guedes da Silva'
+            servidor_cargo = (
+                request.POST.get('assinante_cargo') or ''
+            ).strip() or 'Secretário em Substituição'
+        else:
+            servidor, servidor_cargo = ASSINANTES.get(
+                assinante, ASSINANTES[ASSINANTE_PADRAO]
+            )
+
+        resultado = DecursoPagamentoService(request.user).analisar(
+            processo, evento, parte_nome=executado
+        )
+        if resultado.get('erro'):
+            messages.error(request, resultado['erro'])
+            return render(request, self.template_name, self._contexto(
+                processo=processo, evento=evento, executado=executado,
+            ))
+
+        # Enquanto o prazo não decorrer, não há certidão de decurso:
+        # registra apenas uma observação na movimentação 11383 informando
+        # a data em que o prazo vencerá.
+        if date.today() < resultado['data_decurso']:
+            from .movimentacao_service import MovimentacaoService
+
+            observacao_decurso = (
+                'Certidão de Decurso de Pagamento Voluntário — prazo ainda '
+                f'não decorrido. Processo: {resultado["processo"]}; '
+                f'executado(a): {resultado["executado"]}; '
+                f'despacho: evento {resultado["evento_despacho"]}; '
+                f'intimação: {resultado["data_intimacao"].strftime("%d/%m/%Y")}'
+                f'; último dia do prazo: '
+                f'{resultado["ultimo_dia"].strftime("%d/%m/%Y")}; '
+                f'decurso do prazo: '
+                f'{resultado["data_decurso"].strftime("%d/%m/%Y")}.'
+            )
+            record = MovimentacaoService(request.user).importar(
+                processo_numero=resultado['processo'],
+                act_verb='certifique-se',
+                observacao=observacao_decurso,
+                categoria='registro',
+                origem='movimentacao',
+                processo_cnj=resultado['processo'],
+                parte_nome=resultado['executado'],
+                parte_papel=resultado.get('parte_papel') or '',
+                url_processo=resultado['url'],
+                codigo_movimentacao='11383',
+                descricao_movimentacao='Cumprimento de Ofício',
+            )
+            logging.getLogger('projudi.certidoes').info(
+                'Decurso de pagamento ainda não ocorrido | processo=%s | %s',
+                resultado['processo'], observacao_decurso,
+            )
+            messages.info(
+                request,
+                '⏳ O prazo de 15 dias ainda não decorreu. Foi criada a '
+                f'movimentação #{record.id} (código 11383) informando que o '
+                'decurso ocorrerá em '
+                f'{resultado["data_decurso"].strftime("%d/%m/%Y")}. '
+                'Confira e execute na Fila de Movimentações.'
+            )
+            return HttpResponseRedirect(reverse('projudi:movimentacao_fila'))
+
+        try:
+            template = DocumentTemplate.objects.get(
+                name=self.nome_template, active=True
+            )
+            proc = Process.objects.filter(
+                number_normalized=normalize_process_number(
+                    resultado['processo']
+                )
+            ).first()
+            if not proc:
+                proc = Process.objects.filter(
+                    number=resultado['processo']
+                ).first()
+            if not proc:
+                proc = Process.objects.create(
+                    number=resultado['processo'],
+                    number_normalized=normalize_process_number(
+                        resultado['processo']
+                    ),
+                    tenant=request.user.tenant,
+                    status='analyzing',
+                    projudi_url=resultado['url'],
+                )
+            elif not proc.projudi_url:
+                proc.projudi_url = resultado['url']
+                proc.save(update_fields=['projudi_url'])
+
+            ctx = {
+                'processo': resultado['processo'],
+                'executado': resultado['executado'],
+                'evento_despacho': resultado['evento_despacho'],
+                'data_intimacao': resultado['data_intimacao'].strftime(
+                    '%d/%m/%Y'
+                ),
+                'ultimo_dia': resultado['ultimo_dia'].strftime('%d/%m/%Y'),
+                'data_decurso': resultado['data_decurso'].strftime(
+                    '%d/%m/%Y'
+                ),
+                'data': date.today().strftime('%d/%m/%Y'),
+                'servidor': servidor,
+                'servidor_cargo': servidor_cargo,
+            }
+            html = Template(template.html_template).render(Context(ctx))
+            seq = GeneratedDocument.proximo_numero(template)
+            doc = GeneratedDocument.objects.create(
+                tenant=request.user.tenant,
+                process=proc,
+                template=template,
+                sequential_number=seq,
+                year=date.today().year,
+                recipient_name=(
+                    'Certidão: Decurso de Pagamento Voluntário'
+                ),
+                html_content=html,
+            )
+        except Exception as exc:
+            messages.error(request, f'Erro ao gerar a certidão: {exc}')
+            return HttpResponseRedirect(
+                reverse('projudi:certidao_decurso_pagamento')
+            )
+
+        observacao = (
+            'Certidão de Decurso de Pagamento Voluntário — '
+            f'despacho evento {resultado["evento_despacho"]}; '
+            f'intimação em {ctx["data_intimacao"]}; '
+            f'último dia {ctx["ultimo_dia"]}; '
+            f'decurso {ctx["data_decurso"]}; '
+            f'executado: {resultado["executado"]}.'
+        )
+        logging.getLogger('projudi.certidoes').info(
+            'Certidão de decurso de pagamento gerada | processo=%s | %s',
+            resultado['processo'], observacao,
+        )
+
+        return render(request, 'projudi/certidao_peticao_preview.html', {
+            'documento': doc,
+            'html_content': html,
+            'item': {
+                'processo': resultado['processo'],
+                'processo_url': resultado['url'],
+                'tipo': 'decurso_pagamento',
+                'eh_recurso': False,
+                'pode_intimar': False,
+                'tipo_label': 'Decurso de Prazo para Pagamento Voluntário',
+                'situacao_recurso': '',
+                'situacao_label': '',
+                'recorrente': '',
+                'evento_recurso': '',
+                'evento_recurso_numero': '',
+                'evento_intimacao': resultado['evento_intimacao'],
+                'origem_intimacao': '',
+                'origem_intimacao_label': '',
+                'observacao_juntada': observacao,
+                'polo_sugerido': 'autores',
+                'polo_recorrente': '',
+                'dias': 15,
+                'data_envio': None,
+                'data_inicio': resultado['data_intimacao'],
+                'meio_label': resultado['meio_label'],
+                'ultimo_dia': resultado['ultimo_dia'],
+                'data_decurso': resultado['data_decurso'],
+            },
+        })

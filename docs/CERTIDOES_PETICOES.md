@@ -432,6 +432,43 @@ Outros comandos de custas (cálculo/cobrança, custas recolhidas ou
 inexistência por decisão específica) podem ser adicionados como novas
 tarefas nesse mesmo grupo.
 
+## Certidão de decurso de prazo para pagamento voluntário
+
+Fica em **Certidões → Certidões vindas das movimentações**:
+
+```text
+/projudi/certidoes/movimentacoes/decurso-pagamento/
+```
+
+Finalidade: certificar o decurso do prazo de **15 dias úteis** para o
+pagamento voluntário do débito, contado da intimação do despacho de
+cumprimento de sentença/execução (por exemplo, evento 78).
+
+Campos:
+
+- processo;
+- evento do despacho;
+- executado (opcional; se vazio, usa o promovido/réu);
+- assinante.
+
+O sistema localiza a intimação eletrônica (DJEN) do despacho para o
+executado e calcula o último dia e o decurso. Exemplo validado no processo
+`0002019-65.2026.8.05.0191`, evento 78:
+
+```text
+Executado: COMPANHIA DE ELETRICIDADE DO ESTADO DA BAHIA COELBA
+Intimação: 02/11/2026 (evento 80 — DJEN)
+Último dia: 25/11/2026
+Decurso: 26/11/2026
+```
+
+Se o prazo **já decorreu**, a prévia permite juntar a certidão pelo fluxo
+normal de documentos.
+
+Se o prazo **ainda não decorreu**, o sistema não gera certidão: cria uma
+movimentação pendente na Fila com código **11383 - Cumprimento de Ofício**
+e observação informando o último dia e a data em que ocorrerá o decurso.
+
 ## Assinatura
 
 A fila de petições tem um seletor de assinatura no topo:

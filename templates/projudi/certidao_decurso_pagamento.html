@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block title %}Decurso de Pagamento Voluntário — Send of v4{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:16px;">
+    <div>
+        <h1 class="section-title" style="font-size:20px; margin:0;">
+            📄 Certidão de Decurso de Prazo para Pagamento Voluntário
+        </h1>
+        <div style="font-size:13px; color:#6b7280; margin-top:4px;">
+            Prazo de 15 dias úteis contado da intimação do despacho de
+            cumprimento de sentença/execução.
+        </div>
+    </div>
+    <div style="display:flex; gap:8px;">
+        <a href="{% url 'projudi:certidao_dashboard' %}" class="btn btn-outline">← Certidões</a>
+        <a href="{% url 'projudi:movimentacao_fila' %}" class="btn btn-outline">📥 Fila</a>
+    </div>
+</div>
+
+<div style="background:#fffbeb; border-left:4px solid #f59e0b; border-radius:6px; padding:10px 12px; margin-bottom:16px; font-size:12px; color:#92400e; line-height:1.5;">
+    O sistema confere se o prazo de 15 dias úteis já decorreu. Se já
+    decorreu, gera a certidão. Se ainda não decorreu, <strong>não gera
+    certidão</strong>: cria uma observação na movimentação
+    <strong>tipo 11383</strong> informando a data em que ocorrerá o decurso.
+    Confirme que o executado não efetuou o pagamento.
+</div>
+
+<div style="background:#fff; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,.08); padding:20px; max-width:820px;">
+    <form method="post">
+        {% csrf_token %}
+
+        <div style="margin-bottom:14px;">
+            <label for="processo" style="display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:4px;">Processo *</label>
+            <input id="processo" name="processo" required value="{{ processo }}"
+                   placeholder="0000000-00.0000.8.05.0191"
+                   style="width:100%; padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px;">
+        </div>
+
+        <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:14px;">
+            <div>
+                <label for="evento" style="display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:4px;">Evento do despacho *</label>
+                <input id="evento" name="evento" required value="{{ evento }}"
+                       placeholder="ex.: 78"
+                       style="width:130px; padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px;">
+            </div>
+            <div>
+                <label for="executado" style="display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:4px;">Executado(a) (opcional)</label>
+                <input id="executado" name="executado" value="{{ executado }}"
+                       placeholder="deixe vazio para usar o promovido"
+                       style="width:340px; padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px;">
+            </div>
+        </div>
+
+        <div style="background:#f5f3ff; border:1px solid #ddd6fe; border-radius:8px; padding:10px 12px; margin-bottom:16px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <strong style="font-size:13px; color:#5b21b6;">Assinatura da certidão:</strong>
+            <select id="assinanteSelect" name="assinante" onchange="atualizarAssinatura()"
+                    style="padding:6px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px;">
+                {% for a in assinantes %}
+                <option value="{{ a.chave }}" {% if a.chave == assinante_padrao %}selected{% endif %}>{{ a.nome }} — {{ a.cargo }}</option>
+                {% endfor %}
+                <option value="outro">Outro (digitar)</option>
+            </select>
+            <input id="assinanteNome" name="assinante_nome" type="text" placeholder="Nome do assinante"
+                   style="display:none; padding:6px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px; min-width:220px;">
+            <input id="assinanteCargo" name="assinante_cargo" type="text" placeholder="Cargo"
+                   style="display:none; padding:6px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px; min-width:180px;">
+        </div>
+
+        <button type="submit" class="btn" style="background:#0891b2; color:white;">
+            📄 Gerar certidão
+        </button>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function atualizarAssinatura() {
+    const sel = document.getElementById('assinanteSelect');
+    if (!sel) return;
+    const outro = sel.value === 'outro';
+    const nome = document.getElementById('assinanteNome');
+    const cargo = document.getElementById('assinanteCargo');
+    if (nome) nome.style.display = outro ? 'inline-block' : 'none';
+    if (cargo) cargo.style.display = outro ? 'inline-block' : 'none';
+}
+document.addEventListener('DOMContentLoaded', atualizarAssinatura);
+</script>
+{% endblock %}
