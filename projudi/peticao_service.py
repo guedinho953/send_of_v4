@@ -40,6 +40,10 @@ TIPOS = {
         'label': 'Impugnação/Decurso do Prazo da Penhora',
         'dias': 15,
     },
+    'decurso_pagamento': {
+        'label': 'Decurso de Pagamento Voluntário',
+        'dias': 15,
+    },
 }
 
 

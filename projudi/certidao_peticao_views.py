@@ -106,6 +106,11 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
             messages.error(request, 'Processo não informado.')
             return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
 
+        if tipo == 'decurso_pagamento':
+            return CertidaoDecursoPagamentoView().processar(
+                request, processo,
+            )
+
         data_envio = _parse_data_br(request.POST.get('data_envio'))
         data_inicio = _parse_data_br(request.POST.get('data_inicio'))
         if not data_inicio:
@@ -910,6 +915,12 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
         ))
 
     def post(self, request):
+        processo = (request.POST.get('processo') or '').strip()
+        evento = (request.POST.get('evento') or '').strip()
+        executado = (request.POST.get('executado') or '').strip()
+        return self.processar(request, processo, evento, executado)
+
+    def processar(self, request, processo, evento='', executado=''):
         from django.template import Context, Template
         from base.utils import normalize_process_number
         from processes.models import (
@@ -917,9 +928,6 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
         )
         from .decurso_pagamento_service import DecursoPagamentoService
 
-        processo = (request.POST.get('processo') or '').strip()
-        evento = (request.POST.get('evento') or '').strip()
-        executado = (request.POST.get('executado') or '').strip()
         if not processo:
             messages.error(request, 'Informe o processo.')
             return HttpResponseRedirect(

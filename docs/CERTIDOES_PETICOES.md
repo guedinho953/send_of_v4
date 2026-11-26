@@ -16,6 +16,7 @@ Rota no sistema:
 | Contrarrazões ao Recurso Inominado | Contrarrazões | 10 dias úteis |
 | Impugnação / Cumprimento de Sentença | Impugnação/Cumprimento | 15 dias úteis |
 | Impugnação / Decurso do Prazo da Penhora | Impugnação/Penhora | 15 dias úteis |
+| Decurso de Pagamento Voluntário | Decurso de Pagamento Voluntário | 15 dias úteis |
 
 ## Escolha manual da ação/modelo
 
@@ -37,11 +38,11 @@ Exemplo: uma linha `Juntada de Petição de Solicitação de Execução de
 Sentença` não é classificada automaticamente, mas passa a aparecer na
 fila para que a ação seja escolhida manualmente.
 
-A certidão de decurso de pagamento **não aparece no seletor de modelos**
-porque não depende do tipo da petição: depende do despacho que determinou
-o pagamento. Por isso, cada card da fila e o topo da página têm o botão
-**📄 Decurso de pagamento**, que abre o formulário já com o processo
-preenchido.
+A certidão de decurso de pagamento também aparece no seletor de modelos
+como **Decurso de Pagamento Voluntário — 15 dias**. Ao escolhê-la, o
+sistema localiza automaticamente o despacho que determinou o pagamento,
+sem depender do tipo da petição. Também há atalhos **📄 Decurso de
+pagamento** no topo da página e em cada card, já com o processo preenchido.
 
 ## Contagem — Lei 11.419/2006
 
