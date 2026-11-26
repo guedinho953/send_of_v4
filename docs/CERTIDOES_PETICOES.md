@@ -185,6 +185,25 @@ O dashboard de **Certidões** usa esse campo para montar os dois grupos.
 O dashboard e a lista de **Movimentações** excluem `categoria='certidao'`,
 de modo que todas as certidões ficam dentro do módulo de Certidões.
 
+## Rastrear movimentações por RAG do despacho
+
+No grupo **Certidões de despacho (RAG)**, dentro de Certidões > Movimentações,
+existem duas ações:
+
+- **Rastrear RAG do despacho (certidões)** — varre as últimas movimentações
+  do Projudi, faz o match RAG e importa somente os cumprimentos cujo template
+  é do tipo `certidao`;
+- **Executar certidões pendentes** — executa apenas as certidões de RAG
+  pendentes/falhas, sem executar os demais cumprimentos/movimentações.
+
+Também é possível executar uma certidão individual pelo botão
+**Executar certidão** no cartão correspondente.
+
+A geração da certidão em si continua usando `CumprimentoService` e o
+`Certidão de Prazo`/template indicado pela RAG; depois da execução, o
+`MovimentacaoRecord` gerado entra em **Certidões vindas das movimentações**
+com `origem='movimentacao'`.
+
 ## Certidão de inexistência de custas da execução
 
 Essa certidão fica na área de **Certidões**, dentro do grupo

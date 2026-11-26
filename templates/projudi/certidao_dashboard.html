@@ -178,6 +178,72 @@
 {% endif %}
 
 {% if not origem_atual or origem_atual == 'movimentacao' %}
+<div class="section-title">📄 Certidões de despacho (RAG)</div>
+<div class="section-sub">
+    Rastreia as movimentações pelo RAG do despacho e executa somente as
+    certidões, sem executar todos os cumprimentos/movimentações.
+</div>
+<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
+    <form method="post" action="{% url 'projudi:certidao_rastrear_rag' %}"
+          onsubmit="return confirm('Rastrear as movimentações por RAG e importar somente certidões?');">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm" style="background:#0891b2; color:white;">
+            🔎 Rastrear RAG do despacho (certidões)
+        </button>
+    </form>
+    {% if rag_pendentes %}
+    <form method="post" action="{% url 'projudi:certidao_executar_rag_pendentes' %}"
+          onsubmit="return confirm('Executar somente as certidões de RAG pendentes/falhas?');">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm btn-green">
+            ▶️ Executar certidões pendentes ({{ rag_pendentes }})
+        </button>
+    </form>
+    {% endif %}
+</div>
+
+{% if certidoes_rag %}
+{% for c in certidoes_rag %}
+<div class="cert-card movimentacao {{ c.status }}">
+    <div class="cert-header">
+        <div>
+            <div class="cert-processo">{{ c.numero_processo_cnj|default:c.processo }}</div>
+            {% if c.parte_nome %}<div class="cert-parte">👤 {{ c.parte_nome }}</div>{% endif %}
+            <div class="cert-meta">
+                <span class="tag-origem movimentacao">RAG do despacho</span>
+                {% if c.rag_example_id %} RAG #{{ c.rag_example_id }}{% endif %}
+                {% if c.template_used %} | {{ c.template_used.name }}{% endif %}
+                {% if c.fluxo %} | {{ c.get_fluxo_display }}{% endif %}
+                | 🕒 {{ c.created_at|date:"d/m/Y H:i" }}
+            </div>
+        </div>
+        <span class="tag-status tag-{{ c.status }}">{{ c.get_status_display }}</span>
+    </div>
+    {% if c.snippet %}
+    <div class="cert-obs">{{ c.snippet|striptags|truncatechars:260 }}</div>
+    {% endif %}
+    <div class="cert-actions">
+        <a href="{% url 'projudi:cumprimento_detail' c.pk %}" class="btn btn-sm btn-outline">🔍 Detalhes</a>
+        {% if c.status == 'pendente' or c.status == 'falha' %}
+        <form method="post" action="{% url 'projudi:certidao_executar_rag' c.pk %}" style="display:inline;"
+              onsubmit="return confirm('Executar somente esta certidão?');">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-green">▶️ Executar certidão</button>
+        </form>
+        {% endif %}
+        {% if c.url_processo %}
+        <a href="{{ c.url_processo }}" target="_blank" class="btn btn-sm btn-outline">🔗 Processo</a>
+        {% endif %}
+    </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="empty-state">
+    📭 Nenhuma certidão de RAG de despacho importada.
+    Use o botão acima para rastrear as movimentações.
+</div>
+{% endif %}
+
 <div class="section-title">🔄 Certidões vindas das movimentações</div>
 <div class="section-sub">
     Certidões geradas a partir das movimentações do Projudi.
