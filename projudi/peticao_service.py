@@ -143,6 +143,11 @@ def _norm_nome(texto):
     return re.sub(r'[^A-Z0-9 ]+', ' ', _norm(texto)).strip()
 
 
+def _nome_compacto(texto):
+    """Compacta nome para comparar 'S/A' com 'SA' e pontuação variada."""
+    return re.sub(r'[^A-Z0-9]+', '', _norm(texto))
+
+
 def _eh_embargos_declaracao(texto):
     """True para decisão/intimação de embargos de declaração.
 
@@ -328,7 +333,7 @@ class PeticaoQueueService:
             embargos_intimacoes = []
             embargos_recorrente = []
             embargos_decisoes = []
-            nome_busca = _norm_nome(recorrente)
+            nome_busca = _nome_compacto(recorrente)
             filtrar_recorrente = len(nome_busca) >= 5
 
             for tr in soup.find_all('tr'):
@@ -391,7 +396,7 @@ class PeticaoQueueService:
 
                 pertence_recorrente = (
                     filtrar_recorrente
-                    and nome_busca in _norm_nome(texto)
+                    and nome_busca in _nome_compacto(texto)
                 )
                 if eh_embargos:
                     embargos_intimacoes.append(item)

@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup
 from base.utils import normalize_process_number
 from projudiProcessNavigator import ProcessoParser
 from .cumprimento_service import CumprimentoService
-from .peticao_service import _norm
+from .peticao_service import _norm, _nome_compacto
 from .processo_lookup import localizar_processo
 from .services import ProjudiService
 
@@ -195,11 +195,11 @@ class TransitoJulgadoService:
             texto = BeautifulSoup(
                 resposta.text, 'html.parser'
             ).get_text(' ', strip=True)
-            texto_norm = _norm_nome(texto)
+            texto_norm = _nome_compacto(texto)
             return {
                 parte['nome']
                 for parte in partes
-                if _norm_nome(parte.get('nome')) in texto_norm
+                if _nome_compacto(parte.get('nome')) in texto_norm
             }
         except Exception:
             return set()
@@ -207,7 +207,7 @@ class TransitoJulgadoService:
     def _intimacao_da_parte(self, movs, nome_parte, sentenca):
         if not sentenca:
             return None
-        alvo = _norm_nome(nome_parte)
+        alvo = _nome_compacto(nome_parte)
         if not alvo:
             return None
         candidatas = []
@@ -217,7 +217,7 @@ class TransitoJulgadoService:
             up = _norm(mov['texto'])
             if not any(k in up for k in ('INTIMA', 'DISPONIBILIZ')):
                 continue
-            if alvo not in _norm_nome(mov['texto']):
+            if alvo not in _nome_compacto(mov['texto']):
                 continue
             data_base = _data_disponibilizacao(mov['texto']) or mov['data']
             if not data_base:
@@ -255,12 +255,12 @@ class TransitoJulgadoService:
             }
 
         # Renúncia/dispensa expressa.
-        alvo = _norm_nome(nome)
+        alvo = _nome_compacto(nome)
         for mov in movs:
             up = _norm(mov['texto'])
             if (('RENUNCIA' in up or 'DISPENSA' in up)
                     and 'RECURSO' in up
-                    and alvo in _norm_nome(mov['texto'])):
+                    and alvo in _nome_compacto(mov['texto'])):
                 return 'RENÚNCIA/DISPENSA', {
                     'evento_renuncia': mov['evento'],
                     'observacao': mov['texto'][:250],
