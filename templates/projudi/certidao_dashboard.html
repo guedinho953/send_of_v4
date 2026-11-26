@@ -4,7 +4,7 @@
 
 {% block extra_css %}
 <style>
-    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: 12px; margin-bottom: 20px; }
     .stat-card { background: #fff; border-radius: 10px; padding: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.06); border-left: 4px solid; text-align: center; }
     .stat-card h4 { margin: 0; font-size: 27px; color: #1e3a5f; font-weight: 700; }
     .stat-card p { margin: 4px 0 0; font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -14,22 +14,30 @@
     .stat-card.pendentes { border-left-color: #d97706; }
     .stat-card.cumpridos { border-left-color: #059669; }
     .stat-card.falhas { border-left-color: #dc2626; }
+    .stat-card.dispensados { border-left-color: #6b21a8; }
 
-    .filtro-bar { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+    .bulk-bar { background: #f3f4f6; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .filtro-bar { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
     .filtro-btn { padding: 6px 14px; border-radius: 20px; font-size: 13px; border: 1px solid #e5e7eb; background: #fff; color: #374151; cursor: pointer; text-decoration: none; }
     .filtro-btn.active { background: #2563eb; color: white; border-color: #2563eb; }
     .filtro-btn:hover:not(.active) { background: #f9fafb; }
 
-    .cert-card { background: #fff; border-radius: 8px; padding: 14px 16px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border-left: 4px solid #7c3aed; }
+    .section-title { font-size: 19px; font-weight: 700; color: #1e3a5f; margin: 26px 0 4px; }
+    .section-sub { font-size: 12px; color: #6b7280; margin-bottom: 10px; }
+
+    .cert-card { background: #fff; border-radius: 8px; padding: 14px 16px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border-left: 4px solid #7c3aed; transition: transform 0.1s; }
+    .cert-card:hover { transform: translateX(4px); }
     .cert-card.movimentacao { border-left-color: #0891b2; }
     .cert-card.cumprido { border-left-color: #059669; }
     .cert-card.falha { border-left-color: #dc2626; }
     .cert-card.dispensado { border-left-color: #6b21a8; }
-    .cert-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+    .cert-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
     .cert-processo { font-size: 15px; font-weight: 600; color: #1e3a5f; font-family: monospace; }
-    .cert-parte { font-size: 12px; color: #6b7280; margin-top: 3px; }
-    .cert-obs { font-size: 12px; color: #6b7280; margin-top: 6px; }
-    .tag-status { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+    .cert-parte { font-size: 12px; color: #6b7280; margin-top: 4px; }
+    .cert-meta { font-size: 11px; color: #9ca3af; margin-top: 5px; }
+    .cert-obs { font-size: 12px; color: #6b7280; margin-top: 8px; background: #f9fafb; padding: 8px 10px; border-radius: 6px; }
+    .cert-actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+    .tag-status { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; white-space: nowrap; }
     .tag-pendente { background: #fef3c7; color: #92400e; }
     .tag-processando { background: #ede9fe; color: #5b21b6; }
     .tag-cumprido { background: #d1fae5; color: #065f46; }
@@ -37,14 +45,24 @@
     .tag-dispensado { background: #f3e8ff; color: #6b21a8; }
     .tag-origem { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; background: #ede9fe; color: #5b21b6; }
     .tag-origem.movimentacao { background: #cffafe; color: #155e75; }
-    .section-title { font-size: 18px; font-weight: 700; color: #1e3a5f; margin: 22px 0 10px; }
-    .section-sub { font-size: 12px; color: #6b7280; margin: -4px 0 10px; }
+    .btn-sm { padding: 5px 12px; font-size: 12px; border-radius: 5px; }
+    .btn-green { background: #059669; color: white; }
+    .btn-green:hover { background: #047857; }
+    .btn-orange { background: #ea580c; color: white; }
+    .btn-orange:hover { background: #c2410c; }
+    .log-entry { font-size: 11px; padding: 5px 8px; border-radius: 5px; margin-top: 4px; }
+    .log-info { background: #eff6ff; border-left: 3px solid #3b82f6; }
+    .log-execucao { background: #f0fdf4; border-left: 3px solid #22c55e; }
+    .log-erro { background: #fef2f2; border-left: 3px solid #ef4444; }
     .empty-state { text-align: center; padding: 30px 20px; color: #6b7280; background: #fff; border-radius: 8px; }
 </style>
 {% endblock %}
 
 {% block content %}
-<h1 class="section-title">📄 Certidões</h1>
+<h1 class="section-title" style="font-size:22px; margin-bottom:6px;">📄 Certidões</h1>
+<p style="font-size:13px; color:#6b7280; margin:0 0 18px;">
+    Separação por origem: certidões vindas da análise de petições e certidões vindas das movimentações do Projudi.
+</p>
 
 {% if messages %}
     {% for message in messages %}
@@ -59,81 +77,159 @@
     <div class="stat-card pendentes"><h4>{{ pendentes }}</h4><p>Pendentes</p></div>
     <div class="stat-card cumpridos"><h4>{{ cumpridos }}</h4><p>Cumpridas</p></div>
     <div class="stat-card falhas"><h4>{{ falhas }}</h4><p>Falhas</p></div>
+    <div class="stat-card dispensados"><h4>{{ dispensados }}</h4><p>Dispensadas</p></div>
+</div>
+
+<div class="bulk-bar">
+    <form method="post" action="{% url 'projudi:movimentacao_sync' %}" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-orange">🔄 Sincronizar Movimentações</button>
+    </form>
+    <a href="{% url 'projudi:movimentacao_dashboard' %}" class="btn btn-outline">📋 Todas as Movimentações</a>
+    <a href="{% url 'projudi:cumprimento_dashboard' %}" class="btn btn-outline">📬 Cumprimentos</a>
 </div>
 
 <div class="filtro-bar">
-    <a href="?status={{ status_atual }}" class="filtro-btn {% if not origem_atual %}active{% endif %}">Todas as origens</a>
-    <a href="?origem=peticao{% if status_atual %}&status={{ status_atual }}{% endif %}" class="filtro-btn {% if origem_atual == 'peticao' %}active{% endif %}">📝 Análises de petições</a>
-    <a href="?origem=movimentacao{% if status_atual %}&status={{ status_atual }}{% endif %}" class="filtro-btn {% if origem_atual == 'movimentacao' %}active{% endif %}">🔄 Movimentações</a>
+    <a href="?{% if status_atual %}status={{ status_atual }}{% endif %}"
+       class="filtro-btn {% if not origem_atual %}active{% endif %}">Todas as origens</a>
+    <a href="?origem=peticao{% if status_atual %}&status={{ status_atual }}{% endif %}"
+       class="filtro-btn {% if origem_atual == 'peticao' %}active{% endif %}">📝 Análises de petições ({{ total_peticoes }})</a>
+    <a href="?origem=movimentacao{% if status_atual %}&status={{ status_atual }}{% endif %}"
+       class="filtro-btn {% if origem_atual == 'movimentacao' %}active{% endif %}">🔄 Movimentações ({{ total_movimentacoes }})</a>
 </div>
 
 <div class="filtro-bar">
-    <a href="?origem={{ origem_atual }}" class="filtro-btn {% if not status_atual %}active{% endif %}">Todos os status</a>
-    <a href="?status=pendente{% if origem_atual %}&origem={{ origem_atual }}{% endif %}" class="filtro-btn {% if status_atual == 'pendente' %}active{% endif %}">⏳ Pendentes</a>
-    <a href="?status=cumprido{% if origem_atual %}&origem={{ origem_atual }}{% endif %}" class="filtro-btn {% if status_atual == 'cumprido' %}active{% endif %}">✅ Cumpridas</a>
-    <a href="?status=falha{% if origem_atual %}&origem={{ origem_atual }}{% endif %}" class="filtro-btn {% if status_atual == 'falha' %}active{% endif %}">❌ Falhas</a>
+    <a href="?{% if origem_atual %}origem={{ origem_atual }}{% endif %}"
+       class="filtro-btn {% if not status_atual %}active{% endif %}">Todos os status</a>
+    <a href="?status=pendente{% if origem_atual %}&origem={{ origem_atual }}{% endif %}"
+       class="filtro-btn {% if status_atual == 'pendente' %}active{% endif %}">⏳ Pendentes</a>
+    <a href="?status=cumprido{% if origem_atual %}&origem={{ origem_atual }}{% endif %}"
+       class="filtro-btn {% if status_atual == 'cumprido' %}active{% endif %}">✅ Cumpridas</a>
+    <a href="?status=falha{% if origem_atual %}&origem={{ origem_atual }}{% endif %}"
+       class="filtro-btn {% if status_atual == 'falha' %}active{% endif %}">❌ Falhas</a>
+    <a href="?status=dispensado{% if origem_atual %}&origem={{ origem_atual }}{% endif %}"
+       class="filtro-btn {% if status_atual == 'dispensado' %}active{% endif %}">🚫 Dispensadas</a>
 </div>
 
 {% if not session_active %}
 <div class="alert alert-warning">
     ⚠️ Sessão do Projudi não está ativa.
-    <a href="{% url 'projudi:sync_session' %}">Sincronizar sessão</a>
+    <a href="{% url 'projudi:sync_session' %}">Clique aqui para sincronizar</a>
+    antes de executar certidões.
 </div>
 {% endif %}
 
 {% if certidoes_peticoes %}
 <div class="section-title">📝 Certidões vindas das análises de petições</div>
-<div class="section-sub">Geradas a partir de decisão/petição analisada pela RAG.</div>
+<div class="section-sub">
+    Nasceram de uma decisão/petição analisada pela RAG
+    ({{ total_peticoes }} no total).
+</div>
 {% for c in certidoes_peticoes %}
 <div class="cert-card {{ c.status }}">
     <div class="cert-header">
         <div>
             <div class="cert-processo">{{ c.numero_processo_cnj|default:c.processo }}</div>
             {% if c.parte_nome %}<div class="cert-parte">👤 {{ c.parte_nome }}</div>{% endif %}
-            <div class="cert-parte">
+            <div class="cert-meta">
                 <span class="tag-origem">Petição</span>
                 {% if c.rag_example_id %} RAG #{{ c.rag_example_id }}{% endif %}
                 {% if c.act_verb %} | {{ c.act_verb }}{% endif %}
+                | 🕒 {{ c.created_at|date:"d/m/Y H:i" }}
             </div>
         </div>
         <span class="tag-status tag-{{ c.status }}">{{ c.get_status_display }}</span>
     </div>
-    {% if c.observacao %}<div class="cert-obs">{{ c.observacao|striptags|truncatechars:220 }}</div>{% endif %}
-    <div class="cert-obs">🕒 {{ c.created_at|date:"d/m/Y H:i" }}</div>
-    <div style="margin-top:8px;">
-        <a href="{% url 'projudi:movimentacao_detail' c.pk %}" class="btn btn-outline btn-sm">🔍 Detalhes</a>
+    {% if c.observacao %}
+    <div class="cert-obs">{{ c.observacao|striptags|truncatechars:260 }}</div>
+    {% endif %}
+    <div class="cert-actions">
+        <a href="{% url 'projudi:movimentacao_detail' c.pk %}" class="btn btn-sm btn-outline">🔍 Detalhes</a>
+        {% if c.pode_executar %}
+        <form method="post" action="{% url 'projudi:movimentacao_executar' c.pk %}" style="display:inline;">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-green">▶️ Executar</button>
+        </form>
+        {% endif %}
+        {% if not c.dispensado %}
+        <form method="post" action="{% url 'projudi:movimentacao_dispensar' c.pk %}" style="display:inline;"
+              onsubmit="return confirm('Dispensar esta certidão?');">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-outline" style="color:#6b21a8;">🚫 Dispensar</button>
+        </form>
+        {% endif %}
     </div>
+    {% if c.logs.all %}
+    <div style="margin-top:8px;">
+        {% for log in c.logs.all|slice:":2" %}
+        <div class="log-entry log-{{ log.tipo }}">
+            <strong>{{ log.get_tipo_display }}</strong>: {{ log.mensagem|truncatechars:130 }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
 </div>
 {% endfor %}
 {% elif not origem_atual or origem_atual == 'peticao' %}
-<div class="empty-state">Nenhuma certidão de análise de petição encontrada.</div>
+<div class="empty-state">
+    📭 Nenhuma certidão de análise de petição encontrada.
+</div>
 {% endif %}
 
 {% if certidoes_movimentacoes %}
 <div class="section-title">🔄 Certidões vindas das movimentações</div>
-<div class="section-sub">Geradas a partir da varredura de movimentações do Projudi.</div>
+<div class="section-sub">
+    Nasceram da varredura direta de movimentações do Projudi
+    ({{ total_movimentacoes }} no total).
+</div>
 {% for c in certidoes_movimentacoes %}
 <div class="cert-card movimentacao {{ c.status }}">
     <div class="cert-header">
         <div>
             <div class="cert-processo">{{ c.numero_processo_cnj|default:c.processo }}</div>
             {% if c.parte_nome %}<div class="cert-parte">👤 {{ c.parte_nome }}</div>{% endif %}
-            <div class="cert-parte">
+            <div class="cert-meta">
                 <span class="tag-origem movimentacao">Movimentação</span>
                 {% if c.act_verb %} | {{ c.act_verb }}{% endif %}
+                | 🕒 {{ c.created_at|date:"d/m/Y H:i" }}
             </div>
         </div>
         <span class="tag-status tag-{{ c.status }}">{{ c.get_status_display }}</span>
     </div>
-    {% if c.observacao %}<div class="cert-obs">{{ c.observacao|striptags|truncatechars:220 }}</div>{% endif %}
-    <div class="cert-obs">🕒 {{ c.created_at|date:"d/m/Y H:i" }}</div>
-    <div style="margin-top:8px;">
-        <a href="{% url 'projudi:movimentacao_detail' c.pk %}" class="btn btn-outline btn-sm">🔍 Detalhes</a>
+    {% if c.observacao %}
+    <div class="cert-obs">{{ c.observacao|striptags|truncatechars:260 }}</div>
+    {% endif %}
+    <div class="cert-actions">
+        <a href="{% url 'projudi:movimentacao_detail' c.pk %}" class="btn btn-sm btn-outline">🔍 Detalhes</a>
+        {% if c.pode_executar %}
+        <form method="post" action="{% url 'projudi:movimentacao_executar' c.pk %}" style="display:inline;">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-green">▶️ Executar</button>
+        </form>
+        {% endif %}
+        {% if not c.dispensado %}
+        <form method="post" action="{% url 'projudi:movimentacao_dispensar' c.pk %}" style="display:inline;"
+              onsubmit="return confirm('Dispensar esta certidão?');">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-outline" style="color:#6b21a8;">🚫 Dispensar</button>
+        </form>
+        {% endif %}
     </div>
+    {% if c.logs.all %}
+    <div style="margin-top:8px;">
+        {% for log in c.logs.all|slice:":2" %}
+        <div class="log-entry log-{{ log.tipo }}">
+            <strong>{{ log.get_tipo_display }}</strong>: {{ log.mensagem|truncatechars:130 }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
 </div>
 {% endfor %}
 {% elif not origem_atual or origem_atual == 'movimentacao' %}
-<div class="empty-state">Nenhuma certidão de movimentação encontrada.</div>
+<div class="empty-state">
+    📭 Nenhuma certidão de movimentação encontrada.
+</div>
 {% endif %}
 
 {% endblock %}
