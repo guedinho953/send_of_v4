@@ -31,7 +31,9 @@ google-auth-httplib2>=0.1
 Pillow>=10.1
 python-dateutil>=2.8
 
+# ── PostgreSQL (opcional, para usar o banco do Docker/restaurado) ──
+psycopg2-binary>=2.9
+
 # ── Opcionais ──
-# psycopg2-binary>=2.9
 # celery>=5.3
 # llama-cpp-python>=0.2

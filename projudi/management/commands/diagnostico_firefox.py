@@ -40,6 +40,28 @@ class Command(BaseCommand):
             self.stdout.write(f'  Nomes .............: {sorted(cookies)}')
 
         self.stdout.write('')
+        self.stdout.write(self.style.MIGRATE_HEADING('Banco de dados'))
+        try:
+            from django.db import connection
+
+            connection.ensure_connection()
+            cfg = connection.settings_dict
+            self.stdout.write(f'  Motor .............: {connection.vendor}')
+            self.stdout.write(f'  Banco .............: {cfg.get("NAME")}')
+            if connection.vendor == 'postgresql':
+                self.stdout.write(
+                    f'  Servidor ..........: {cfg.get("HOST")}:{cfg.get("PORT")}')
+            from projudi.models import OficioRecord
+            from processes.models import Process
+
+            self.stdout.write(f'  Oficios ...........: {OficioRecord.objects.count()}')
+            self.stdout.write(f'  Processos .........: {Process.objects.count()}')
+        except Exception as e:
+            self.stdout.write(self.style.ERROR(f'  Indisponivel: {e}'))
+            self.stdout.write('  No Windows, rode scripts\\postgres_local_windows.ps1 '
+                              'ou use SQLite no .env.')
+
+        self.stdout.write('')
         self.stdout.write(self.style.MIGRATE_HEADING('Playwright'))
         try:
             from playwright.sync_api import sync_playwright

@@ -77,18 +77,96 @@ Se algo falhar, rode **`DIAGNOSTICO_WINDOWS.bat`**. Ele mostra:
 | `CAPTURAR_COOKIES.bat` | Captura cookies do Firefox local. |
 | `DIAGNOSTICO_WINDOWS.bat` | Diagnóstico de Firefox/cookies/Playwright. |
 | `ABRIR_FIREFOX_PROJUDI.bat` | Abre o Projudi no Firefox local. |
+| `PARAR_POSTGRES.bat` | Para o PostgreSQL local do projeto. |
+| `RESTAURAR_BANCO_POSTGRES.bat` | Restaura um dump `.sql/.sql.gz/.dump`. |
+| `scripts/postgres_local_windows.ps1` | Cria/sobe/para o PostgreSQL local (porta 5433). |
+| `scripts/exportar_dump_postgres_ubuntu.sh` | Exporta o `pg_send_of` no Ubuntu para `D:\Projudi`. |
 | `FIREFOX_PATH` | Caminho do `firefox.exe` (vazio = detecção automática). |
 | `FIREFOX_PROFILE` | Pasta do perfil (vazio = perfil mais recente). |
 | `PROJUDI_COOKIES_FILE` | Caminho do JSON de cookies (vazio = padrão do SO). |
 | `PLAYWRIGHT_HEADLESS` | `0` = Firefox visível; `1` = sem janela. |
 | `PLAYWRIGHT_FIREFOX_EXECUTABLE` | Build compatível do Firefox (normalmente vazio). |
 
-O `.env` do Windows já vem com `DATABASE_URL=sqlite:///db.sqlite3`, então
-**não é necessário Docker/PostgreSQL** para uso local.
+O `env.windows.example` vem com `DATABASE_URL=sqlite:///db.sqlite3`, então
+**não é necessário Docker/PostgreSQL** para uso local. A instalação atual em
+`D:\send_of_v4_win` está configurada para o **PostgreSQL local** (veja abaixo).
 
 ---
 
-## 4. Ubuntu / Linux (mesmo repositório)
+## 4. Banco de dados no Windows
+
+### 4.1 PostgreSQL local do projeto (recomendado para espelhar o Docker)
+
+O PostgreSQL 15 já instalado no Windows **não** é o `pg_send_of` (o banco dele
+é outro, de 2023). Para não depender de admin nem do serviço do Windows, o
+projeto cria um **cluster próprio** em `.\pgdata`, na porta **5433**:
+
+```powershell
+.\scripts\postgres_local_windows.ps1
+# cria o cluster (se preciso), sobe, cria o banco sccj e mostra a URL
+.\scripts\postgres_local_windows.ps1 -Status
+.\scripts\postgres_local_windows.ps1 -Stop
+```
+
+Depois, no `.env`:
+
+```env
+DATABASE_URL=postgres://send_of:send_of@127.0.0.1:5433/sccj
+```
+
+E rode:
+
+```bat
+.venv\Scripts\python.exe manage.py migrate
+```
+
+O `RODAR_WINDOWS.bat` detecta `postgres://` no `.env` e sobe o cluster
+automaticamente. `PARAR_POSTGRES.bat` encerra.
+
+### 4.2 Copiar o espelho SQLite para o PostgreSQL
+
+```bat
+.venv\Scripts\python.exe manage.py copiar_dados_sqlite ^
+    --origem D:\send_of_v4\db.sqlite3 --limpar
+```
+
+Isso preserva IDs e copia todas as tabelas de aplicação que existem nos dois
+lados. Tabelas novas (que o espelho antigo não tinha) ficam vazias.
+
+### 4.3 Restaurar o banco real do Docker (`pg_send_of`)
+
+1. **No Ubuntu**, com o container ligado:
+
+   ```bash
+   docker start pg_send_of
+   bash scripts/exportar_dump_postgres_ubuntu.sh
+   ```
+
+   O dump sai em `D:\Projudi\sendof_AAAAmmdd_HHMMSS.sql.gz` (via `/mnt/d`).
+
+2. **No Windows**, dê duplo clique em **`RESTAURAR_BANCO_POSTGRES.bat`** e
+   arraste o arquivo `.sql.gz`. Ele restaura no cluster local (porta 5433) e
+   roda as migrações.
+
+3. Inicie com `RODAR_WINDOWS.bat`.
+
+> Se o dump for de PostgreSQL 16 e a restauração reclamar de alguma opção
+> nova, instale o PostgreSQL 16 ou use `pg_dump --no-owner --no-privileges`
+> em uma versão compatível. O script de exportação já usa essas opções.
+
+### 4.4 Voltar para SQLite
+
+No `.env`:
+
+```env
+DATABASE_URL=sqlite:///db.sqlite3
+```
+
+O banco `db.sqlite3` continua na raiz do projeto (com o espelho aplicado).
+
+---
+
+## 5. Ubuntu / Linux (mesmo repositório)
 
 O código continua funcionando no Ubuntu. Use o modelo de ambiente Linux:
 
@@ -115,7 +193,7 @@ defina `FIREFOX_PROFILE` no `.env`.
 
 ---
 
-## 5. Versão portátil
+## 6. Versão portátil
 
 A pasta portátil é gerada por:
 
@@ -145,7 +223,7 @@ deste repositório, com o banco antigo copiado).
 
 ---
 
-## 6. O que mudou no código
+## 7. O que mudou no código
 
 - `firefox_config.py` (novo): detecção de Firefox/perfis e captura de cookies
   multiplataforma (Windows, WSL e Linux).
@@ -165,7 +243,7 @@ deste repositório, com o banco antigo copiado).
 
 ---
 
-## 7. Problemas comuns
+## 8. Problemas comuns
 
 ### “JSESSIONID não encontrado”
 

@@ -12,6 +12,17 @@ Guia completo: **[docs/WINDOWS_FIREFOX.md](docs/WINDOWS_FIREFOX.md)**
 
 Login inicial: **`admin@local` / `admin123`**.
 
+### Banco
+
+A instalação atual usa o **PostgreSQL local do projeto** (porta 5433,
+`.\pgdata`), com os dados do espelho SQLite já copiados (70 ofícios).
+O launcher sobe o PostgreSQL automaticamente.
+
+- Parar: `PARAR_POSTGRES.bat`
+- Voltar para SQLite: no `.env`, `DATABASE_URL=sqlite:///db.sqlite3`
+- Restaurar o banco real do Docker: `RESTAURAR_BANCO_POSTGRES.bat`
+  (gere o dump no Ubuntu com `scripts/exportar_dump_postgres_ubuntu.sh`)
+
 ## Arquivos
 
 | Arquivo | Função |

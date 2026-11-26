@@ -14,7 +14,7 @@
 | 03 | [PROCESSAR-PENDENTES](03-PROCESSAR-PENDENTES.md) | View, fluxo de impossibilidade | Como funciona o botão |
 | 04 | [MODO-ESTUDANTE](04-MODO-ESTUDANTE.md) | Explicação linha por linha | Aprender o código |
 | 05 | [CONFIGURAR-RAGS](05-CONFIGURAR-RAGS.md) | sequencia_cumprimento: tipos de passo, códigos (localizador, subtipo, prazo), polo, exemplos | Configurar RAGExamples |
-| 06 | [WINDOWS_FIREFOX](WINDOWS_FIREFOX.md) | Windows nativo, Firefox local, Playwright, modo portátil e Ubuntu | Rodar no Windows/Linux |
+| 06 | [WINDOWS_FIREFOX](WINDOWS_FIREFOX.md) | Windows nativo, Firefox local, Playwright, PostgreSQL local, dump do Docker, modo portátil e Ubuntu | Rodar no Windows/Linux |
 
 ---
 

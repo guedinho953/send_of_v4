@@ -10,6 +10,12 @@ if not exist "%PYTHON%" (
     exit /b 1
 )
 
+findstr /i "postgres://" .env >nul 2>&1
+if not errorlevel 1 (
+    echo [pg] Verificando PostgreSQL local...
+    powershell -NoProfile -ExecutionPolicy Bypass -File scripts\postgres_local_windows.ps1 >nul
+)
+
 "%PYTHON%" manage.py diagnostico_firefox
 pause
 endlocal
