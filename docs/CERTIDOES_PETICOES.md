@@ -204,6 +204,47 @@ A geração da certidão em si continua usando `CumprimentoService` e o
 `MovimentacaoRecord` gerado entra em **Certidões vindas das movimentações**
 com `origem='movimentacao'`.
 
+## Trânsito em Julgado
+
+Rota:
+
+```text
+/projudi/certidoes/transito-julgado/
+```
+
+A análise é **por parte**:
+
+1. localiza a sentença/decisão;
+2. localiza a intimação da sentença de cada parte;
+3. conta 10 dias úteis;
+4. verifica renúncia/dispensa do prazo recursal;
+5. verifica recurso interposto pela parte.
+
+Status:
+
+```text
+TRANSITADO
+RENÚNCIA/DISPENSA
+PRAZO EM CURSO
+RECURSO PENDENTE
+INTIMAÇÃO NÃO LOCALIZADA
+```
+
+O status geral só fica `TRANSITADO` quando todas as partes estão
+transitadas ou com renúncia/dispensa.
+
+A tela cria a **Mov848 — Transitado em Julgado** na Fila de Movimentações,
+com escopo:
+
+- todas as partes;
+- autores;
+- réus;
+- parte selecionada.
+
+Os botões de grupo ficam bloqueados quando há parte do grupo com prazo em
+curso ou recurso pendente. A execução definitiva é feita na Fila de
+Movimentações, após conferência da seleção de partes.
+
 ## Modelos de Certidões
 
 Rota:

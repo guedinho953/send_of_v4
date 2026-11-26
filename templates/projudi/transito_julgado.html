@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}Trânsito em Julgado — Send of v4{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:16px;">
+    <div>
+        <h1 class="section-title" style="font-size:22px; margin:0;">⚖️ Trânsito em Julgado</h1>
+        <p style="font-size:13px; color:#6b7280; margin:4px 0 0;">
+            Calcula o trânsito por parte a partir da intimação da sentença.
+        </p>
+    </div>
+    <div style="display:flex; gap:8px;">
+        <a href="{% url 'projudi:certidao_dashboard' %}" class="btn btn-outline">← Certidões</a>
+        <a href="{% url 'projudi:movimentacao_fila' %}" class="btn btn-outline">📥 Fila</a>
+    </div>
+</div>
+
+<div style="background:#eff6ff; border-left:4px solid #2563eb; border-radius:6px; padding:10px 12px; margin-bottom:16px; font-size:12px; color:#1e40af; line-height:1.5;">
+    A prévia mostra o status por parte. A Mov848 entra na Fila de
+    Movimentações para conferência antes da execução.
+</div>
+
+<div style="background:#fff; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,.08); padding:20px; max-width:760px;">
+    <form method="post">
+        {% csrf_token %}
+        <label for="processo" style="display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:4px;">
+            Processo
+        </label>
+        <input id="processo" name="processo" required value="{{ processo }}"
+               placeholder="0000000-00.0000.8.05.0191"
+               style="width:100%; padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px;">
+        <div style="font-size:11px; color:#6b7280; margin-top:4px;">
+            Pode digitar só os dígitos; o sistema completa os zeros e localiza
+            o processo no Projudi.
+        </div>
+        <div style="margin-top:14px;">
+            <button type="submit" class="btn" style="background:#0891b2; color:white;">
+                🔎 Analisar trânsito
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -407,6 +407,46 @@ class MovimentacaoService:
                         except Exception as e:
                             print(f'   ⚠️ Tipo Documento: {e}')
 
+                # PASSO 2.5: Mov848 — selecionar o polo/parte
+                if cod_mov == '848':
+                    escopo = (record.parte_papel or 'todos').lower()
+                    nome_parte = record.parte_nome or ''
+                    try:
+                        page.evaluate('''(config) => {
+                            const escopo = config.escopo;
+                            const nome = config.nome;
+                            const marcar = (sel, val) => {
+                                document.querySelectorAll(sel).forEach(el => {
+                                    el.checked = val;
+                                });
+                            };
+                            if (escopo === 'autores') {
+                                marcar('input[name="partesAutora"]', true);
+                                marcar('input[name="partesRe"]', false);
+                            } else if (escopo === 'res') {
+                                marcar('input[name="partesAutora"]', false);
+                                marcar('input[name="partesRe"]', true);
+                            } else if (escopo === 'todos') {
+                                marcar('input[name="partesAutora"]', true);
+                                marcar('input[name="partesRe"]', true);
+                            } else if (escopo === 'parte' && nome) {
+                                const sel = document.querySelector('select[name="codParte"]');
+                                if (sel) {
+                                    for (const opt of sel.options) {
+                                        if (opt.text.trim() === nome) {
+                                            sel.value = opt.value;
+                                            sel.dispatchEvent(new Event('change', {bubbles:true}));
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }''', {'escopo': escopo, 'nome': nome_parte})
+                        print(f'   ✅ Mov848 — partes: {escopo} {nome_parte[:50]}')
+                        time.sleep(0.5)
+                    except Exception as e:
+                        print(f'   ⚠️ Seleção de partes 848: {e}')
+
                 # PASSO 3: Preencher observação
                 # NÃO incluir o parte_nome automaticamente aqui (o nome na obs
                 # é decidido pelo chamador — parte_na_observacao etc.). Evita

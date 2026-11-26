@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block title %}Trânsito — {{ resultado.processo }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .status-geral { padding: 12px 16px; border-radius: 8px; font-size: 14px; font-weight: 600; margin-bottom: 16px; }
+    .status-transitado { background: #d1fae5; color: #065f46; border-left: 5px solid #059669; }
+    .status-nao { background: #fef3c7; color: #92400e; border-left: 5px solid #d97706; }
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+    .tag-transitado { background: #d1fae5; color: #065f46; }
+    .tag-curso { background: #fef3c7; color: #92400e; }
+    .tag-recurso { background: #fee2e2; color: #991b1b; }
+    .tag-renuncia { background: #ede9fe; color: #5b21b6; }
+    .tag-nao-localizada { background: #e5e7eb; color: #374151; }
+    .tag-erro { background: #fee2e2; color: #991b1b; }
+    .party-row { background: #fff; border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.06); border-left: 4px solid #d97706; }
+    .party-row.transitado { border-left-color: #059669; }
+    .party-row.recurso { border-left-color: #dc2626; }
+    .party-row.renuncia { border-left-color: #7c3aed; }
+    .party-nome { font-size: 14px; font-weight: 600; color: #1e3a5f; }
+    .party-meta { font-size: 11px; color: #6b7280; margin-top: 4px; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+    .btn-outline { background: transparent; border: 1px solid #d1d5db; color: #374151; }
+    .btn-outline:hover { background: #f3f4f6; }
+    .btn:disabled { background: #d1d5db; border-color: #d1d5db; cursor: not-allowed; }
+    .sentenca-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; font-size: 12px; color: #374151; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:16px;">
+    <div>
+        <h1 class="section-title" style="font-size:22px; margin:0;">⚖️ Trânsito em Julgado</h1>
+        <p style="font-size:13px; color:#6b7280; margin:4px 0 0;">
+            {{ resultado.processo }}{% if resultado.numero_interno %} · interno {{ resultado.numero_interno }}{% endif %}
+        </p>
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <a href="{% url 'projudi:transito_julgado' %}" class="btn btn-outline">← Nova análise</a>
+        <a href="{% url 'projudi:movimentacao_fila' %}" class="btn btn-outline">📥 Fila</a>
+        {% if resultado.url %}
+        <a href="{{ resultado.url }}" target="_blank" class="btn btn-outline">🔗 Projudi</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="status-geral {% if resultado.status_geral == 'TRANSITADO' %}status-transitado{% else %}status-nao{% endif %}">
+    Status geral: {{ resultado.status_geral }}
+</div>
+
+{% if resultado.sentenca %}
+<div class="sentenca-box">
+    <strong>Sentença/decisão considerada:</strong>
+    evento {{ resultado.sentenca.evento }}
+    {% if resultado.sentenca.data %} em {{ resultado.sentenca.data|date:"d/m/Y" }}{% endif %}
+    <br>{{ resultado.sentenca.texto|truncatechars:300 }}
+</div>
+{% endif %}
+
+{% if resultado.recurso %}
+<div class="sentenca-box" style="border-left:4px solid #dc2626;">
+    <strong>Recurso localizado:</strong>
+    evento {{ resultado.recurso.evento }}
+    {% if resultado.recurso.data %} em {{ resultado.recurso.data|date:"d/m/Y" }}{% endif %}
+    <br>{{ resultado.recurso.texto|truncatechars:300 }}
+</div>
+{% endif %}
+
+<div class="section-title" style="font-size:17px; margin:18px 0 10px;">Partes</div>
+
+{% for p in resultado.partes %}
+<div class="party-row {% if p.status == 'TRANSITADO' %}transitado{% elif p.status == 'RECURSO PENDENTE' %}recurso{% elif p.status == 'RENÚNCIA/DISPENSA' %}renuncia{% endif %}">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+        <div>
+            <div class="party-nome">{{ p.nome }}</div>
+            <div class="party-meta">
+                {{ p.papel }}
+                {% if p.evento_intimacao %}
+                | Intimação: evento {{ p.evento_intimacao }}
+                {% if p.data_intimacao %} em {{ p.data_intimacao|date:"d/m/Y" }}{% endif %}
+                {% endif %}
+                {% if p.ultimo_dia %}| Último dia: {{ p.ultimo_dia|date:"d/m/Y" }}{% endif %}
+                {% if p.decurso %}| Decurso: {{ p.decurso|date:"d/m/Y" }}{% endif %}
+            </div>
+            {% if p.observacao %}
+            <div class="party-meta">{{ p.observacao|truncatechars:200 }}</div>
+            {% endif %}
+        </div>
+        <span class="tag {% if p.status == 'TRANSITADO' %}tag-transitado{% elif p.status == 'PRAZO EM CURSO' %}tag-curso{% elif p.status == 'RECURSO PENDENTE' %}tag-recurso{% elif p.status == 'RENÚNCIA/DISPENSA' %}tag-renuncia{% elif p.status == 'ERRO NO PRAZO' %}tag-erro{% else %}tag-nao-localizada{% endif %}">
+            {{ p.status }}
+        </span>
+    </div>
+</div>
+{% endfor %}
+
+<div class="actions">
+    <form method="post" action="{% url 'projudi:transito_julgado_criar' %}">
+        {% csrf_token %}
+        <input type="hidden" name="processo" value="{{ resultado.processo }}">
+        <input type="hidden" name="escopo" value="todos">
+        <button type="submit" class="btn" style="background:#059669; color:white;"
+                {% if not pode_todos %}disabled{% endif %}
+                onclick="return confirm('Criar Mov848 — Transitado em Julgado para todas as partes?');">
+            ⚖️ Criar Mov848 — todas as partes
+        </button>
+    </form>
+
+    <form method="post" action="{% url 'projudi:transito_julgado_criar' %}">
+        {% csrf_token %}
+        <input type="hidden" name="processo" value="{{ resultado.processo }}">
+        <input type="hidden" name="escopo" value="autores">
+        <button type="submit" class="btn btn-outline"
+                {% if not pode_autores %}disabled{% endif %}
+                onclick="return confirm('Criar Mov848 somente para os autores?');">
+            Criar Mov848 — autores
+        </button>
+    </form>
+
+    <form method="post" action="{% url 'projudi:transito_julgado_criar' %}">
+        {% csrf_token %}
+        <input type="hidden" name="processo" value="{{ resultado.processo }}">
+        <input type="hidden" name="escopo" value="res">
+        <button type="submit" class="btn btn-outline"
+                {% if not pode_res %}disabled{% endif %}
+                onclick="return confirm('Criar Mov848 somente para os réus?');">
+            Criar Mov848 — réus
+        </button>
+    </form>
+
+    {% if partes_transitadas %}
+    <form method="post" action="{% url 'projudi:transito_julgado_criar' %}" style="display:flex; gap:6px; align-items:center;">
+        {% csrf_token %}
+        <input type="hidden" name="processo" value="{{ resultado.processo }}">
+        <input type="hidden" name="escopo" value="parte">
+        <select name="parte_nome" required style="padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px;">
+            {% for p in partes_transitadas %}
+            <option value="{{ p.nome }}">{{ p.nome }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-outline"
+                onclick="return confirm('Criar Mov848 para a parte selecionada?');">
+            Criar Mov848 — parte
+        </button>
+    </form>
+    {% endif %}
+</div>
+
+<div style="font-size:11px; color:#6b7280; margin-top:14px; line-height:1.5;">
+    A criação apenas coloca a Mov848 na Fila de Movimentações. A execução
+    definitiva será feita após a conferência da seleção de partes.
+</div>
+{% endblock %}

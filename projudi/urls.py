@@ -7,6 +7,7 @@ from . import movimentacao_views
 from . import certidao_views
 from . import certidao_peticao_views
 from . import certidao_modelo_views
+from . import transito_julgado_views
 
 app_name = 'projudi'
 
@@ -76,6 +77,8 @@ urlpatterns = [
 
     # Aba Certidões (separadas por origem: petição x movimentação)
     path('certidoes/dashboard/', certidao_views.CertidaoDashboardView.as_view(), name='certidao_dashboard'),
+    path('certidoes/transito-julgado/', transito_julgado_views.TransitoJulgadoView.as_view(), name='transito_julgado'),
+    path('certidoes/transito-julgado/criar/', transito_julgado_views.TransitoJulgadoCriarView.as_view(), name='transito_julgado_criar'),
     path('certidoes/modelos/', certidao_modelo_views.CertidaoModeloListView.as_view(), name='certidao_modelos'),
     path('certidoes/modelos/novo/', certidao_modelo_views.CertidaoModeloCreateView.as_view(), name='certidao_modelo_novo'),
     path('certidoes/modelos/<int:pk>/editar/', certidao_modelo_views.CertidaoModeloUpdateView.as_view(), name='certidao_modelo_editar'),
