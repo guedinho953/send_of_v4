@@ -75,7 +75,7 @@ $excluirDirs = @(
     ".git", ".venv", "venv", "__pycache__", "staticfiles",
     "media", "backups", ".pytest_cache", ".mypy_cache"
 ) | ForEach-Object { Join-Path $Origem $_ }
-$excluirArqs = @("db.sqlite3", "*.pyc", "*.pyo", "*.log", "nul")
+$excluirArqs = @(".env", "db.sqlite3", "*.pyc", "*.pyo", "*.log", "nul")
 $roboArgs = @($Origem, $AppDest, "/E", "/NFL", "/NDL", "/NJH", "/NJS", "/NP")
 $roboArgs += "/XD"
 $roboArgs += $excluirDirs
