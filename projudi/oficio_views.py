@@ -15,6 +15,7 @@ from django.views.decorators.csrf import csrf_exempt
 from .models import OficioRecord, OficioLog
 from .oficio_service import OficioService
 from .services import ProjudiService
+from .assinantes import ASSINANTE_PADRAO, ASSINANTES
 
 
 class OficioDashboardView(LoginRequiredMixin, TemplateView):
@@ -72,6 +73,12 @@ class OficioDashboardView(LoginRequiredMixin, TemplateView):
             )
         except Exception:
             context['tipos_oficio'] = []
+
+        context['assinante_padrao'] = ASSINANTE_PADRAO
+        context['assinantes'] = [
+            {'chave': chave, 'nome': dados[0], 'cargo': dados[1]}
+            for chave, dados in ASSINANTES.items()
+        ]
 
         # Planilha Google configurada?
         try:
@@ -780,9 +787,11 @@ class OficioExpedirPorTipoView(LoginRequiredMixin, View):
             limite = 20
         limite = max(1, min(limite, 100))
 
-        assinante = (request.POST.get('assinante') or 'ivan').strip().lower()
-        if assinante not in ('ivan', 'mauro'):
-            assinante = 'ivan'
+        assinante = (
+            request.POST.get('assinante') or ASSINANTE_PADRAO
+        ).strip().lower()
+        if assinante not in ASSINANTES:
+            assinante = ASSINANTE_PADRAO
 
         usar_planilha = request.POST.get('planilha') == '1'
 
@@ -826,11 +835,10 @@ class OficioExpedirPorTipoView(LoginRequiredMixin, View):
                     f'⚠️ Nenhum ofício pendente do tipo "{tipo}" foi encontrado.'
                 )
             elif result.returncode == 0:
-                signatario = (
-                    'Ivan Guedes da Silva (Secretário em Substituição)'
-                    if assinante == 'ivan'
-                    else 'Mauro Emílio (Secretário)'
+                assinante_nome, assinante_cargo = ASSINANTES.get(
+                    assinante, ASSINANTES[ASSINANTE_PADRAO]
                 )
+                signatario = f'{assinante_nome} ({assinante_cargo})'
                 messages.success(
                     request,
                     f'✅ Expedição por tipo concluída'

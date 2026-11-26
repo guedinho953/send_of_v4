@@ -48,6 +48,11 @@ class CertidaoPeticaoQueueView(LoginRequiredMixin, TemplateView):
             'erro': erro,
             'total': len(itens),
             'contagem': contagem,
+            'assinante_padrao': ASSINANTE_PADRAO,
+            'assinantes': [
+                {'chave': chave, 'nome': dados[0], 'cargo': dados[1]}
+                for chave, dados in ASSINANTES.items()
+            ],
         })
         return context
 

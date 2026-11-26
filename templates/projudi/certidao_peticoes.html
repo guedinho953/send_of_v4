@@ -68,8 +68,9 @@
 <div style="background:#f5f3ff; border:1px solid #ddd6fe; border-radius:8px; padding:10px 12px; margin-bottom:16px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
     <strong style="font-size:13px; color:#5b21b6;">Assinatura da certidão:</strong>
     <select id="assinanteSelect" onchange="atualizarAssinatura()" style="padding:6px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px;">
-        <option value="ivan" selected>Ivan Guedes da Silva — Secretário em Substituição</option>
-        <option value="mauro">Mauro Emílio Viana da Silva Moreira — Secretário</option>
+        {% for a in assinantes %}
+        <option value="{{ a.chave }}" {% if a.chave == assinante_padrao %}selected{% endif %}>{{ a.nome }} — {{ a.cargo }}</option>
+        {% endfor %}
         <option value="outro">Outro (digitar)</option>
     </select>
     <input id="assinanteNome" type="text" placeholder="Nome do assinante"
@@ -127,7 +128,7 @@
         <div style="margin-top:10px; display:flex; gap:6px; flex-wrap:wrap;">
             <form method="post" action="{% url 'projudi:certidao_peticao_gerar' %}">
                 {% csrf_token %}
-                <input type="hidden" name="assinante" value="ivan" class="assinante-hidden">
+                <input type="hidden" name="assinante" value="{{ assinante_padrao }}" class="assinante-hidden">
                 <input type="hidden" name="assinante_nome" value="" class="assinante-nome-hidden">
                 <input type="hidden" name="assinante_cargo" value="" class="assinante-cargo-hidden">
                 <input type="hidden" name="tipo" value="{{ item.tipo }}">

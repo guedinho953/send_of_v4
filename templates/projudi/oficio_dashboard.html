@@ -195,8 +195,9 @@
         </label>
         <select name="assinante" title="Assinante do ofício"
                 style="max-width:245px; padding:5px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px; background:#fff; color:#374151;">
-            <option value="ivan" selected>Ivan Guedes da Silva — Secretário em Substituição</option>
-            <option value="mauro">Mauro Emílio Viana da Silva Moreira — Secretário</option>
+            {% for a in assinantes %}
+            <option value="{{ a.chave }}" {% if a.chave == assinante_padrao %}selected{% endif %}>{{ a.nome }} — {{ a.cargo }}</option>
+            {% endfor %}
         </select>
         <label title="Lê o último número da planilha Google, soma 1 e adiciona a linha"
                style="font-size:12px; color:#374151; display:inline-flex; align-items:center; gap:4px; white-space:nowrap;">

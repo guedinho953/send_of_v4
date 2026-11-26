@@ -5,6 +5,10 @@ ASSINANTES = {
         'Ivan Guedes da Silva',
         'Secretário em Substituição',
     ),
+    'ivan_servidor': (
+        'Ivan Guedes da Silva',
+        'Servidor de Secretaria 2',
+    ),
     'mauro': (
         'Mauro Emílio Viana da Silva Moreira',
         'Secretário',

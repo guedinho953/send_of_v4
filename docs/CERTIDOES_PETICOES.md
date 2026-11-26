@@ -77,6 +77,7 @@ Projudi/Mov581 é uma etapa separada, que pode ser adicionada depois.
 A fila de petições tem um seletor de assinatura no topo:
 
 - **Ivan Guedes da Silva — Secretário em Substituição** (padrão);
+- **Ivan Guedes da Silva — Servidor de Secretaria 2**;
 - **Mauro Emílio Viana da Silva Moreira — Secretário**;
 - **Outro** (nome e cargo digitados).
 

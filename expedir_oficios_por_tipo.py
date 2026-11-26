@@ -87,15 +87,7 @@ RPV_ALIASES = (
     'REQUISIÇÃO DE PEQUENO VALOR',
 )
 
-# Assinantes disponíveis para o ofício.
-ASSINANTES = {
-    'ivan': ('IVAN GUEDES DA SILVA', 'SECRETÁRIO EM SUBSTITUIÇÃO'),
-    'mauro': (
-        'MAURO EMILIO VIANA DA SILVA MOREIRA',
-        'SECRETÁRIO',
-    ),
-}
-ASSINANTE_PADRAO = 'ivan'
+from projudi.assinantes import ASSINANTE_PADRAO, ASSINANTES
 
 # Dados fixos do 20º BPM usados no ofício de apresentação de policiais.
 BPM20 = {
