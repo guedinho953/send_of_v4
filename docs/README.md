@@ -15,6 +15,7 @@
 | 04 | [MODO-ESTUDANTE](04-MODO-ESTUDANTE.md) | Explicação linha por linha | Aprender o código |
 | 05 | [CONFIGURAR-RAGS](05-CONFIGURAR-RAGS.md) | sequencia_cumprimento: tipos de passo, códigos (localizador, subtipo, prazo), polo, exemplos | Configurar RAGExamples |
 | 06 | [WINDOWS_FIREFOX](WINDOWS_FIREFOX.md) | Windows nativo, Firefox local, Playwright, PostgreSQL local, dump do Docker, modo portátil e Ubuntu | Rodar no Windows/Linux |
+| 07 | [DEPOL_DILIGENCIAS](DEPOL_DILIGENCIAS.md) | Ofício à DEPOL com diligências do parecer do MP (com/sem cópia) | Expedir diligências |
 
 ---
 

@@ -115,6 +115,17 @@ BPM20 = {
     'finalidade': 'participar',
 }
 
+# Destinatário fixo do ofício de cumprimento de diligências.
+DEPOL = {
+    'nome': 'DEPOL — Delegacia de Polícia de Paulo Afonso',
+    'cargo': 'Ilustríssimo(a) Senhor(a) Delegado(a)',
+    'endereco': (
+        'Rodovia BA 210, S/N — BTN I<br>'
+        '48.600-000 — Paulo Afonso/BA'
+    ),
+    'email': 'dt.pauloafonso@pcivil.ba.gov.br',
+}
+
 MESES_PT = {
     'janeiro': 'Janeiro', 'fevereiro': 'Fevereiro', 'marco': 'Março',
     'março': 'Março', 'abril': 'Abril', 'maio': 'Maio', 'junho': 'Junho',
@@ -196,6 +207,15 @@ def _eh_20bpm(texto):
     ))
 
 
+def _eh_depol(texto):
+    alvo = _normalizar(texto)
+    return any(x in alvo for x in (
+        'DEPOL',
+        'DELEGACIA DE POLICIA DE PAULO AFONSO',
+        'DELEGACIA TERRITORIAL DE POLICIA DE PAULO AFONSO',
+    ))
+
+
 def _termos_busca(tipo):
     """Termos que identificam o tipo no Projudi.
 
@@ -208,6 +228,12 @@ def _termos_busca(tipo):
     if not alvo:
         return []
 
+    if _eh_depol(alvo):
+        return [
+            'DEPOL',
+            'DELEGACIA DE POLICIA DE PAULO AFONSO',
+            'DELEGACIA TERRITORIAL DE POLICIA DE PAULO AFONSO',
+        ]
     if _eh_20bpm(alvo):
         return ['20BPM', '20 BPM', '20O BPM', '20° BPM']
     if _eh_ciap(alvo):
@@ -223,6 +249,12 @@ def _termos_busca(tipo):
 
 def _termos_modelo(tipo):
     """Termos usados para escolher o modelo no select codModelo do Projudi."""
+    if _eh_depol(tipo):
+        # Modelo do Projudi: "OFÍCIO - DELEGACIA - DILIGÊNCIAS".
+        return [
+            'DILIGENCIA', 'DILIGENCIAS', 'DELEGACIA', 'DEPOL',
+            'OFICIO', 'RPA',
+        ]
     if _eh_20bpm(tipo):
         # No Projudi o modelo aparece como "20º BATALHÃO - REQUISITAR
         # POLICIAL"; "20 BPM" é o texto da linha. Mantém RPA/OFICIO/COMUM
@@ -247,6 +279,8 @@ def _selecionado_placeholder(item):
 def _termos_por_texto(texto):
     """Infere o tipo a partir do texto, sem confundir com o 'Ofício' genérico."""
     alvo = _normalizar(texto)
+    if _eh_depol(alvo):
+        return ['DEPOL', 'DELEGACIA DE POLICIA DE PAULO AFONSO']
     if _eh_20bpm(alvo):
         return ['20BPM', '20 BPM', '20O BPM', '20° BPM']
     if _eh_ciap(alvo):
@@ -385,6 +419,8 @@ def _tipo_efetivo(item, tipo):
         return selecionado
 
     texto = item.get('rowText') or ''
+    if _eh_depol(texto):
+        return 'DEPOL'
     if _eh_20bpm(texto):
         return '20BPM'
     if _eh_ciap(texto):
@@ -401,6 +437,8 @@ def _destinatario_item(item, tipo_efetivo):
     """Órgão/pessoa de destino para gravar na planilha."""
     if _eh_ciap(tipo_efetivo):
         return 'CENTRAL INTEGRADA DE ALTERNATIVAS PENAIS PAULO AFONSO'
+    if _eh_depol(tipo_efetivo):
+        return 'DEPOL - DELEGACIA DE POLICIA DE PAULO AFONSO'
     if _eh_20bpm(tipo_efetivo):
         return '20 BPM'
 
@@ -965,10 +1003,339 @@ def _gerar_conteudo_20bpm(item, user, http_session,
     return html, template, proc, {}, policiais_texto
 
 
+def _mov_texto(mov):
+    return re.sub(r'\s+', ' ', ' '.join(
+        str(mov.get(k) or '') for k in
+        ('ato', 'descricao', 'observacao', 'ato_normalizado'))).strip()
+
+
+def _mov_evento(mov):
+    try:
+        return int(str(mov.get('evento')).strip())
+    except (TypeError, ValueError):
+        return 0
+
+
+def _mov_documento_url(mov):
+    for doc in (mov.get('documentos') or []):
+        url = (doc.get('url') or '').replace(
+            'downloadarquivo', 'DownloadArquivo')
+        if url:
+            return url
+    return ''
+
+
+def _baixar_texto_documento(url, http_session):
+    if not url or not http_session:
+        return ''
+    try:
+        resposta = http_session.get(url, timeout=40)
+        if resposta.status_code != 200:
+            return ''
+        if resposta.content[:4] == b'%PDF':
+            try:
+                import fitz
+                pdf = fitz.open(stream=resposta.content, filetype='pdf')
+                texto = '\n'.join(page.get_text() for page in pdf)
+                pdf.close()
+                return texto
+            except Exception as e:
+                print(f'   ⚠️ PDF não lido: {e}')
+                return ''
+        from bs4 import BeautifulSoup
+        return BeautifulSoup(
+            resposta.text, 'html.parser').get_text('\n', strip=True)
+    except Exception as e:
+        print(f'   ⚠️ Documento {url[:80]}: {e}')
+        return ''
+
+
+def _movimentos_com_documentos(proc, item, http_session):
+    url = (item or {}).get('procHref') or getattr(proc, 'projudi_url', '')
+    if not url or not http_session:
+        return []
+    try:
+        resposta = http_session.get(url, timeout=30)
+        if resposta.status_code != 200 or 'expirou' in resposta.text.lower():
+            return []
+        from projudiProcessNavigator import ProcessoParser
+        parser = ProcessoParser(resposta.text)
+        movs, _ = parser.extrair_movimentacoes()
+        return movs
+    except Exception as e:
+        print(f'   ⚠️ Não foi possível ler as movimentações: {e}')
+        return []
+
+
+def _ultimo_despacho(movs, http_session):
+    candidatos = []
+    for mov in movs:
+        up = _normalizar(_mov_texto(mov))
+        if not any(k in up for k in ('DESPACHO', 'DECISAO')):
+            continue
+        url = _mov_documento_url(mov)
+        if not url:
+            continue
+        candidatos.append((_mov_evento(mov), mov, url))
+
+    if not candidatos:
+        return {}
+
+    candidatos.sort(key=lambda x: x[0], reverse=True)
+    evento, mov, url = candidatos[0]
+    texto = _baixar_texto_documento(url, http_session)
+    return {
+        'evento': evento,
+        'data': mov.get('data_texto') or '',
+        'texto': texto or _mov_texto(mov),
+        'descricao': _mov_texto(mov),
+    }
+
+
+def _parecer_mp(movs, texto_despacho, http_session):
+    eventos = [
+        int(x) for x in re.findall(
+            r'evento\s*[nº.]*\s*(\d{1,4})', texto_despacho or '', re.I)
+    ]
+    candidatos = []
+    for mov in movs:
+        up = _normalizar(_mov_texto(mov))
+        if not (
+            any(k in up for k in (
+                'MANIFESTA', 'MINISTERIO PUBLICO', 'PARECER'))
+            or re.search(r'\bMP\b', up)
+        ):
+            continue
+        url = _mov_documento_url(mov)
+        if not url:
+            continue
+        candidatos.append((_mov_evento(mov), mov, url))
+
+    if not candidatos:
+        return {}
+
+    for evento in eventos:
+        for ev, mov, url in candidatos:
+            if ev == evento:
+                texto = _baixar_texto_documento(url, http_session)
+                return {
+                    'evento': ev,
+                    'data': mov.get('data_texto') or '',
+                    'texto': texto or _mov_texto(mov),
+                }
+
+    candidatos.sort(key=lambda x: x[0], reverse=True)
+    ev, mov, url = candidatos[0]
+    return {
+        'evento': ev,
+        'data': mov.get('data_texto') or '',
+        'texto': _baixar_texto_documento(url, http_session) or _mov_texto(mov),
+    }
+
+
+def _limpar_item_diligencia(texto):
+    texto = re.sub(r'\s+', ' ', texto or '').strip(' .;')
+    texto = re.split(
+        r'(?i)\s*(?:Paulo Afonso,\s*data da assinatura|'
+        r'Promotor(?:a)? de Justiça|Assinado eletronicamente)',
+        texto,
+    )[0]
+    return texto.strip(' .;')
+
+
+def _extrair_diligencias_mp(texto):
+    texto = re.sub(r'\s+', ' ', texto or '')
+    m = re.search(
+        r'(?:requer(?:e)?|requerimento|dilig[eê]ncias?)'
+        r'[^:]{0,140}:\s*', texto, re.I)
+    trecho = texto[m.end():] if m else texto
+
+    itens = []
+    for m_item in re.finditer(
+            r'(?:^|\s)(\d{1,2})\.\s*(.+?)(?=\s+\d{1,2}\.\s+|$)',
+            trecho, re.S):
+        item = _limpar_item_diligencia(m_item.group(2))
+        if item:
+            itens.append(item)
+
+    if not itens:
+        for linha in re.split(r'[\n•\-]\s*', trecho):
+            item = _limpar_item_diligencia(linha)
+            if len(item) > 15:
+                itens.append(item)
+    return itens
+
+
+def _diligencias_depol(itens):
+    """Separa as diligências endereçadas à autoridade policial."""
+    da_policia = []
+    for item in itens:
+        up = _normalizar(item)
+        if not any(k in up for k in (
+                'DELEGADO', 'AUTORIDADE POLICIAL', 'POLICIA',
+                'CORREGEDORIA', 'DEPOL', 'INFORME', 'OMISSAO',
+                'CUMPRIMENTO')):
+            continue
+        da_policia.append(item)
+    return da_policia or itens
+
+
+def _com_copia_depol(texto):
+    up = _normalizar(texto)
+    if 'SEM COPIA' in up:
+        return False
+
+    # Olha a frase que trata da autoridade policial/delegacia.
+    for frase in re.split(r'(?<=[.;])\s+', texto or ''):
+        f = _normalizar(frase)
+        if any(k in f for k in (
+                'AUTORIDADE POLICIAL', 'DELEGACIA', 'DEPOL', 'POLICIAL')):
+            if 'COPIA' in f:
+                return True
+
+    return any(k in up for k in (
+        'ENCAMINHANDO COPIA', 'COM COPIA', 'COPIA DO REQUERIDO'))
+
+
+def _prazo_despacho(texto):
+    m = re.search(r'prazo de\s+(\d{1,3})\s+dias', texto or '', re.I)
+    return int(m.group(1)) if m else 10
+
+
+def _juiz_despacho(texto):
+    m = re.search(
+        r'(MARTINHO\s+FERRAZ\s+DA\s+N[ÓO]BREGA\s+JUNIOR)',
+        texto or '', re.I)
+    return m.group(1).upper() if m else 'MARTINHO FERRAZ DA NOBREGA JUNIOR'
+
+
+def _data_mov_formatada(data_texto):
+    m = re.search(r'(\d{1,2})/(\d{1,2})/(\d{2,4})', data_texto or '')
+    if not m:
+        return data_texto or ''
+    dia, mes, ano = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    if ano < 100:
+        ano += 2000
+    return f'{dia:02d}/{mes:02d}/{ano}'
+
+
+def _limpar_parecer_mp(texto):
+    texto = re.sub(r'\s+', ' ', texto or '').strip()
+    texto = re.split(
+        r'(?i)\s*Assinado eletronicamente por', texto)[0]
+    return texto.strip()
+
+
+def _gerar_conteudo_depol(item, user, http_session,
+                          assinante_nome=None, assinante_cargo=None,
+                          numero_documento=None, com_copia_override=None):
+    """Ofício à DEPOL: lista de diligências ou parecer integral do MP."""
+    from django.template import Context, Template
+    from html import escape as _html_escape
+    from expedir_rapido import _aplicar_assinatura, _remover_rpa_numero
+
+    proc = _obter_processo(item, user, http_session)
+    if not proc:
+        return '', None, None, {}, ''
+
+    template = _resolver_template('DEPOL')
+    if not template:
+        print('   ⚠️ Template "Ofício DEPOL — Cumprimento de Diligências" '
+              'não encontrado.')
+        return '', None, proc, {}, ''
+
+    movs = _movimentos_com_documentos(proc, item, http_session)
+    if not movs:
+        print('   ⚠️ Não foi possível ler as movimentações do processo.')
+        return '', template, proc, {}, ''
+
+    despacho = _ultimo_despacho(movs, http_session)
+    if not despacho:
+        print('   ⚠️ Não encontrei o último despacho do juiz com documento.')
+        return '', template, proc, {}, ''
+
+    parecer = _parecer_mp(
+        movs,
+        despacho.get('texto') or despacho.get('descricao') or '',
+        http_session,
+    )
+    if not parecer:
+        print('   ⚠️ Não encontrei o parecer/manifestação do MP com documento.')
+        return '', template, proc, {}, ''
+
+    itens = _extrair_diligencias_mp(parecer.get('texto') or '')
+    itens_depol = _diligencias_depol(itens)
+    if not itens_depol:
+        print('   ⚠️ Não encontrei a lista de diligências no parecer do MP.')
+        return '', template, proc, {}, ''
+
+    com_copia = (
+        com_copia_override
+        if com_copia_override is not None
+        else _com_copia_depol(despacho.get('texto') or '')
+    )
+
+    if com_copia:
+        diligencias_html = ''
+        parecer_texto = _limpar_parecer_mp(parecer.get('texto') or '')
+    else:
+        diligencias_html = '<ol style="margin:8px 0 8px 24px;">' + ''.join(
+            f'<li style="margin-bottom:8px; text-align:justify;">'
+            f'{_html_escape(item)}</li>'
+            for item in itens_depol
+        ) + '</ol>'
+        parecer_texto = ''
+
+    ctx = {
+        'numero_documento': (
+            numero_documento
+            or _proximo_numero_sistema(template)
+        ),
+        'processo': proc.number,
+        'destinatario_nome': DEPOL['nome'],
+        'destinatario_cargo': DEPOL['cargo'],
+        'destinatario_endereco': DEPOL['endereco'],
+        'destinatario_email': DEPOL['email'],
+        'juiz': _juiz_despacho(despacho.get('texto') or ''),
+        'despacho_data': _data_mov_formatada(despacho.get('data') or ''),
+        'despacho_evento': despacho.get('evento') or '',
+        'evento_mp': parecer.get('evento') or '',
+        'prazo_dias': _prazo_despacho(despacho.get('texto') or ''),
+        'com_copia': com_copia,
+        'parecer_mp_texto': parecer_texto,
+        'diligencias_html': diligencias_html,
+        'assinante_nome': assinante_nome or 'IVAN GUEDES DA SILVA',
+        'assinante_cargo': assinante_cargo or 'SECRETÁRIO EM SUBSTITUIÇÃO',
+        'data': date.today().strftime('%d/%m/%Y'),
+    }
+
+    try:
+        html = Template(template.html_template).render(Context(ctx))
+        html = _aplicar_assinatura(html, assinante_nome, assinante_cargo)
+        html = _remover_rpa_numero(html)
+    except Exception as e:
+        print(f'   ⚠️ Erro ao gerar ofício DEPOL: {e}')
+        return '', template, proc, {}, ''
+
+    resumo = (
+        f'evento MP {parecer.get("evento")} | '
+        f'{len(itens_depol)} diligência(s) | '
+        f'com cópia: {"sim" if com_copia else "não"}'
+    )
+    return html, template, proc, {}, resumo
+
+
 def _gerar_conteudo(item, tipo_efetivo, user, http_session,
                     assinante_nome=None, assinante_cargo=None,
                     numero_documento=None):
     """Lê a ata e monta o HTML do ofício (pessoa + prestação)."""
+    if _eh_depol(tipo_efetivo):
+        return _gerar_conteudo_depol(
+            item, user, http_session,
+            assinante_nome=assinante_nome,
+            assinante_cargo=assinante_cargo,
+            numero_documento=numero_documento,
+        )
     if _eh_20bpm(tipo_efetivo):
         return _gerar_conteudo_20bpm(
             item, user, http_session,
@@ -1346,6 +1713,10 @@ def _processar_item(page, item, tipo, user, http_session,
         print('   ⏭️ Não foi possível montar o ofício 20º BPM — pulando.')
         return False
 
+    if _eh_depol(tipo_efetivo) and not html_gerado:
+        print('   ⏭️ Não foi possível montar o ofício DEPOL — pulando.')
+        return False
+
     if not proc:
         proc = _resolver_processo(item)
     html_doc, doc = _html_do_processo(proc, tipo_efetivo)
@@ -1364,6 +1735,8 @@ def _processar_item(page, item, tipo, user, http_session,
         )
     elif _eh_20bpm(tipo_efetivo) and nome_parte:
         print(f'   👮 Policiais: {nome_parte}')
+    elif _eh_depol(tipo_efetivo) and nome_parte:
+        print(f'   📋 {nome_parte}')
 
     selecao = page.evaluate(
         JS_SELECIONAR_TIPO,

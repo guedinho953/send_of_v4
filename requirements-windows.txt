@@ -30,6 +30,7 @@ google-auth-httplib2>=0.1
 # ── Utilitários ──
 Pillow>=10.1
 python-dateutil>=2.8
+pymupdf>=1.24
 
 # ── PostgreSQL (opcional, para usar o banco do Docker/restaurado) ──
 psycopg2-binary>=2.9
