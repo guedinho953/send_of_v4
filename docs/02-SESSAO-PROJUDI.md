@@ -2,6 +2,13 @@
 
 ## Data: 2026-07-17
 
+> **Atualização (Windows nativo):** os caminhos `/mnt/...` descritos abaixo
+> eram do uso via WSL. No Windows nativo eles foram centralizados em
+> `firefox_config.py` e o JSON fica em
+> `%LOCALAPPDATA%\send_of_v4\cookies.json`. Veja
+> [WINDOWS_FIREFOX.md](WINDOWS_FIREFOX.md). Os caminhos antigos continuam
+> sendo aceitos na leitura.
+
 ---
 
 ## O Problema

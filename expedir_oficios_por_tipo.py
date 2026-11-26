@@ -62,6 +62,13 @@ os.environ['DJANGO_ALLOW_ASYNC_UNSAFE'] = 'true'
 import django  # noqa: E402
 
 django.setup()
+# --- caminhos portáveis e Firefox local (Windows/Linux) ---
+import firefox_config  # noqa: E402
+from app_paths import temp_dir  # noqa: E402
+from projudi.playwright_firefox import launch_firefox  # noqa: E402
+
+TMP = str(temp_dir())
+
 
 from playwright.sync_api import sync_playwright  # noqa: E402
 
@@ -1380,7 +1387,7 @@ def main():
     max_tentativas = max(args.limite * 3, 10)
 
     with sync_playwright() as pw:
-        browser = pw.firefox.launch(headless=False, slow_mo=300)
+        browser = launch_firefox(pw, slow_mo=300)
         contexto = browser.new_context(
             viewport={'width': 1500, 'height': 950},
             locale='pt-BR',

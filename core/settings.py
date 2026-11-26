@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import environ
@@ -12,13 +13,16 @@ env = environ.Env(
 
 environ.Env.read_env(BASE_DIR / '.env')
 
-SECRET_KEY = env('SECRET_KEY')
+# Chave de desenvolvimento usada somente quando .env não existe (ex.: primeiro
+# start em uma máquina nova). Em produção, defina SECRET_KEY no .env.
+SECRET_KEY = env('SECRET_KEY', default='django-insecure-send-of-local-dev')
 
 DEBUG = env('DEBUG')
 
-ALLOWED_HOSTS = env.list('ALLOWED_HOSTS')
+ALLOWED_HOSTS = env.list(
+    'ALLOWED_HOSTS', default=['127.0.0.1', 'localhost'])
 
-CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS')
+CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[])
 
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
@@ -32,7 +36,9 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'django.contrib.postgres',
+    # 'django.contrib.postgres' só é necessário se o projeto usar campos
+    # específicos do PostgreSQL (ArrayField, HStore, SearchVector...). O uso
+    # local no Windows é SQLite; mantê-lo aqui exigiria psycopg2 instalado.
     # Third-party
     'whitenoise.runserver_nostatic',
     # Local apps
@@ -104,7 +110,11 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_DIRS = [BASE_DIR / 'static']
+# A pasta 'static' pode não existir em um clone limpo; o Django só aceita
+# caminhos existentes em STATICFILES_DIRS.
+STATICFILES_DIRS = [
+    pasta for pasta in [BASE_DIR / 'static'] if pasta.exists()
+]
 STORAGES = {
     'staticfiles': {
         'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
@@ -140,6 +150,33 @@ EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
 OPENAI_API_KEY = env('OPENAI_API_KEY', default='')
 QWEN_MODEL_PATH = env('QWEN_MODEL_PATH', default='')
 QWEN_SERVER_URL = env('QWEN_SERVER_URL', default='http://localhost:8080')
+
+# ---------------------------------------------------------------------------
+# Firefox local / Projudi (Windows nativo, WSL ou Linux)
+# ---------------------------------------------------------------------------
+# Deixe FIREFOX_PATH/FIREFOX_PROFILE vazios para a detecção automática.
+FIREFOX_PATH = env('FIREFOX_PATH', default='')
+FIREFOX_PROFILE = env('FIREFOX_PROFILE', default='')
+PROJUDI_COOKIES_FILE = env('PROJUDI_COOKIES_FILE', default='')
+PROJUDI_DOMAIN = env('PROJUDI_DOMAIN', default='projudi.tjba.jus.br')
+
+# Automação (Playwright). Por padrão abre o Firefox visível.
+PLAYWRIGHT_HEADLESS = env.bool('PLAYWRIGHT_HEADLESS', default=False)
+PLAYWRIGHT_FIREFOX_EXECUTABLE = env(
+    'PLAYWRIGHT_FIREFOX_EXECUTABLE', default='')
+
+# Garante que firefox_config.py (importado por scripts soltos) enxergue as
+# mesmas variáveis definidas no .env.
+for _nome, _valor in (
+    ('FIREFOX_PATH', FIREFOX_PATH),
+    ('FIREFOX_PROFILE', FIREFOX_PROFILE),
+    ('PROJUDI_COOKIES_FILE', PROJUDI_COOKIES_FILE),
+    ('PROJUDI_DOMAIN', PROJUDI_DOMAIN),
+    ('PLAYWRIGHT_HEADLESS', '1' if PLAYWRIGHT_HEADLESS else '0'),
+    ('PLAYWRIGHT_FIREFOX_EXECUTABLE', PLAYWRIGHT_FIREFOX_EXECUTABLE),
+):
+    if _valor:
+        os.environ.setdefault(_nome, str(_valor))
 
 # Planilha/tabela de ofícios no Google Docs (conta de serviço)
 GOOGLE_SERVICE_ACCOUNT_FILE = env('GOOGLE_SERVICE_ACCOUNT_FILE', default='')

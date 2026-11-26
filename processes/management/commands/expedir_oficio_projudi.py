@@ -9,6 +9,9 @@ Uso:
 import os, re, time, random
 from django.core.management.base import BaseCommand
 
+from app_paths import temp_file, temp_subdir
+from projudi.playwright_firefox import launch_firefox
+
 LINK_BASE = 'https://projudi.tjba.jus.br/projudi/'
 
 
@@ -124,7 +127,7 @@ class Command(BaseCommand):
         url = f'{LINK_BASE}movimentacao/MovimentarProcesso?numeroProcesso={pnum}'
 
         with sync_playwright() as p:
-            browser = p.firefox.launch(headless=False)
+            browser = launch_firefox(p)
             ctx = browser.new_context(viewport={'width': 1280, 'height': 800},
                                       locale='pt-BR')
             for name, value in cookies.items():
@@ -137,7 +140,7 @@ class Command(BaseCommand):
             self._pausa()
 
             if self.debug:
-                page.screenshot(path=f'/tmp/pw_0_{pnum}.png')
+                page.screenshot(path=str(temp_file(f'pw_0_{pnum}.png')))
 
             # 1. Codigo 581
             page.fill('#seqCategoriaMovimentacao', codigo)
@@ -148,7 +151,7 @@ class Command(BaseCommand):
             self._pausa(1, 3)
 
             if self.debug:
-                page.screenshot(path=f'/tmp/pw_1_{pnum}.png')
+                page.screenshot(path=str(temp_file(f'pw_1_{pnum}.png')))
 
             # 3. Aguardar DWR preencher descricao (mov 581)
             page.wait_for_function(
@@ -276,7 +279,7 @@ class Command(BaseCommand):
     # =====================================================================
 
     def _debug_pages(self, pnum, session):
-        d = f'/tmp/pd_{pnum}'
+        d = str(temp_subdir(f'pd_{pnum}'))
         os.makedirs(d, exist_ok=True)
         for name, url in [
             ('mov', f'{LINK_BASE}movimentacao/MovimentarProcesso?numeroProcesso={pnum}'),

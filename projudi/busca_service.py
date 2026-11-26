@@ -3,15 +3,10 @@ BuscaService — Busca processos no Projudi por nome da parte.
 """
 
 import time
-import os
 import re
 from typing import List, Dict, Optional
 
-# WSLg: sem renderização por software o Firefox do Playwright abre a janela
-# EM BRANCO (só o ícone "pinguim") — o usuário não vê a busca pra conferir.
-_FIREFOX_ENV = {**os.environ, 'MOZ_DISABLE_GPU_SANDBOX': '1',
-                'LIBGL_ALWAYS_SOFTWARE': '1'}
-_FIREFOX_PREFS = {'gfx.webrender.software': True}
+from .playwright_firefox import launch_firefox
 
 
 class BuscaService:
@@ -54,9 +49,7 @@ class BuscaService:
             from playwright.sync_api import sync_playwright
 
             with sync_playwright() as pw:
-                browser = pw.firefox.launch(headless=False, slow_mo=500,
-                                            env=_FIREFOX_ENV,
-                                            firefox_user_prefs=_FIREFOX_PREFS)
+                browser = launch_firefox(pw, slow_mo=500)
                 ctx_b = browser.new_context(
                     viewport={'width': 1500, 'height': 950}, locale='pt-BR')
                 ctx_b.add_cookies([

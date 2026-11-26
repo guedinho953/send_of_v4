@@ -1,0 +1,37 @@
+# Dependências para rodar o send_of_v4 no WINDOWS NATIVO (+ Firefox local).
+# Instale com:  python -m pip install -r requirements-windows.txt
+#
+# Diferenças em relação ao requirements.txt:
+#  * sem gunicorn (não roda no Windows);
+#  * sem psycopg2/celery por padrão (o uso local é SQLite e sem fila).
+#    Descomente se for usar PostgreSQL/Celery no Windows.
+
+# ── Framework ──
+Django>=5.1,<6.1
+django-environ>=0.11
+whitenoise>=6.6
+
+# ── Web scraping / navegador ──
+beautifulsoup4>=4.12
+requests>=2.31
+selenium>=4.15
+webdriver-manager>=4.0
+browser-cookie3>=0.19
+playwright>=1.49
+
+# ── Processamento de dados ──
+pandas>=2.1
+
+# ── Google Docs (planilha de ofícios) ──
+google-api-python-client>=2.100
+google-auth>=2.23
+google-auth-httplib2>=0.1
+
+# ── Utilitários ──
+Pillow>=10.1
+python-dateutil>=2.8
+
+# ── Opcionais ──
+# psycopg2-binary>=2.9
+# celery>=5.3
+# llama-cpp-python>=0.2

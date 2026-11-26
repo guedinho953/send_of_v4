@@ -7,7 +7,9 @@ Uso:
 """
 import os, sys, time, json, signal
 
-PID_FILE = '/tmp/auto_rastrear.pid'
+from app_paths import temp_file
+
+PID_FILE = str(temp_file('auto_rastrear.pid'))
 
 def _pid_info():
     if not os.path.exists(PID_FILE):
@@ -37,7 +39,7 @@ def iniciar():
         print('❌ Auto-rastrear já está rodando')
         return
 
-    os.chdir('/home/ivan/PythonProjects/send_of_v4')
+    os.chdir(os.path.dirname(os.path.abspath(__file__)))
     os.environ['DJANGO_SETTINGS_MODULE'] = 'core.settings'
     os.environ['DJANGO_ALLOW_ASYNC_UNSAFE'] = 'true'
 

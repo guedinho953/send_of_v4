@@ -4,6 +4,13 @@ from datetime import datetime
 os.environ['DJANGO_SETTINGS_MODULE'] = 'core.settings'
 os.environ['DJANGO_ALLOW_ASYNC_UNSAFE'] = 'true'
 import django; django.setup()
+# --- caminhos portáveis e Firefox local (Windows/Linux) ---
+import firefox_config  # noqa: E402
+from app_paths import temp_dir  # noqa: E402
+from projudi.playwright_firefox import launch_firefox  # noqa: E402
+
+TMP = str(temp_dir())
+
 from django.contrib.auth import get_user_model
 from processes.models import GeneratedDocument, DocumentTemplate, RAGExample
 from django.template import engines
@@ -55,7 +62,7 @@ print('\n========== 2. PLAYWRIGHT COM PERFIL FIREFOX ==========')
 from playwright.sync_api import sync_playwright
 
 # Caminho do perfil Firefox do usuario
-FF_PROFILE = '/mnt/c/Users/Ivan/AppData/Roaming/Mozilla/Firefox/Profiles/akugmqxq.default-release'
+FF_PROFILE = str(firefox_config.default_firefox_profile() or '')
 
 LINK_BASE = 'https://projudi.tjba.jus.br/projudi/'
 PROC_PROJUDI = '41020261733480'  # Proc 3099 (Jano)

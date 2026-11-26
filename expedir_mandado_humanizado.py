@@ -9,10 +9,17 @@ Uso:
 """
 
 import os, sys, time, json, re
-sys.path.insert(0, '/home/ivan/PythonProjects/send_of_v4')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ['DJANGO_SETTINGS_MODULE'] = 'core.settings'
 os.environ['DJANGO_ALLOW_ASYNC_UNSAFE'] = 'true'
 import django; django.setup()
+# --- caminhos portáveis e Firefox local (Windows/Linux) ---
+import firefox_config  # noqa: E402
+from app_paths import temp_dir  # noqa: E402
+from projudi.playwright_firefox import launch_firefox  # noqa: E402
+
+TMP = str(temp_dir())
+
 
 import requests
 from urllib.parse import urljoin, urlparse, parse_qs
@@ -29,7 +36,7 @@ from projudi.models import MandadoRecord, MandadoLog
 
 # ── CONFIG ──────────────────────────────────────────────────────
 TEMPLATE_MANDADO_ID = 6  # Mandado de Intimação (Transação Penal)
-COOKIES_PATH = '/mnt/d/Projudi/cookies.json'
+COOKIES_PATH = str(firefox_config.preferred_cookies_file())
 
 
 def carregar_cookies():
@@ -169,7 +176,7 @@ def expedir_mandado(mandado_id=None, processo_cnj=None, dry_run=False):
     sucesso = False
     try:
         with sync_playwright() as pw:
-            browser = pw.firefox.launch(headless=False, slow_mo=500)
+            browser = launch_firefox(pw, slow_mo=500)
             ctx_b = browser.new_context(viewport={'width': 1500, 'height': 950}, locale='pt-BR')
             ctx_b.add_cookies([
                 {'name': k, 'value': v, 'domain': 'projudi.tjba.jus.br', 'path': '/'}
@@ -186,7 +193,7 @@ def expedir_mandado(mandado_id=None, processo_cnj=None, dry_run=False):
             tem_form = page.evaluate('!!document.getElementById("seqCategoriaMovimentacao")')
             if not tem_form:
                 print('   ❌ Formulário não encontrado (sessão expirou?)')
-                page.screenshot(path='/tmp/pw_mandado_erro.png')
+                page.screenshot(path=TMP + '/pw_mandado_erro.png')
                 browser.close()
                 return False
 

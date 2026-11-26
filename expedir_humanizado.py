@@ -10,10 +10,17 @@ Exemplo:
   python expedir_humanizado.py --rastrear
 """
 import os, sys, time, random
-sys.path.insert(0, '/home/ivan/PythonProjects/send_of_v4')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ['DJANGO_SETTINGS_MODULE'] = 'core.settings'
 os.environ['DJANGO_ALLOW_ASYNC_UNSAFE'] = 'true'
 import django; django.setup()
+# --- caminhos portáveis e Firefox local (Windows/Linux) ---
+import firefox_config  # noqa: E402
+from app_paths import temp_dir  # noqa: E402
+from projudi.playwright_firefox import launch_firefox  # noqa: E402
+
+TMP = str(temp_dir())
+
 
 import json, re
 import requests
@@ -29,7 +36,7 @@ from processo_parser_ext import ProcessoParserExt
 
 # ====== CONFIG ======
 TEMPLATE_ID = 5
-COOKIES_PATH = '/mnt/d/Projudi/cookies.json'
+COOKIES_PATH = str(firefox_config.preferred_cookies_file())
 
 def rastrear_movimentacoes(paginas=3):
     """Varre AnalisarMovimentacao, baixa docs, analisa comandos, match RAG e expede."""
@@ -204,7 +211,7 @@ def expedir_processo(proc, session, cookies_dict):
     sucesso = False
     try:
         with sync_playwright() as pw:
-            browser = pw.firefox.launch(headless=False, slow_mo=500)
+            browser = launch_firefox(pw, slow_mo=500)
             ctx_b = browser.new_context(viewport={'width': 1500, 'height': 950}, locale='pt-BR')
             ctx_b.add_cookies([
                 {'name': k, 'value': v, 'domain': 'projudi.tjba.jus.br', 'path': '/'}
@@ -217,7 +224,7 @@ def expedir_processo(proc, session, cookies_dict):
             url_mov = f'https://projudi.tjba.jus.br/projudi/movimentacao/MovimentarProcesso?numeroProcesso={PROC_PROJUDI}'
             page.goto(url_mov, wait_until='networkidle')
             time.sleep(2)
-            page.screenshot(path='/tmp/pw_step1_movimentacao.png')
+            page.screenshot(path=TMP + '/pw_step1_movimentacao.png')
             
             tem_form = page.evaluate('!!document.getElementById("seqCategoriaMovimentacao")')
             if not tem_form:
@@ -225,7 +232,7 @@ def expedir_processo(proc, session, cookies_dict):
                     print('   ❌ SESSÃO EXPIROU! Login manual necessário.')
                 else:
                     print('   ❌ Formulário de movimentação não encontrado')
-                page.screenshot(path='/tmp/pw_erro_movimentacao.png')
+                page.screenshot(path=TMP + '/pw_erro_movimentacao.png')
                 browser.close()
                 return False
             
@@ -243,7 +250,7 @@ def expedir_processo(proc, session, cookies_dict):
                 if (panel) panel.style.display = 'block';
             }''')
             time.sleep(1.5)
-            page.screenshot(path='/tmp/pw_step2_injetado.png')
+            page.screenshot(path=TMP + '/pw_step2_injetado.png')
             print('   [2/5] 🖍️ Movimento 581 injetado')
             
             # === PASSO 2: Completar movimentacao (Cumprimento + Concluir) ===
@@ -280,7 +287,7 @@ def expedir_processo(proc, session, cookies_dict):
             except:
                 pass
             
-            page.screenshot(path='/tmp/pw_step2b_concluido.png')
+            page.screenshot(path=TMP + '/pw_step2b_concluido.png')
             print(f'   ✅ Movimentacao concluida! URL: {page.url}')
             
             # === PASSO 3: CumprimentoCartorio -> Redigir sem AR (link direto) ===
@@ -288,7 +295,7 @@ def expedir_processo(proc, session, cookies_dict):
             url_cump = 'https://projudi.tjba.jus.br/projudi/listagens/CumprimentoCartorio?tipo=oficio&acao=expedir'
             page.goto(url_cump, wait_until='networkidle')
             time.sleep(3)
-            page.screenshot(path='/tmp/pw_step3_cumprimento.png')
+            page.screenshot(path=TMP + '/pw_step3_cumprimento.png')
             
             # Clicar no ultimo link "Redigir sem AR" (flow documentado no FLUXO_COMPLETO.md)
             print('   🔍 Clicando no ultimo "Redigir sem AR"...')
@@ -306,12 +313,12 @@ def expedir_processo(proc, session, cookies_dict):
                 time.sleep(2)
             
             time.sleep(3)
-            page.screenshot(path='/tmp/pw_step4_editor.png')
+            page.screenshot(path=TMP + '/pw_step4_editor.png')
             print(f'   ✅ URL apos Redigir: {page.url}')
             
             if 'ExpedirCumprimento' not in page.url:
                 print(f'   ❌ ERRO: nao foi pra ExpedirCumprimento. URL: {page.url}')
-                page.screenshot(path='/tmp/pw_erro_redigir.png')
+                page.screenshot(path=TMP + '/pw_erro_redigir.png')
                 browser.close()
                 return False
             
@@ -372,7 +379,7 @@ def expedir_processo(proc, session, cookies_dict):
             print(f'   📝 FCKeditor: {result}')
             
             time.sleep(2)
-            page.screenshot(path='/tmp/pw_step4b_html_colado.png')
+            page.screenshot(path=TMP + '/pw_step4b_html_colado.png')
             print('   ✅ HTML colado')
             
             # === PASSO 5: Submeter ===
@@ -381,10 +388,10 @@ def expedir_processo(proc, session, cookies_dict):
             if submeter.count():
                 submeter.scroll_into_view_if_needed()
                 time.sleep(1)
-                page.screenshot(path='/tmp/pw_step4c_pre_submeter.png')
+                page.screenshot(path=TMP + '/pw_step4c_pre_submeter.png')
                 submeter.click()
                 time.sleep(5)
-                page.screenshot(path='/tmp/pw_step5_submetido.png')
+                page.screenshot(path=TMP + '/pw_step5_submetido.png')
                 print(f'   ✅ Submetido! URL: {page.url}')
             else:
                 print('   ❌ Submeter nao encontrado')
@@ -400,7 +407,7 @@ def expedir_processo(proc, session, cookies_dict):
                 time.sleep(1)
                 registrar.click()
                 time.sleep(3)
-                page.screenshot(path='/tmp/pw_step6_registrado.png')
+                page.screenshot(path=TMP + '/pw_step6_registrado.png')
                 registrou = True
                 print('   ✅ Registrar clicado!')
                 # Aguarda reload apos registrar (sobe um pouco no caso de confirmacao)
@@ -410,7 +417,7 @@ def expedir_processo(proc, session, cookies_dict):
                         break
             else:
                 print('   ⚠️ Registrar nao encontrado')
-                page.screenshot(path='/tmp/pw_step5_sem_registrar.png')
+                page.screenshot(path=TMP + '/pw_step5_sem_registrar.png')
 
             # Verificar sucesso: confirmar que a expedicao foi registrada.
             # So gravar no banco se o Registrar foi clicado E a pag final confirma.
@@ -455,7 +462,7 @@ def expedir_processo(proc, session, cookies_dict):
 # ====== FUNÇÃO: PROCESSAR FILA ======
 def processar_fila():
     """Lê fila de /tmp/fila_expedir_ciap.json e expede cada processo."""
-    fp = '/tmp/fila_expedir_ciap.json'
+    fp = TMP + '/fila_expedir_ciap.json'
     if not os.path.exists(fp):
         print('   Fila vazia! Nada para processar.')
         return
@@ -501,7 +508,7 @@ if not cookies_dict or 'JSESSIONID' not in cookies_dict:
     cookies_paths = [
         COOKIES_PATH,
         os.path.expanduser('~/.projudi_cookies.json'),
-        '/tmp/projudi_cookies.json',
+        TMP + '/projudi_cookies.json',
     ]
     for cp in cookies_paths:
         if os.path.exists(cp):

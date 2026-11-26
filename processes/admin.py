@@ -5,6 +5,8 @@ from django.utils.safestring import mark_safe
 from django.contrib import messages
 import json, os
 
+from app_paths import temp_file
+
 from .models import Process, Party, Movement, Deadline
 from .models import MovementCommand, CommunicationTracking, ComplianceHistory, ProcessSummary
 from .models import RAGExample, DocumentTemplate, GeneratedDocument
@@ -19,7 +21,7 @@ class ProcessAdmin(admin.ModelAdmin):
 
     def expedir_ciap(self, request, queryset):
         fila = []
-        fp = '/tmp/fila_expedir_ciap.json'
+        fp = str(temp_file('fila_expedir_ciap.json'))
         if os.path.exists(fp):
             with open(fp) as f:
                 fila = json.load(f)
@@ -30,7 +32,7 @@ class ProcessAdmin(admin.ModelAdmin):
             json.dump(fila, f)
         self.message_user(request, mark_safe(
             f'{len(queryset)} processo(s) na fila. Rode no terminal:<br>'
-            f'<code>cd /home/ivan/PythonProjects/send_of_v4 && source .venv/bin/activate && python expedir_humanizado.py --fila</code>'
+            f'<code>python expedir_humanizado.py --fila</code>'
         ))
     expedir_ciap.short_description = "📨 Expedir Ofício CIAP"
 
@@ -297,7 +299,7 @@ class RAGExampleAdmin(admin.ModelAdmin):
 
     def expedir_ciap(self, request, queryset):
         fila = []
-        fp = '/tmp/fila_expedir_ciap.json'
+        fp = str(temp_file('fila_expedir_ciap.json'))
         if os.path.exists(fp):
             with open(fp) as f:
                 fila = json.load(f)
@@ -309,7 +311,7 @@ class RAGExampleAdmin(admin.ModelAdmin):
         n = len([r for r in queryset if r.process])
         self.message_user(request, mark_safe(
             f'{n} processo(s) adicionados à fila. Rode no terminal:<br>'
-            f'<code>cd /home/ivan/PythonProjects/send_of_v4 && source .venv/bin/activate && python expedir_humanizado.py --fila</code>'
+            f'<code>python expedir_humanizado.py --fila</code>'
         ))
     expedir_ciap.short_description = "📨 Expedir Ofício CIAP"
 
@@ -343,22 +345,22 @@ class DocumentTemplateAdmin(admin.ModelAdmin):
         if not procs:
             self.message_user(request, 'Nenhum processo ativo com RAG para este template.', level='WARNING')
             return redirect('admin:processes_documenttemplate_change', template_id)
-        fp = '/tmp/fila_expedir_ciap.json'
+        fp = str(temp_file('fila_expedir_ciap.json'))
         with open(fp, 'w') as f:
             json.dump([p.number for p in procs], f)
         self.message_user(request, mark_safe(
             f'{len(procs)} processo(s) na fila. Rode no terminal:<br>'
-            f'<code>cd /home/ivan/PythonProjects/send_of_v4 && source .venv/bin/activate && python expedir_humanizado.py --fila</code>'
+            f'<code>python expedir_humanizado.py --fila</code>'
         ))
         return redirect('admin:processes_documenttemplate_change', template_id)
 
     def rastrear_view(self, request, template_id):
-        fp = '/tmp/rastrear_sinal.json'
+        fp = str(temp_file('rastrear_sinal.json'))
         with open(fp, 'w') as f:
             json.dump({'rastrear': True, 'paginas': 3, 'template_id': template_id}, f)
         self.message_user(request, mark_safe(
             '✅ Sinal de rastreamento ativado! Rode no terminal:<br>'
-            f'<code>cd /home/ivan/PythonProjects/send_of_v4 && source .venv/bin/activate && python expedir_humanizado.py --rastrear</code>'
+            f'<code>python expedir_humanizado.py --rastrear</code>'
         ))
         return redirect('admin:processes_documenttemplate_change', template_id)
 

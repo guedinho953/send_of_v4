@@ -5,15 +5,17 @@ Este servico orquestra a integracao com o sistema Projudi usando
 os modulos existentes: projudi_bot, projudi_client, etc.
 """
 
+import subprocess
 import sys
 from pathlib import Path
-from django.conf import settings
-import glob
-import os
 
-# Detecta automaticamente perfil Firefox do Windows via WSL
-WIN_FIREFOX_PROFILES = glob.glob('/mnt/c/Users/*/AppData/Roaming/Mozilla/Firefox/Profiles/*.default*')
-DEFAULT_FIREFOX_PROFILE = WIN_FIREFOX_PROFILES[0] if WIN_FIREFOX_PROFILES else None
+from django.conf import settings
+
+import firefox_config
+
+# Perfil do Firefox local (Windows nativo, WSL ou Linux). O próprio módulo
+# firefox_config resolve os caminhos de cada sistema.
+DEFAULT_FIREFOX_PROFILE = firefox_config.default_firefox_profile()
 
 
 class ProjudiService:
@@ -67,18 +69,17 @@ class ProjudiService:
     # OFICIOS  (usa cookies salvos no Django -> acesso direto via requests)
     # ------------------------------------------------------------------
     def _get_session_from_cookies(self):
-        """
-        Cria um requests.Session a partir dos cookies.
-        Prioridade:
-        1. /mnt/d/Projudi/cookies.json (capturado pelo Windows)
-        2. Captura automática via powershell.exe (Windows nativo)
-        3. ProjudiSession no banco Django
+        """Cria um requests.Session a partir dos cookies do Firefox local.
+
+        Ordem de prioridade (funciona em Windows nativo, WSL e Linux):
+        1. JSON de cookies capturado anteriormente;
+        2. captura direta do cookies.sqlite (+ WAL) do Firefox local;
+        3. script de captura em subprocesso;
+        4. browser_cookie3;
+        5. sessão salva no banco Django.
         """
         import requests
         from .models import ProjudiSession
-        import json
-        from pathlib import Path
-        import subprocess
 
         def _criar_session(cookies_dict):
             session = requests.Session()
@@ -114,109 +115,86 @@ class ProjudiService:
             except Exception:
                 return False
 
-        # 1) Tenta o arquivo JSON (mais confiável - capturado pelo Windows)
-        caminhos_json = [
-            Path('/mnt/d/Projudi/cookies.json'),
-            Path('/mnt/c/Projudi/cookies.json'),
-            Path.home() / '.projudi_cookies.json',
-            Path('/tmp/projudi_cookies.json'),
-        ]
-
-        for caminho in caminhos_json:
-            if caminho.exists():
-                try:
-                    with open(caminho, 'r', encoding='utf-8') as f:
-                        cookies_dict = json.load(f)
-                    if 'JSESSIONID' in cookies_dict:
-                        # Aquecer e validar sessão
-                        session, _ = _criar_session(cookies_dict)
-                        if _session_valida(session):
-                            # Cookies válidos — salva no banco
-                            ProjudiSession.objects.update_or_create(
-                                user=self.user,
-                                defaults={
-                                    'cookies': cookies_dict,
-                                    'status': 'active',
-                                    'tenant': self.user.tenant if hasattr(self.user, 'tenant') else None,
-                                }
-                            )
-                            return session, cookies_dict
-                        else:
-                            print(f"[INFO] Cookies em {caminho} expirados. Tentando próximo método...")
-                except Exception:
-                    pass
-
-        # 2) Tenta capturar automaticamente via powershell.exe
-        try:
-            script_path = 'D:\\Projudi\\capture_cookies_windows.py'
-            result = subprocess.run(
-                ['powershell.exe', '-Command',
-                 f'python "{script_path}" --quiet'],
-                capture_output=True, text=True, timeout=30,
+        def _salvar_no_banco(cookies_dict):
+            ProjudiSession.objects.update_or_create(
+                user=self.user,
+                defaults={
+                    'cookies': cookies_dict,
+                    'status': 'active',
+                    'tenant': getattr(self.user, 'tenant', None),
+                }
             )
-            # Re-tenta ler após captura
-            for caminho in caminhos_json:
-                if caminho.exists():
-                    try:
-                        with open(caminho, 'r', encoding='utf-8') as f:
-                            cookies_dict = json.load(f)
-                        if 'JSESSIONID' in cookies_dict:
-                            session, _ = _criar_session(cookies_dict)
-                            if _session_valida(session):
-                                ProjudiSession.objects.update_or_create(
-                                    user=self.user,
-                                    defaults={
-                                        'cookies': cookies_dict,
-                                        'status': 'active',
-                                        'tenant': self.user.tenant if hasattr(self.user, 'tenant') else None,
-                                    }
-                                )
-                                return session, cookies_dict
-                            else:
-                                print("[INFO] Cookies capturados via PowerShell expirados.")
-                    except Exception:
-                        pass
+
+        def _tentar(cookies_dict, origem):
+            if not cookies_dict or 'JSESSIONID' not in cookies_dict:
+                return None
+            session, _ = _criar_session(cookies_dict)
+            if not _session_valida(session):
+                print(f'[INFO] Cookies de {origem} expirados.')
+                return None
+            firefox_config.write_cookies(cookies_dict)
+            _salvar_no_banco(cookies_dict)
+            return session, cookies_dict
+
+        # 1) JSON gravado pela captura anterior
+        for caminho in firefox_config.cookies_file_candidates():
+            cookies_dict = firefox_config.read_cookies(caminho)
+            resultado = _tentar(cookies_dict, str(caminho))
+            if resultado:
+                return resultado
+
+        # 2) Captura direta no processo (melhor caminho no Windows nativo)
+        try:
+            cookies_dict = firefox_config.capture_cookies()
+            resultado = _tentar(cookies_dict, 'captura direta do Firefox')
+            if resultado:
+                return resultado
+            if cookies_dict:
+                print(f'[INFO] Firefox local: {len(cookies_dict)} cookies, '
+                      'mas sem JSESSIONID. Faca login no Projudi.')
+        except Exception as e:
+            print(f'[INFO] Captura direta do Firefox falhou: {e}')
+
+        # 3) Script de captura em subprocesso (util no WSL e em casos de
+        #    permissao/encoding diferentes).
+        try:
+            script = Path(settings.BASE_DIR) / 'scripts' / 'capture_cookies_windows.py'
+            if script.is_file():
+                subprocess.run(
+                    [sys.executable, str(script), '--quiet'],
+                    capture_output=True, text=True, encoding='utf-8',
+                    errors='replace', timeout=60,
+                )
+                for caminho in firefox_config.cookies_file_candidates():
+                    resultado = _tentar(
+                        firefox_config.read_cookies(caminho), str(caminho))
+                    if resultado:
+                        return resultado
         except Exception:
             pass
 
-        # 3) Fallback: browser_cookie3 direto (pode funcionar no Windows)
+        # 4) Fallback: browser_cookie3 direto
         try:
             import browser_cookie3
-            cj = browser_cookie3.firefox(domain_name='projudi.tjba.jus.br')
-            cookies_ff = {c.name: c.value for c in cj}
-            if cookies_ff and 'JSESSIONID' in cookies_ff:
-                session, _ = _criar_session(cookies_ff)
-                if _session_valida(session):
-                    # Salvou no arquivo e no banco
-                    for caminho in caminhos_json:
-                        if caminho.parent.exists():
-                            with open(caminho, 'w') as f:
-                                json.dump(cookies_ff, f)
-                            break
-                    ProjudiSession.objects.update_or_create(
-                        user=self.user,
-                        defaults={
-                            'cookies': cookies_ff,
-                            'status': 'active',
-                            'tenant': self.user.tenant if hasattr(self.user, 'tenant') else None,
-                        }
-                    )
-                    return session, cookies_ff
-                else:
-                    print("[INFO] browser_cookie3: cookies expirados.")
+            jar = browser_cookie3.firefox(domain_name='projudi.tjba.jus.br')
+            cookies_ff = {c.name: c.value for c in jar}
+            resultado = _tentar(cookies_ff, 'browser_cookie3')
+            if resultado:
+                return resultado
         except Exception:
             pass
 
-        # 4) Fallback: sessão salva no banco
-        sessao = ProjudiSession.objects.filter(user=self.user, status='active').first()
+        # 5) Fallback: sessão salva no banco
+        sessao = ProjudiSession.objects.filter(
+            user=self.user, status='active').first()
         if sessao and sessao.cookies:
             cookies_dict = sessao.cookies if isinstance(sessao.cookies, dict) else {}
             if 'JSESSIONID' in cookies_dict:
                 session, _ = _criar_session(cookies_dict)
                 if _session_valida(session):
                     return session, cookies_dict
-                else:
-                    print("[INFO] Sessão do banco expirada. Re-sincronize em /projudi/sessoes/")
+                print('[INFO] Sessão do banco expirada. '
+                      'Re-sincronize em /projudi/sessoes/')
 
         print("[WARN] _get_session_from_cookies: JSESSIONID não encontrado em nenhuma fonte")
         return None
@@ -226,22 +204,27 @@ class ProjudiService:
         Lista ofícios expedidos.
         
         Estratégia de cookies (ordem de prioridade):
-        1. Arquivo JSON gerado pelo script Windows: scripts/capture_cookies_windows.py
-        2. ProjudiBot (browser_cookie3 no Linux - funciona se cookies desbloqueados)
-        3. ProjudiSession (sessão salva no banco Django)
-        
-        O cookie JSESSIONID é obrigatório e só existe na memória do navegador logado.
+        1. JSON gerado pela captura (caminho multiplataforma)
+        2. Captura direta do Firefox local (SQLite + WAL)
+        3. ProjudiBot / browser_cookie3
+        4. ProjudiSession (sessão salva no banco Django)
+
+        O cookie JSESSIONID é obrigatório.
         """
         client = self.get_client()
 
         import sys
         sys.path.insert(0, str(settings.BASE_DIR))
         from projudi_bot import ProjudiBot
-        
+
         cookies = ProjudiBot.carregar_cookies_do_arquivo()
-        
+
         if not cookies or 'JSESSIONID' not in cookies:
-            print("[INFO] Sem cookies JSON válido. Tentando browser_cookie3...")
+            print("[INFO] Sem cookies JSON válido. Capturando do Firefox local...")
+            cookies = firefox_config.capture_cookies()
+
+        if not cookies or 'JSESSIONID' not in cookies:
+            print("[INFO] Tentando ProjudiBot/browser_cookie3...")
             bot = self.get_bot()
             bot.criar_sessao()
             cookies = bot.exportar_cookies()
@@ -258,10 +241,10 @@ class ProjudiService:
             raise Exception(
                 "Não foi possível capturar a sessão do Projudi.\n\n"
                 "SOLUÇÕES:\n"
-                "1. (Recomendado) No Windows, rode:\n"
-                "   python scripts/capture_cookies_windows.py\n\n"
-                "2. Ou no Linux, desbloqueie os cookies do Firefox:\n"
-                "   about:config -> set 'network.cookie.cookieBehavior' = 0\n\n"
+                "1. Abra o Firefox local e faca login no Projudi;\n"
+                "2. Rode a captura de cookies:\n"
+                "   python scripts/capture_cookies_windows.py\n"
+                "   (no Windows tambem existe CAPTURAR_COOKIES.bat)\n\n"
                 "Certifique-se de estar logado no Projudi no Firefox antes."
             )
 
@@ -388,20 +371,15 @@ class ProjudiService:
             ProjudiSession.objects.create(user=self.user, cookies=cookies_dict, status='active')
 
     def _capturar_cookies_fresh(self):
-        """
-        Captura cookies frescos do Firefox.
-        Estratégia:
-        1. Tenta arquivo JSON (bot rodando no Windows)
-        2. Tenta browser_cookie3 (ProjudiBot)
-        3. Fallback Selenium (memória do Firefox)
-        """
-        import requests
-        from bs4 import BeautifulSoup
+        """Captura cookies frescos do Firefox local.
 
-        # Estratégia 1: Arquivo JSON
+        Estratégias: arquivo JSON, captura direta do SQLite (Windows/Linux),
+        ProjudiBot/browser_cookie3 e, por último, Selenium com o perfil local.
+        """
+        # Estratégia 1: arquivo JSON
         sys.path.insert(0, str(settings.BASE_DIR))
         from projudi_bot import ProjudiBot
-        
+
         cookies_json = ProjudiBot.carregar_cookies_do_arquivo()
         if cookies_json:
             print(f"[INFO] Cookies JSON: {list(cookies_json.keys())}")
@@ -411,35 +389,48 @@ class ProjudiService:
                 return session
             print("[WARN] JSON expirado")
 
-        # Estratégia 2: browser_cookie3 (ProjudiBot)
+        # Estratégia 2: captura direta do Firefox (SQLite + WAL)
+        cookies_diretos = firefox_config.capture_cookies()
+        if cookies_diretos:
+            print(f"[INFO] Cookies Firefox: {list(cookies_diretos.keys())}")
+            session = self._criar_session_com_cookies(cookies_diretos)
+            if self._testar_sessao(session):
+                firefox_config.write_cookies(cookies_diretos)
+                print("[OK] Sessão válida via Firefox local")
+                return session
+            print("[WARN] Cookies do Firefox expirados")
+
+        # Estratégia 3: browser_cookie3 (ProjudiBot)
         bot = self.get_bot()
         bot.criar_sessao()
         cookies_bot = bot.exportar_cookies()
         print(f"[INFO] Cookies Bot: {list(cookies_bot.keys())}")
-        
+
         if 'JSESSIONID' in cookies_bot or bot.testar_login():
             print("[OK] Sessão válida via ProjudiBot")
             return bot.session
         print("[WARN] Bot sem JSESSIONID, tentando Selenium...")
 
-        # Estratégia 3: Selenium (memória do Firefox)
+        # Estratégia 4: Selenium com o perfil do Firefox local
         try:
             import time
             from selenium import webdriver
             from selenium.webdriver.firefox.options import Options
             from selenium.webdriver.firefox.service import Service
-            from selenium.webdriver.firefox.firefox_profile import FirefoxProfile
             from webdriver_manager.firefox import GeckoDriverManager
-            import glob
 
-            win_profiles = glob.glob('/mnt/c/Users/*/AppData/Roaming/Mozilla/Firefox/Profiles/*.default*')
-            if not win_profiles:
+            perfil = firefox_config.default_firefox_profile()
+            if not perfil:
                 raise Exception("Nenhum perfil Firefox encontrado")
-            
-            profile = FirefoxProfile(win_profiles[0])
+
             options = Options()
-            options.profile = profile
-            
+            options.add_argument('-profile')
+            options.add_argument(str(perfil))
+
+            firefox_bin = firefox_config.find_firefox()
+            if firefox_bin:
+                options.binary_location = str(firefox_bin)
+
             driver = webdriver.Firefox(
                 service=Service(GeckoDriverManager().install()),
                 options=options
@@ -447,19 +438,20 @@ class ProjudiService:
             driver.set_window_size(1280, 800)
             driver.get("https://projudi.tjba.jus.br/projudi/")
             time.sleep(3)
-            
+
             raw_cookies = driver.get_cookies()
             selenium_cookies = {c['name']: c['value'] for c in raw_cookies}
             print(f"[INFO] Selenium cookies: {list(selenium_cookies.keys())}")
-            
+
             driver.quit()
-            
+
             session = self._criar_session_com_cookies(selenium_cookies)
             if self._testar_sessao(session):
+                firefox_config.write_cookies(selenium_cookies)
                 print("[OK] Sessão válida via Selenium")
                 return session
             print("[WARN] Selenium também expirado")
-            
+
         except Exception as e:
             print(f"[ERRO] Selenium: {e}")
 

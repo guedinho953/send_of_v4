@@ -12,6 +12,8 @@ from django.conf import settings
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 
+from app_paths import temp_file
+
 from .models import OficioRecord, OficioLog
 from .oficio_service import OficioService
 from .services import ProjudiService
@@ -717,7 +719,7 @@ class OficioExpedirCiapView(LoginRequiredMixin, View):
             return HttpResponseRedirect(reverse('projudi:oficio_dashboard'))
 
         # Escrever fila
-        fila_path = '/tmp/fila_expedir_ciap.json'
+        fila_path = str(temp_file('fila_expedir_ciap.json'))
         with open(fila_path, 'w') as f:
             json.dump(cnjs, f)
         

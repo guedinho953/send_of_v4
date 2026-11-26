@@ -18,15 +18,13 @@ PROJECT_ROOT = str(settings.BASE_DIR)
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
+from app_paths import temp_file
+
 from .models import MovimentacaoRecord, MovimentacaoLog
+from .playwright_firefox import launch_firefox
 
 # Código do localizador → descrição (para pre-check por conteúdo —
 # localizadores compostos tipo "AGUARDAR ASSINAR; PESQUISA DE ENDEREÇO")
-# WSLg: sem renderização por software o Firefox do Playwright abre a janela
-# EM BRANCO (só o ícone "pinguim") — o usuário não vê a assinatura pra clicar.
-_FIREFOX_ENV = {**os.environ, 'MOZ_DISABLE_GPU_SANDBOX': '1',
-                'LIBGL_ALWAYS_SOFTWARE': '1'}
-_FIREFOX_PREFS = {'gfx.webrender.software': True}
 
 
 def _procurar_campo_senha(page, timeout=10):
@@ -263,8 +261,7 @@ class MovimentacaoService:
         sucesso = False
         try:
             with sync_playwright() as pw:
-                browser = pw.firefox.launch(headless=False, slow_mo=500,
-                                            env=_FIREFOX_ENV, firefox_user_prefs=_FIREFOX_PREFS)
+                browser = launch_firefox(pw, slow_mo=500)
                 ctx_b = browser.new_context(
                     viewport={'width': 1500, 'height': 950}, locale='pt-BR')
                 ctx_b.add_cookies([
@@ -721,8 +718,7 @@ class MovimentacaoService:
         try:
             from playwright.sync_api import sync_playwright
             with sync_playwright() as pw:
-                browser = pw.firefox.launch(headless=False, slow_mo=500,
-                                            env=_FIREFOX_ENV, firefox_user_prefs=_FIREFOX_PREFS)
+                browser = launch_firefox(pw, slow_mo=500)
                 ctx_b = browser.new_context(
                     viewport={'width': 1500, 'height': 950}, locale='pt-BR')
                 ctx_b.add_cookies([
@@ -976,8 +972,9 @@ class MovimentacaoService:
                                 pass
                             # Screenshot do estado atual (assinatura?) pra debug
                             try:
-                                page.screenshot(path='/tmp/certidao_assinatura.png')
-                                print('   📸 Screenshot: /tmp/certidao_assinatura.png')
+                                _shot = str(temp_file('certidao_assinatura.png'))
+                                page.screenshot(path=_shot)
+                                print(f'   📸 Screenshot: {_shot}')
                             except Exception:
                                 pass
                             if sys.stdout.isatty():
@@ -2083,8 +2080,7 @@ class MovimentacaoService:
 
         try:
             with sync_playwright() as pw:
-                browser = pw.firefox.launch(headless=False, slow_mo=400,
-                                            env=_FIREFOX_ENV, firefox_user_prefs=_FIREFOX_PREFS)
+                browser = launch_firefox(pw, slow_mo=400)
                 ctx_b = browser.new_context(
                     viewport={'width': 1500, 'height': 950}, locale='pt-BR')
                 ctx_b.add_cookies([
@@ -3120,8 +3116,9 @@ class MovimentacaoService:
             print('   ⏳ A página ExpedirIntimacao ficou aberta — assine')
             print('   ⏳ manualmente (senha + Assinar) se quiser concluir.')
             try:
-                page.screenshot(path='/tmp/intimacao_ar_pendente.png')
-                print('   📸 Screenshot: /tmp/intimacao_ar_pendente.png')
+                _shot = str(temp_file('intimacao_ar_pendente.png'))
+                page.screenshot(path=_shot)
+                print(f'   📸 Screenshot: {_shot}')
             except Exception:
                 pass
             if sys.stdout.isatty():
@@ -3174,8 +3171,9 @@ class MovimentacaoService:
             except Exception:
                 pass
             try:
-                page.screenshot(path='/tmp/intimacao_ar_assinatura.png')
-                print('   📸 Screenshot: /tmp/intimacao_ar_assinatura.png')
+                _shot = str(temp_file('intimacao_ar_assinatura.png'))
+                page.screenshot(path=_shot)
+                print(f'   📸 Screenshot: {_shot}')
             except Exception:
                 pass
             if sys.stdout.isatty():

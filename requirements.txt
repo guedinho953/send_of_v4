@@ -12,6 +12,7 @@ requests>=2.31
 selenium>=4.15
 webdriver-manager>=4.0
 browser-cookie3>=0.19
+playwright>=1.49
 
 # ── Processamento de dados ──
 pandas>=2.1

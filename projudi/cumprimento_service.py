@@ -21,6 +21,8 @@ PROJECT_ROOT = str(settings.BASE_DIR)
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
+from app_paths import temp_file
+
 from .models import CumprimentoRecord, CumprimentoLog
 from .services import ProjudiService
 
@@ -1400,7 +1402,8 @@ class CumprimentoService:
                         #    o marcador, mas a imagem pode ter a certidão).
                         try:
                             pix = page.get_pixmap(matrix=fitz.Matrix(2.5, 2.5))
-                            tmp = '/tmp/_prec_ocr_%d.png' % (page.number + 1)
+                            tmp = str(temp_file(
+                                '_prec_ocr_%d.png' % (page.number + 1)))
                             pix.save(tmp)
                             res, _ = engine(tmp)
                         except Exception:

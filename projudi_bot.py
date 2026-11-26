@@ -1,48 +1,66 @@
-import requests
-import browser_cookie3
 import threading
 import time
-import os
-import sqlite3
-import glob
-import shutil
-import tempfile
+from pathlib import Path
 
-# Suporte a múltiplos navegadores e caminho customizado do Windows via WSL
+import requests
+
+import firefox_config
+
+# Suporte a múltiplos navegadores e caminho customizado do perfil.
+# A detecção de Windows/WSL/Linux fica centralizada em firefox_config.py.
+
 
 def get_cookies_from_browser(domain='projudi.tjba.jus.br', browser='auto', profile_path=None):
     """
     Tenta capturar cookies do navegador especificado.
+
     browser: 'auto', 'firefox', 'chrome', 'edge', 'chromium'
-    profile_path: caminho customizado do perfil (ex: Windows no WSL)
+    profile_path: caminho customizado do perfil do Firefox
     """
     errors = []
-    
-    # Tenta extrair cookies via SQLite (funciona para cookies comuns, nao para session cookies)
-    def _try_sqlite_extract(path, label):
-        try:
-            c = _extract_firefox_cookies_custom(path, domain)
-            if c and 'JSESSIONID' in c:
-                print(f"Cookies capturados do Firefox {label}")
-                return c
-            if c:
-                print(f"[INFO] SQLite {label}: achou {len(c)} cookies (sem JSESSIONID)")
-        except Exception as e:
-            errors.append(f"SQLite {label}: {e}")
-        return None
-
-    if profile_path:
-        result = _try_sqlite_extract(profile_path, f'(path: {profile_path})')
-        if result:
-            return result
 
     if browser in ('auto', 'firefox'):
-        win_profiles = glob.glob('/mnt/c/Users/*/AppData/Roaming/Mozilla/Firefox/Profiles/*.default*')
-        for p in win_profiles:
-            result = _try_sqlite_extract(p, f'Windows: {p}')
-            if result:
-                return result
-    
+        if profile_path:
+            try:
+                cookies = firefox_config.read_firefox_sqlite(
+                    Path(profile_path) / 'cookies.sqlite',
+                    domain,
+                )
+                if cookies and 'JSESSIONID' in cookies:
+                    print(f'Cookies capturados do Firefox (path: {profile_path})')
+                    return cookies
+                if cookies:
+                    print(f'[INFO] SQLite {profile_path}: achou '
+                          f'{len(cookies)} cookies (sem JSESSIONID)')
+            except Exception as e:
+                errors.append(f'SQLite {profile_path}: {e}')
+
+        for perfil in firefox_config.firefox_profiles():
+            try:
+                cookies = firefox_config.read_firefox_sqlite(
+                    perfil / 'cookies.sqlite', domain)
+                if cookies and 'JSESSIONID' in cookies:
+                    print(f'Cookies capturados do Firefox: {perfil}')
+                    return cookies
+                if cookies:
+                    print(f'[INFO] SQLite {perfil}: achou '
+                          f'{len(cookies)} cookies (sem JSESSIONID)')
+            except Exception as e:
+                errors.append(f'SQLite {perfil}: {e}')
+
+    if browser != 'auto':
+        return _cookies_browser_cookie3(browser, domain, errors)
+
+    return _cookies_browser_cookie3('auto', domain, errors)
+
+
+def _cookies_browser_cookie3(browser, domain, errors):
+    try:
+        import browser_cookie3
+    except ImportError:
+        print('[ERRO] browser_cookie3 nao instalado.')
+        return {}
+
     navegadores = {
         'chrome': browser_cookie3.chrome,
         'chromium': browser_cookie3.chromium,
@@ -51,61 +69,40 @@ def get_cookies_from_browser(domain='projudi.tjba.jus.br', browser='auto', profi
         'opera': browser_cookie3.opera,
         'brave': browser_cookie3.brave,
     }
-    
+
     if browser != 'auto':
-        if browser in navegadores:
-            try:
-                cj = navegadores[browser](domain_name=domain)
-                return {c.name: c.value for c in cj}
-            except Exception as e:
-                errors.append(f"{browser}: {e}")
-    else:
-        for name, func in navegadores.items():
-            try:
-                cj = func(domain_name=domain)
-                cookies = {c.name: c.value for c in cj}
-                if cookies:
-                    print(f"Cookies capturados do {name}")
-                    return cookies
-            except Exception as e:
-                errors.append(f"{name}: {e}")
-    
-    print(f"Erro ao capturar cookies: {errors}")
+        func = navegadores.get(browser)
+        if func is None:
+            return {}
+        try:
+            jar = func(domain_name=domain)
+            return {c.name: c.value for c in jar}
+        except Exception as e:
+            errors.append(f'{browser}: {e}')
+            print(f'Erro ao capturar cookies: {errors}')
+            return {}
+
+    for nome in ('firefox', 'edge', 'chrome', 'chromium', 'brave', 'opera'):
+        try:
+            jar = navegadores[nome](domain_name=domain)
+            cookies = {c.name: c.value for c in jar}
+            if cookies:
+                print(f'Cookies capturados do {nome}')
+                return cookies
+        except Exception as e:
+            errors.append(f'{nome}: {e}')
+
+    print(f'Erro ao capturar cookies: {errors}')
     return {}
 
 
 def _extract_firefox_cookies_custom(profile_path, domain):
-    """Extrai cookies de um perfil Firefox customizado (ex: Windows via WSL)"""
-    db_path = os.path.join(profile_path, 'cookies.sqlite')
-    
-    if not os.path.exists(db_path):
+    """Extrai cookies de um perfil Firefox customizado (compatibilidade)."""
+    try:
+        return firefox_config.read_firefox_sqlite(
+            Path(profile_path) / 'cookies.sqlite', domain)
+    except Exception:
         return {}
-    
-    # Copia SQLite + WAL + SHM para temp (WAL tem dados nao comitados)
-    with tempfile.TemporaryDirectory() as tmpdir:
-        for suffix in ('', '-wal', '-shm'):
-            src = db_path + suffix
-            if os.path.exists(src):
-                shutil.copy2(src, os.path.join(tmpdir, 'cookies.sqlite' + suffix))
-        
-        tmp_path = os.path.join(tmpdir, 'cookies.sqlite')
-        conn = sqlite3.connect(tmp_path)
-        conn.execute('PRAGMA wal_checkpoint(TRUNCATE)')
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT name, value, host FROM moz_cookies 
-            WHERE host LIKE ?
-        """, (f'%{domain}%',))
-        
-        rows = cursor.fetchall()
-        cookies = {}
-        for name, value, host in rows:
-            cookies[name] = value
-        
-        conn.close()
-    
-    return cookies
 
 
 class ProjudiBot:
@@ -217,48 +214,16 @@ class ProjudiBot:
         t.start()
 
     def exportar_cookies_para_arquivo(self, caminho=None):
-        """Salva cookies da sessão em um arquivo JSON para uso no WSL."""
-        import json
-        if caminho is None:
-            # Padrao: pasta do projeto ou mnt/d
-            from pathlib import Path
-            possiveis = [
-                Path('/mnt/d/Projudi/cookies.json'),
-                Path.home() / '.projudi_cookies.json',
-                Path('/tmp/projudi_cookies.json'),
-            ]
-            for p in possiveis:
-                p.parent.mkdir(parents=True, exist_ok=True)
-                if p.parent.exists():
-                    caminho = str(p)
-                    break
-        
+        """Salva cookies da sessão em um arquivo JSON compartilhado."""
         cookies = self.exportar_cookies()
-        with open(caminho, 'w', encoding='utf-8') as f:
-            json.dump(cookies, f, indent=2, ensure_ascii=False)
-        print(f"[INFO] Cookies exportados para: {caminho}")
-        return caminho
+        destino = firefox_config.write_cookies(cookies, caminho)
+        print(f'[INFO] Cookies exportados para: {destino}')
+        return str(destino)
 
     @staticmethod
     def carregar_cookies_do_arquivo(caminho=None):
-        """Carrega cookies de um arquivo JSON (usado no WSL)."""
-        import json
-        from pathlib import Path
-        if caminho is None:
-            possiveis = [
-                Path('/mnt/d/Projudi/cookies.json'),
-                Path.home() / '.projudi_cookies.json',
-                Path('/tmp/projudi_cookies.json'),
-            ]
-            for p in possiveis:
-                if p.exists():
-                    caminho = str(p)
-                    break
-        
-        if caminho and Path(caminho).exists():
-            with open(caminho, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        return {}
+        """Carrega cookies do arquivo JSON compartilhado."""
+        return firefox_config.read_cookies(caminho)
 
     def executar(self):
         self.criar_sessao()

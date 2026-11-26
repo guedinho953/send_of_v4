@@ -14,6 +14,7 @@
 | 03 | [PROCESSAR-PENDENTES](03-PROCESSAR-PENDENTES.md) | View, fluxo de impossibilidade | Como funciona o botão |
 | 04 | [MODO-ESTUDANTE](04-MODO-ESTUDANTE.md) | Explicação linha por linha | Aprender o código |
 | 05 | [CONFIGURAR-RAGS](05-CONFIGURAR-RAGS.md) | sequencia_cumprimento: tipos de passo, códigos (localizador, subtipo, prazo), polo, exemplos | Configurar RAGExamples |
+| 06 | [WINDOWS_FIREFOX](WINDOWS_FIREFOX.md) | Windows nativo, Firefox local, Playwright, modo portátil e Ubuntu | Rodar no Windows/Linux |
 
 ---
 
@@ -52,8 +53,10 @@ docs/04-MODO-ESTUDANTE.md     → Explicação de CADA linha
 | `projudi/services.py` | Service geral (`_get_session_from_cookies`) |
 | `projudi/urls.py` | Rotas do app projudi |
 | `templates/projudi/oficio_dashboard.html` | Dashboard de ofícios |
-| `scripts/capture_cookies_windows.py` | Script de captura de cookies (Windows) |
-| `/mnt/d/Projudi/cookies.json` | Arquivo de cookies |
-| `/mnt/d/Projudi/capture_cookies_windows.py` | Cópia do script para Windows |
+| `scripts/capture_cookies_windows.py` | Script de captura de cookies (Windows/WSL/Linux) |
+| `firefox_config.py` | Detecção do Firefox local e caminho do JSON de cookies |
+| `%LOCALAPPDATA%\send_of_v4\cookies.json` | Arquivo de cookies no Windows |
+| `~/.local/share/send_of_v4/cookies.json` | Arquivo de cookies no Linux |
+| `/mnt/d/Projudi/cookies.json` | Caminho legado (WSL) ainda aceito na leitura |
 | `scripts/backup_db.sh` | Backup do banco |
 | `docs/` | Esta documentação |

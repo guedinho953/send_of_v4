@@ -33,4 +33,7 @@ backups/
 
 # Fila / temporários
 /tmp/
+var/
 *.tmp
+*.pid
+.server_pid

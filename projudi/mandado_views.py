@@ -15,6 +15,8 @@ from django.conf import settings
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 
+from app_paths import temp_file
+
 from .models import MandadoRecord, MandadoLog, ProjudiSession
 from .mandado_service import MandadoService
 from .services import ProjudiService
@@ -384,7 +386,7 @@ class AutoRastrearToggleView(LoginRequiredMixin, View):
         import subprocess, os, sys
         from django.conf import settings
         script = os.path.join(settings.BASE_DIR, 'auto_rastrear.py')
-        pid_file = '/tmp/auto_rastrear.pid'
+        pid_file = str(temp_file('auto_rastrear.pid'))
 
         if os.path.exists(pid_file):
             try:

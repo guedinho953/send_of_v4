@@ -15,6 +15,8 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 import os
 
+from app_paths import temp_file
+
 from .models import CumprimentoRecord, CumprimentoLog, ProjudiSession
 from .cumprimento_service import CumprimentoService
 from .services import ProjudiService
@@ -67,7 +69,8 @@ class CumprimentoDashboardView(LoginRequiredMixin, TemplateView):
         )
 
         context['session_active'] = self._session_ativa(user)
-        context['auto_rastrear_ativo'] = os.path.exists('/tmp/auto_rastrear.pid')
+        context['auto_rastrear_ativo'] = os.path.exists(
+            str(temp_file('auto_rastrear.pid')))
         return context
 
     def _session_ativa(self, user):

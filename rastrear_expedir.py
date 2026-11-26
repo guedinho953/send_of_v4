@@ -13,10 +13,17 @@ Fluxo:
 """
 
 import os, sys, time, random, re
-sys.path.insert(0, '/home/ivan/PythonProjects/send_of_v4')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ['DJANGO_SETTINGS_MODULE'] = 'core.settings'
 os.environ['DJANGO_ALLOW_ASYNC_UNSAFE'] = 'true'
 import django; django.setup()
+# --- caminhos portáveis e Firefox local (Windows/Linux) ---
+import firefox_config  # noqa: E402
+from app_paths import temp_dir  # noqa: E402
+from projudi.playwright_firefox import launch_firefox  # noqa: E402
+
+TMP = str(temp_dir())
+
 
 import json
 import requests
@@ -49,9 +56,9 @@ print(f'\nProcesso CNJ: {PROC_NUM}')
 # ====== 1. CARREGAR COOKIES ======
 print('\n========== 1. Carregando cookies ==========')
 cookies_paths = [
-    '/mnt/d/Projudi/cookies.json',
+    str(firefox_config.preferred_cookies_file()),
     os.path.expanduser('~/.projudi_cookies.json'),
-    '/tmp/projudi_cookies.json',
+    TMP + '/projudi_cookies.json',
 ]
 cookies_dict = {}
 for cp in cookies_paths:
@@ -262,7 +269,7 @@ def clicar(page, seletor):
 print(f'\n========== 5. Playwright ==========')
 
 with sync_playwright() as pw:
-    browser = pw.firefox.launch(headless=False)
+    browser = launch_firefox(pw)
     ctx = browser.new_context(
         viewport={'width': 1400, 'height': 900},
         locale='pt-BR'
@@ -300,7 +307,7 @@ with sync_playwright() as pw:
     el_exists = page.evaluate('!!document.getElementById("seqCategoriaMovimentacao")')
     if not el_exists:
         print(f'   ERRO: seqCategoriaMovimentacao não encontrado! URL: {page.url}')
-        page.screenshot(path='/tmp/erro_mov.png')
+        page.screenshot(path=TMP + '/erro_mov.png')
         input('\n>>> Enter para fechar...')
         browser.close()
         sys.exit(1)
@@ -464,7 +471,7 @@ with sync_playwright() as pw:
         else:
             print('   >> Registrar não encontrado')
 
-        page2.screenshot(path='/tmp/pw_final.png')
+        page2.screenshot(path=TMP + '/pw_final.png')
         print('   >> Screenshot: /tmp/pw_final.png')
     else:
         print(f'   ERRO: URL = {page2.url}')

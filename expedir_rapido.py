@@ -2530,6 +2530,7 @@ def _gerar_html(proc, part, rag, template, dados_ata=None, prazo_dias=None,
 def _expedir_mandado(proc, session, cookies_dict, html_mandado, part, subtipo='11', obs_parte=None, destinatarios=None):
     """Expede mandado via Playwright."""
     from playwright.sync_api import sync_playwright
+    from projudi.playwright_firefox import launch_firefox
 
     PROC_PROJUDI = None
     projudi_url = getattr(proc, 'projudi_url', None) or ''
@@ -2610,7 +2611,7 @@ def _expedir_mandado(proc, session, cookies_dict, html_mandado, part, subtipo='1
 
     try:
         with sync_playwright() as pw:
-            browser = pw.firefox.launch(headless=False, slow_mo=500)
+            browser = launch_firefox(pw, slow_mo=500)
             ctx_b = browser.new_context(viewport={'width': 1500, 'height': 950}, locale='pt-BR')
             ctx_b.add_cookies([
                 {'name': k, 'value': v, 'domain': 'projudi.tjba.jus.br', 'path': '/'}
@@ -2867,6 +2868,7 @@ def _expedir_mandado(proc, session, cookies_dict, html_mandado, part, subtipo='1
 def _expedir_oficio(proc, session, cookies_dict, html_oficio, part, template):
     """Expede ofício via Playwright seguindo fluxo igual ao CIAP."""
     from playwright.sync_api import sync_playwright
+    from projudi.playwright_firefox import launch_firefox
 
     PROC_PROJUDI = None
     projudi_url = getattr(proc, 'projudi_url', None) or ''
@@ -2890,7 +2892,7 @@ def _expedir_oficio(proc, session, cookies_dict, html_oficio, part, template):
 
     try:
         with sync_playwright() as pw:
-            browser = pw.firefox.launch(headless=False, slow_mo=500)
+            browser = launch_firefox(pw, slow_mo=500)
             ctx_b = browser.new_context(viewport={'width': 1500, 'height': 950}, locale='pt-BR')
             ctx_b.add_cookies([
                 {'name': k, 'value': v, 'domain': 'projudi.tjba.jus.br', 'path': '/'}

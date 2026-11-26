@@ -24,6 +24,7 @@ if PROJECT_ROOT not in sys.path:
 
 from .models import MandadoRecord, MandadoLog
 from .services import ProjudiService
+from .playwright_firefox import launch_firefox
 
 
 class MandadoService:
@@ -242,7 +243,7 @@ class MandadoService:
         browser = None
         try:
             with sync_playwright() as pw:
-                browser = pw.firefox.launch(headless=False, slow_mo=500)
+                browser = launch_firefox(pw, slow_mo=500)
                 ctx_b = browser.new_context(viewport={'width': 1500, 'height': 950}, locale='pt-BR')
                 ctx_b.add_cookies([
                     {'name': k, 'value': v, 'domain': 'projudi.tjba.jus.br', 'path': '/'}
