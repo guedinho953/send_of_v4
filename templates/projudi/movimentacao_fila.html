@@ -81,7 +81,7 @@
         <button type="submit" name="hoje" value="1" class="btn btn-outline">📅 Sincronizar somente hoje</button>
     </form>
     <form method="post" action="{% url 'projudi:movimentacao_batch' %}" style="display:inline;"
-          onsubmit="return confirm('Executar todas as movimentações pendentes da fila?');">
+          onsubmit="return confirm('Executar {{ total_pendentes }} pendente(s) da fila? O lote registra Mov581 e inclui certidões; não gera o documento da certidão.');">
         {% csrf_token %}
         <input type="hidden" name="incluir_certidoes" value="1">
         {% if filtro_hoje %}<input type="hidden" name="hoje" value="1">{% endif %}
@@ -90,6 +90,13 @@
         </button>
     </form>
     <a href="{% url 'projudi:certidao_peticoes' %}" class="btn btn-outline">📥 Fila de Petições</a>
+</div>
+
+<div style="background:#fffbeb; border-left:4px solid #f59e0b; border-radius:6px; padding:10px 12px; margin-bottom:14px; font-size:12px; color:#92400e; line-height:1.5;">
+    <strong>O que o lote executa:</strong> registra a movimentação Mov581 dos
+    itens pendentes/falhas da fila, inclusive os classificados como certidão.
+    Ele <strong>não gera o documento da certidão</strong> (RAG/custas); para
+    isso use o módulo <strong>Certidões</strong>.
 </div>
 
 <div class="filtro-bar">
