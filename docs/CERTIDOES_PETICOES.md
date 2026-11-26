@@ -457,10 +457,16 @@ executado e calcula o último dia e o decurso. Exemplo validado no processo
 
 ```text
 Executado: COMPANHIA DE ELETRICIDADE DO ESTADO DA BAHIA COELBA
-Intimação: 02/11/2026 (evento 80 — DJEN)
+Intimação: 02/11/2026 (evento 84 — DJEN do despacho do evento 78)
+Expedição da intimação: evento 79
 Último dia: 25/11/2026
 Decurso: 26/11/2026
 ```
+
+O evento 87 (decurso de prazo) confirma o vínculo: ele referencia o
+despacho de mero expediente de 27/10/2026 e registra último dia
+25/11/2026, o mesmo resultado do cálculo a partir da intimação do
+evento 84.
 
 Se o prazo **já decorreu**, a prévia permite juntar a certidão pelo fluxo
 normal de documentos.

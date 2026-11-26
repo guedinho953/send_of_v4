@@ -81,7 +81,8 @@ class DecursoPagamentoService:
 
         alvo = _nome_compacto(parte['nome'])
         intima = self._intimacao(
-            movs, evento, alvo
+            movs, evento, alvo,
+            self._descricao_evento(despacho['texto']),
         )
         if not intima:
             return {
@@ -120,10 +121,18 @@ class DecursoPagamentoService:
             'data_decurso': prazo.data_decurso,
         }
 
-    def _intimacao(self, movs, evento, alvo):
+    @staticmethod
+    def _descricao_evento(texto):
+        """Extrai a descrição do evento, sem número, data e assinatura."""
+        texto = re.sub(r'^\s*\d+\s*', '', texto or '')
+        texto = re.split(r'\b\d{2}/\d{2}/\d{2,4}\b', texto)[0]
+        texto = re.split(r'\s+Arquivos:', texto, flags=re.I)[0]
+        return _norm(texto).strip()
+
+    def _intimacao(self, movs, evento, alvo, descricao_despacho=''):
         candidatas = []
         for mov in movs:
-            if int(mov['evento']) < int(evento):
+            if int(mov['evento']) <= int(evento):
                 continue
             up = _norm(mov['texto'])
             if not any(k in up for k in ('INTIMA', 'DISPONIBILIZ')):
@@ -139,16 +148,26 @@ class DecursoPagamentoService:
                 meio = 'eletronico'
             else:
                 meio = 'intimacao'
+
+            # A intimação correta é a que referencia o próprio despacho.
+            # Ex.: evento 84 referencia "Proferido despacho de mero
+            # expediente"; o evento 80 referencia "Transitado em Julgado"
+            # e não deve ser usado para o prazo de pagamento.
+            score = 0
+            if descricao_despacho and descricao_despacho in up:
+                score += 100
+            elif 'REFERENTE AO EVENTO' in up and descricao_despacho:
+                score -= 100
+            if meio == 'eletronico':
+                score += 50
+
             candidatas.append({
                 'evento': mov['evento'],
                 'data': data,
                 'meio': meio,
+                'score': score,
             })
         if not candidatas:
             return None
-        eletronicas = [
-            c for c in candidatas if c['meio'] == 'eletronico'
-        ]
-        lista = eletronicas or candidatas
-        lista.sort(key=lambda c: c['data'])
-        return lista[0]
+        candidatas.sort(key=lambda c: (-c['score'], c['data']))
+        return candidatas[0]

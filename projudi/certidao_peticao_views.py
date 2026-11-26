@@ -959,6 +959,7 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
                 f'não decorrido. Processo: {resultado["processo"]}; '
                 f'executado(a): {resultado["executado"]}; '
                 f'despacho: evento {resultado["evento_despacho"]}; '
+                f'evento da intimação: {resultado["evento_intimacao"]}; '
                 f'intimação: {resultado["data_intimacao"].strftime("%d/%m/%Y")}'
                 f'; último dia do prazo: '
                 f'{resultado["ultimo_dia"].strftime("%d/%m/%Y")}; '
@@ -1056,6 +1057,7 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
         observacao = (
             'Certidão de Decurso de Pagamento Voluntário — '
             f'despacho evento {resultado["evento_despacho"]}; '
+            f'evento da intimação: {resultado["evento_intimacao"]}; '
             f'intimação em {ctx["data_intimacao"]}; '
             f'último dia {ctx["ultimo_dia"]}; '
             f'decurso {ctx["data_decurso"]}; '
@@ -1082,8 +1084,8 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
                 'evento_recurso': '',
                 'evento_recurso_numero': '',
                 'evento_intimacao': resultado['evento_intimacao'],
-                'origem_intimacao': '',
-                'origem_intimacao_label': '',
+                'origem_intimacao': 'despacho',
+                'origem_intimacao_label': 'despacho',
                 'observacao_juntada': observacao,
                 'polo_sugerido': 'autores',
                 'polo_recorrente': '',
