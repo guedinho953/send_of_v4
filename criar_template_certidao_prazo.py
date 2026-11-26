@@ -7,6 +7,7 @@ a certidão atesta a CONTAGEM DE PRAZO da intimação (DJEN/AR/advogado/etc).
 Variáveis Django usadas no template:
   {{ processo }}        -> nº do processo CNJ
   {{ parte }}           -> nome da parte intimada
+  {{ recorrente }}      -> nome do recorrente (para certidão de prazo recursal)
   {{ observacao_prazo }}-> texto genérico de prazo (já gerado pelo
                            CumprimentoService._texto_observacao_prazo)
   {{ data }}            -> data de expedição (Paulo Afonso-BA, dd/mm/aaaa)
@@ -55,11 +56,12 @@ HTML = f'''<div style="font-family:'Times New Roman',serif; font-size:12pt; max-
   <table style="width:100%; border-collapse:collapse;">
     <tr><td style="width:140px;"><strong>PROCESSO N.º</strong></td><td>-</td><td>{{{{ processo }}}}</td></tr>
     <tr><td><strong>PARA</strong></td><td>-</td><td>{{{{ parte }}}}</td></tr>
+    <tr><td><strong>RECORRENTE</strong></td><td>-</td><td>{{{{ recorrente }}}}</td></tr>
   </table>
 </div>
 
 <div style="font-size:10pt; font-family:'Courier New',monospace; margin:0 0 18px; text-align:justify; text-indent:80px; line-height:1.4;">
-  Certifico que, referente ao processo em epígrafe, {{{{ observacao_prazo }}}}
+  Certifico que, referente ao processo em epígrafe, {{% if recorrente %}}tendo como recorrente <strong>{{{{ recorrente }}}}</strong>, {{% endif %}}{{{{ observacao_prazo }}}}
 </div>
 
 <div style="font-size:10pt; font-family:'Courier New',monospace; margin:0 0 10px; text-align:justify; text-indent:80px;">

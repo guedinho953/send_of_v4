@@ -1594,6 +1594,46 @@ class CumprimentoService:
         return ' '.join(partes)
 
     @staticmethod
+    def _nome_recorrente(record: 'CumprimentoRecord') -> str:
+        """Nome do recorrente para a certidão de prazo.
+
+        Usa o nome já resolvido no cumprimento; se estiver vazio, busca a
+        parte correspondente no cadastro do processo.
+        """
+        nome = (getattr(record, 'parte_nome', '') or '').strip()
+        if nome:
+            return nome
+
+        try:
+            from processes.models import Party, Process
+            proc = (
+                Process.objects.filter(
+                    number=record.numero_processo_cnj).first()
+                or Process.objects.filter(number=record.processo).first()
+            )
+            if not proc:
+                return ''
+
+            papel = CumprimentoService._papel_resolvido(record)
+            if papel == 'autor':
+                qs = Party.objects.filter(
+                    process=proc,
+                    role__in=['autor', 'exequente', 'PROMOVENTE',
+                              'EXEQUENTE'])
+            elif papel == 'reu':
+                qs = Party.objects.filter(
+                    process=proc,
+                    role__in=['reu', 'executado', 'PROMOVIDO',
+                              'EXECUTADO'])
+            else:
+                qs = Party.objects.filter(process=proc)
+
+            nomes = [p.name for p in qs if p.name]
+            return ' / '.join(dict.fromkeys(nomes))
+        except Exception:
+            return ''
+
+    @staticmethod
     def _papel_resolvido(record: 'CumprimentoRecord') -> str:
         """Papel final para a contagem de prazo.
 
@@ -1747,6 +1787,7 @@ class CumprimentoService:
                 'processo': record.numero_processo_cnj or record.processo,
                 'parte': CumprimentoService._rotulo_parte(
                     self._papel_resolvido(record), record.parte_nome),
+                'recorrente': CumprimentoService._nome_recorrente(record),
                 'observacao_prazo': record.observacao_prazo or '',
                 'data': _date.today().strftime('%d/%m/%Y'),
                 'servidor': CumprimentoService._capitalizar_nome_proprio(
@@ -1778,8 +1819,10 @@ class CumprimentoService:
             f'Leitura em {d_ini}, término em {d_fim} '
             f'(decorrido o prazo em {d_dec}).'
         )
+        recorrente = CumprimentoService._nome_recorrente(record)
         return (
             f'<p><b>CERTIDÃO DE PRAZO</b></p>'
+            f'<p><b>RECORRENTE:</b> {recorrente or "..."}</p>'
             f'<p>Certifico que, referente ao processo nº '
             f'{record.numero_processo_cnj or record.processo}, '
             f'a parte {record.parte_nome or "..."} — {texto}</p>'
