@@ -73,61 +73,85 @@
         {% if item.eh_recurso and item.pode_intimar %}
         <div style="margin-bottom:12px;">
             <label for="poloIntimacao" style="display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:4px;">
-                Parte contrária a intimar para contrarrazões
+                {% if item.situacao_recurso == 'preparo' or item.situacao_recurso == 'gratuidade' %}
+                Recorrido (parte contrária) a ser intimado para contrarrazões
+                {% else %}
+                Polo do recorrente a ser intimado (ciência da intempestividade)
+                {% endif %}
             </label>
             <select id="poloIntimacao" name="polo_intimacao"
                     style="padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px; background:#fff; color:#374151;">
                 <option value="autores" {% if item.polo_sugerido == 'autores' %}selected{% endif %}>Autoras / Autores</option>
                 <option value="res" {% if item.polo_sugerido == 'res' %}selected{% endif %}>Réus / Rés</option>
-                <option value="todos">Ambas as partes (autores e rés)</option>
             </select>
+
+            {% if item.situacao_recurso == 'preparo' or item.situacao_recurso == 'gratuidade' %}
             <div style="font-size:11px; color:#92400e; margin-top:4px;">
-                ⚠️ Confira o polo: a intimação será feita com prazo de
+                ⚠️ Confira o polo do recorrido. A intimação será feita para
+                contrarrazões ao Recurso Inominado{% if item.evento_recurso_numero %}
+                (evento {{ item.evento_recurso_numero }}){% endif %}, no prazo de
                 <strong>10 dias úteis</strong> (código 3 do Projudi).
             </div>
+            {% else %}
+            <div style="margin-top:8px;">
+                <label for="prazoIntimacao" style="display:block; font-size:11px; font-weight:600; color:#374151; margin-bottom:4px;">
+                    Prazo da intimação (ciência)
+                </label>
+                <select id="prazoIntimacao" name="prazo_intimacao"
+                        style="padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px; background:#fff; color:#374151;">
+                    <option value="5" selected>5 dias úteis (ciência)</option>
+                    <option value="10">10 dias úteis</option>
+                    <option value="15">15 dias úteis</option>
+                </select>
+            </div>
+            <div style="font-size:11px; color:#92400e; margin-top:4px;">
+                O recorrente será intimado para ciência da
+                <strong>INTEMPESTIVIDADE</strong>, conforme certidão em anexo.
+            </div>
+            {% endif %}
         </div>
         {% elif item.eh_recurso %}
         <div style="margin-bottom:12px; background:#fef3c7; border-left:4px solid #f59e0b; border-radius:6px; padding:10px 12px; font-size:12px; color:#92400e; line-height:1.5;">
-            <strong>Intimação de contrarrazões indisponível para esta certidão.</strong>
-            O fluxo de intimação em 10 dias é exclusivo de recurso
-            <strong>TEMPESTIVO e PREPARADO</strong>.
-            Para
-            {% if item.situacao_recurso == 'intempestivo' %}
-            recurso <strong>INTEMPESTIVO</strong>,
-            {% elif item.situacao_recurso == 'gratuidade' %}
-            recurso <strong>TEMPESTIVO SEM PREPARO</strong> (gratuidade),
-            {% else %}
-            esta situação,
-            {% endif %}
-            a intimação segue fluxo próprio. A certidão pode ser apenas juntada.
+            <strong>Não foi possível identificar a situação da certidão.</strong>
+            É possível apenas juntar a certidão; a intimação deve ser feita
+            manualmente após conferir o corpo da certidão.
         </div>
         {% endif %}
 
         <div style="font-size:11px; color:#6b7280; margin-bottom:10px;">
             A execução abre o Projudi e pode levar alguns minutos. Não feche a página.
-            A juntada e a intimação são registradas em movimentações separadas.
+            Quando houver intimação, ela é registrada em movimentação separada da juntada.
         </div>
 
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
             {% if not documento.exported_to_projudi %}
             <button type="submit" name="acao" value="juntar" class="btn btn-outline"
-                    onclick="return confirm('Juntar a certidão no Projudi sem intimar a parte contrária?');">
+                    onclick="return confirm('Juntar a certidão no Projudi sem realizar a intimação?');">
                 📎 Apenas juntar certidão
             </button>
             {% endif %}
             {% if item.eh_recurso and item.pode_intimar %}
             <button type="submit" name="acao" value="{% if documento.exported_to_projudi %}intimar{% else %}juntar_intimar{% endif %}"
                     class="btn" style="background:#7c3aed; border-color:#7c3aed;"
-                    onclick="return confirm('{% if documento.exported_to_projudi %}Intimar a parte selecionada para apresentar contrarrazões em 10 dias úteis?{% else %}Juntar a certidão e intimar a parte selecionada para apresentar contrarrazões em 10 dias úteis?{% endif %}');">
+                    onclick="return confirm('{% if documento.exported_to_projudi %}{% if item.situacao_recurso == 'preparo' or item.situacao_recurso == 'gratuidade' %}Intimar o recorrido para apresentar contrarrazões em 10 dias úteis?{% else %}Intimar o recorrente para ciência da intempestividade?{% endif %}{% else %}{% if item.situacao_recurso == 'preparo' or item.situacao_recurso == 'gratuidade' %}Juntar a certidão e intimar o recorrido para apresentar contrarrazões em 10 dias úteis?{% else %}Juntar a certidão e intimar o recorrente para ciência da intempestividade?{% endif %}{% endif %}');">
                 {% if documento.exported_to_projudi %}
-                📨 Apenas intimar contrarrazões (10 dias)
+                    {% if item.situacao_recurso == 'preparo' or item.situacao_recurso == 'gratuidade' %}
+                    📨 Apenas intimar contrarrazões (10 dias)
+                    {% else %}
+                    📨 Apenas intimar o recorrente (ciência da intempestividade)
+                    {% endif %}
                 {% else %}
-                📎📨 Juntar certidão + intimar contrarrazões (10 dias)
+                    {% if item.situacao_recurso == 'preparo' or item.situacao_recurso == 'gratuidade' %}
+                    📎📨 Juntar certidão + intimar contrarrazões (10 dias)
+                    {% else %}
+                    📎📨 Juntar certidão + intimar o recorrente (intempestividade)
+                    {% endif %}
                 {% endif %}
             </button>
             {% elif item.eh_recurso and documento.exported_to_projudi %}
             <span style="font-size:12px; color:#047857; align-self:center;">
-                ✅ Certidão juntada. Use o fluxo próprio de intimação para esta situação.
+                ✅ Certidão juntada. Não foi possível identificar a situação;
+                faça a intimação manualmente.
             </span>
             {% endif %}
         </div>

@@ -70,35 +70,51 @@ Os dados privados (evento da intimação da sentença, data da intimação,
 - fora do corpo público da certidão.
 
 A certidão é exibida em tela para impressão. Na própria prévia é possível
-juntá-la ao Projudi e/ou intimar a parte contrária (veja abaixo).
+juntá-la ao Projudi e/ou realizar a intimação (veja abaixo).
 
-## Juntar a certidão e intimar contrarrazões
+## Juntar a certidão e intimar
 
 Na prévia da certidão de **Recurso Inominado** existem as ações:
 
 - **Apenas juntar certidão** — insere a certidão no Projudi via Mov581 e
   assina o documento;
-- **Juntar certidão + intimar contrarrazões (10 dias)** — junta a certidão
-  e, na sequência, faz a intimação da parte contrária;
-- **Apenas intimar contrarrazões (10 dias)** — aparece quando a certidão
-  já foi juntada.
+- **Juntar certidão + intimar** — junta a certidão e, na sequência, faz a
+  intimação conforme a situação;
+- **Apenas intimar** — aparece quando a certidão já foi juntada.
 
-> **Importante:** esse fluxo de intimação em 10 dias é exclusivo do recurso
-> **TEMPESTIVO e PREPARADO**. Para recurso **INTEMPESTIVO** ou
-> **TEMPESTIVO SEM PREPARO** (gratuidade), a prévia mostra um aviso e
-> permite apenas juntar a certidão; a intimação segue fluxo próprio.
+### Tempestivo — preparo integral ou gratuidade
 
-A intimação usa:
+Nos dois casos, intima-se o **recorrido** para contrarrazões:
 
 ```text
-Mov581 · Intimação · prazo_intimacao='3' (10 dias úteis)
-motivo_intimacao='3'
-polo_intimacao='autores' | 'res' | 'todos'
+Intime(m)-se o(s) recorrido(s) para que, querendo, apresente(m)
+contrarrazões ao Recurso Inominado (evento XX), no prazo de
+10 dias úteis.
 ```
 
-O polo da parte contrária deve ser conferido na prévia. O sistema sugere
-o polo oposto ao recorrente quando ele está cadastrado como parte no
-processo; sem cadastro, sugere **Autoras/Autores**.
+- `prazo_intimacao='3'` (10 dias), `motivo_intimacao='3'`;
+- `polo_intimacao='autores' | 'res'`;
+- o número do evento é extraído do corpo da certidão
+  (“recurso inominado interposto no evento XX”).
+
+O sistema sugere o polo oposto ao recorrente quando ele está cadastrado
+como parte no processo; sem cadastro, sugere **Autoras/Autores**.
+
+### Intempestivo
+
+- Intima-se o **recorrente** para ciência da **INTEMPESTIVIDADE** do
+  recurso interposto/apresentado, conforme certidão em anexo;
+- prazo padrão de **5 dias úteis** (código 2), ajustável para 10 ou
+  15 dias na prévia;
+- o polo deve ser o do **recorrente** (autoras/autores ou réus/rés).
+
+Conversão de prazo usada no Projudi:
+
+```text
+5 dias úteis  → prazo_intimacao='2'
+10 dias úteis → prazo_intimacao='3'
+15 dias úteis → prazo_intimacao='4'
+```
 
 São duas movimentações no Projudi: a juntada da certidão e a intimação.
 Se a certidão for juntada mas a intimação falhar, a certidão permanece

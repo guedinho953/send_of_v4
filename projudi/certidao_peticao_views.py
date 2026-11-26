@@ -1,5 +1,6 @@
 """Fila de petições e geração de certidões de prazo."""
 import logging
+import re
 from datetime import date, datetime
 
 from django.contrib import messages
@@ -44,6 +45,12 @@ def _situacao_certidao_recurso(html):
             or 'ASSISTENCIA JUDICIARIA GRATUITA' in texto):
         return 'gratuidade'
     return ''
+
+
+def _evento_recurso_certidao(html):
+    """Extrai o número do evento do recurso do corpo da certidão."""
+    m = re.search(r'evento\s+(\d+)', html or '', re.I)
+    return m.group(1) if m else ''
 
 
 class CertidaoPeticaoQueueView(LoginRequiredMixin, TemplateView):
@@ -146,6 +153,8 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
         situacao_recurso = (
             request.POST.get('situacao_recurso') or ''
         ).strip()
+        if eh_recurso and situacao_recurso not in ('preparo', 'intempestivo'):
+            situacao_recurso = 'gratuidade'
         evento_intimacao = (
             request.POST.get('evento_intimacao') or ''
         ).strip() or 'não informado'
@@ -280,11 +289,11 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
             messages.error(request, f'Erro ao gerar a certidão: {exc}')
             return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
 
-        # Polo sugerido para a intimação de contrarrazões: se o recorrente
-        # estiver cadastrado como autor, intima-se o polo réu; se estiver
-        # cadastrado como réu, intima-se o polo autor. Sem cadastro, usa-se
-        # "autores" como sugestão (caso mais comum: réu recorrente).
-        polo_sugerido = 'autores'
+        # Polo do recorrente e polo a ser intimado:
+        # - preparo integral e gratuidade: intima-se a parte contrária
+        #   (recorrido) para contrarrazões;
+        # - intempestivo: intima-se o próprio recorrente para ciência.
+        polo_recorrente = ''
         if eh_recurso and recorrente:
             from processes.models import Party
             parte = (
@@ -293,9 +302,18 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
                 .first()
             )
             if parte and parte.is_author_side:
-                polo_sugerido = 'res'
+                polo_recorrente = 'autores'
             elif parte and parte.is_defendant_side:
-                polo_sugerido = 'autores'
+                polo_recorrente = 'res'
+
+        if situacao_recurso in ('preparo', 'gratuidade'):
+            polo_sugerido = (
+                'res' if polo_recorrente == 'autores' else 'autores'
+            )
+        else:
+            polo_sugerido = polo_recorrente or 'autores'
+
+        evento_recurso_numero = _evento_recurso_certidao(html)
 
         return render(request, 'projudi/certidao_peticao_preview.html', {
             'documento': doc,
@@ -306,12 +324,16 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
                 'eh_recurso': eh_recurso,
                 'situacao_recurso': situacao_recurso,
                 'pode_intimar': (
-                    eh_recurso and situacao_recurso == 'preparo'
+                    eh_recurso and situacao_recurso in (
+                        'preparo', 'intempestivo', 'gratuidade',
+                    )
                 ),
+                'polo_recorrente': polo_recorrente,
                 'tipo_label': info['label'],
                 'situacao_label': situacao_label,
                 'recorrente': recorrente,
                 'evento_recurso': evento_recurso,
+                'evento_recurso_numero': evento_recurso_numero,
                 'evento_intimacao': evento_intimacao,
                 'observacao_juntada': observacao_juntada,
                 'polo_sugerido': polo_sugerido,
@@ -359,11 +381,20 @@ class CertidaoPeticaoPreviewView(LoginRequiredMixin, TemplateView):
                 'tipo': '',
                 'eh_recurso': eh_recurso,
                 'situacao_recurso': situacao,
-                'pode_intimar': eh_recurso and situacao == 'preparo',
+                'pode_intimar': (
+                    eh_recurso and situacao in (
+                        'preparo', 'intempestivo', 'gratuidade',
+                    )
+                ),
+                'polo_recorrente': '',
                 'tipo_label': rotulo,
                 'situacao_label': '',
                 'recorrente': '',
                 'evento_recurso': '',
+                'evento_recurso_numero': (
+                    _evento_recurso_certidao(doc.html_content)
+                    if eh_recurso else ''
+                ),
                 'evento_intimacao': '',
                 'observacao_juntada': '',
                 'polo_sugerido': 'autores',
@@ -382,8 +413,8 @@ class CertidaoPeticaoJuntarIntimarView(LoginRequiredMixin, View):
     """Junta a certidão gerada no Projudi e/ou intima a parte contrária.
 
     A certidão é inserida na movimentação 581 (com assinatura) e, em seguida,
-    é feita uma segunda movimentação 581 de intimação da parte contrária para
-    apresentar contrarrazões no prazo de 10 dias úteis (código 3 do Projudi).
+    é feita a intimação conforme a situação da certidão: parte contrária
+    (contrarrazões) ou recorrente (ciência da intempestividade).
 
     Ações aceitas:
       - juntar: apenas junta a certidão;
@@ -432,26 +463,27 @@ class CertidaoPeticaoJuntarIntimarView(LoginRequiredMixin, View):
         if acao in ('intimar', 'juntar_intimar') and not eh_recurso:
             messages.error(
                 request,
-                'A intimação para contrarrazões só se aplica à '
-                'Certidão de Recurso Inominado.'
+                'A intimação só se aplica à Certidão de Recurso Inominado.'
             )
             return self._preview_redirect(doc)
 
-        # A intimação para contrarrazões do fluxo padrão só vale para
-        # recurso TEMPESTIVO e PREPARADO. Intempestivo e sem preparo
-        # (gratuidade) têm tratamento próprio.
+        # Situação da certidão define a intimação:
+        # - preparo ou gratuidade: parte contrária (recorrido), para
+        #   contrarrazões em 10 dias;
+        # - intempestivo: recorrente, para ciência da intempestividade.
         situacao_recurso = (
             _situacao_certidao_recurso(doc.html_content)
             if eh_recurso else ''
         )
         if (acao in ('intimar', 'juntar_intimar')
-                and situacao_recurso != 'preparo'):
+                and situacao_recurso not in (
+                    'preparo', 'intempestivo', 'gratuidade',
+                )):
             messages.warning(
                 request,
-                'Esta certidão não é de recurso TEMPESTIVO e PREPARADO. '
-                'A intimação de contrarrazões em 10 dias é exclusiva desse '
-                'caso; para intempestivo ou sem preparo, use o fluxo próprio. '
-                'A certidão pode ser apenas juntada.'
+                'Não foi possível identificar a situação da certidão '
+                '(tempestivo e preparado, intempestivo ou sem preparo). '
+                'É possível apenas juntar a certidão.'
             )
             return self._preview_redirect(doc)
 
@@ -525,31 +557,63 @@ class CertidaoPeticaoJuntarIntimarView(LoginRequiredMixin, View):
         if acao == 'intimar' and not certidao_juntada:
             messages.error(
                 request,
-                'Junte a certidão antes de intimar a parte contrária.'
+                'Junte a certidão antes de realizar a intimação.'
             )
             return self._preview_redirect(doc)
 
-        # ── 2. Intimação da parte contrária ─────────────────────────
+        # ── 2. Intimação conforme a situação da certidão ────────────
         if acao in ('intimar', 'juntar_intimar'):
-            observacao_intimacao = (
-                'Intimem-se a parte contrária para apresentar contrarrazões '
-                'ao recurso inominado, no prazo de 10 (dez) dias úteis.'
+            evento_recurso = _evento_recurso_certidao(doc.html_content)
+            texto_evento = (
+                f' (evento {evento_recurso})' if evento_recurso else ''
             )
+
+            if situacao_recurso in ('preparo', 'gratuidade'):
+                observacao_intimacao = (
+                    'Intime(m)-se o(s) recorrido(s) para que, querendo, '
+                    'apresente(m) contrarrazões ao Recurso Inominado'
+                    f'{texto_evento}, no prazo de 10 dias úteis.'
+                )
+                prazo_dias = '10'
+                rotulo_intimacao = (
+                    'parte contrária (recorrido) para contrarrazões'
+                )
+            else:
+                observacao_intimacao = (
+                    'Intime-se o recorrente para ciência da '
+                    'INTEMPESTIVIDADE do recurso interposto/apresentado, '
+                    'conforme certidão em anexo.'
+                )
+                prazo_dias = (
+                    (request.POST.get('prazo_intimacao') or '5').strip()
+                )
+                rotulo_intimacao = (
+                    'recorrente para ciência da intempestividade'
+                )
+
+            prazo_codigo = {'5': '2', '10': '3', '15': '4'}.get(prazo_dias)
+            if not prazo_codigo:
+                prazo_dias = (
+                    '10' if situacao_recurso in ('preparo', 'gratuidade')
+                    else '5'
+                )
+                prazo_codigo = {'5': '2', '10': '3', '15': '4'}[prazo_dias]
+
             try:
                 ok_intimacao = service.executar_com_intimacao(
                     processo_numero=processo,
                     observacao=observacao_intimacao,
                     codigo_mov='581',
                     descricao_mov='Intimação',
-                    prazo_intimacao='3',   # código 3 = 10 dias úteis
+                    prazo_intimacao=prazo_codigo,
                     motivo_intimacao='3',
                     polo_intimacao=polo,
                     natureza_override='civel',
                 )
             except Exception as exc:
                 logger.exception(
-                    'Erro ao intimar contrarrazões | processo=%s | documento=%s',
-                    processo, doc.id,
+                    'Erro ao intimar | situação=%s | processo=%s | '
+                    'documento=%s', situacao_recurso, processo, doc.id,
                 )
                 messages.error(
                     request,
@@ -568,9 +632,10 @@ class CertidaoPeticaoJuntarIntimarView(LoginRequiredMixin, View):
                 return self._preview_redirect(doc)
 
             logger.info(
-                'Intimação para contrarrazões realizada | processo=%s | '
-                'documento=%s | polo=%s | prazo=10 dias úteis',
-                processo, doc.id, polo,
+                'Intimação realizada | situação=%s | processo=%s | '
+                'documento=%s | polo=%s | prazo=%s dias úteis | %s',
+                situacao_recurso, processo, doc.id, polo, prazo_dias,
+                rotulo_intimacao,
             )
 
         if acao == 'juntar':
@@ -580,9 +645,15 @@ class CertidaoPeticaoJuntarIntimarView(LoginRequiredMixin, View):
             )
             return self._preview_redirect(doc)
 
-        messages.success(
-            request,
-            '✅ Certidão juntada e parte contrária intimada para '
-            'apresentar contrarrazões em 10 dias úteis.'
-        )
+        if situacao_recurso in ('preparo', 'gratuidade'):
+            mensagem = (
+                '✅ Certidão juntada e parte contrária intimada para '
+                'apresentar contrarrazões em 10 dias úteis.'
+            )
+        else:
+            mensagem = (
+                '✅ Certidão juntada e recorrente intimado para ciência '
+                'da INTEMPESTIVIDADE do recurso.'
+            )
+        messages.success(request, mensagem)
         return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
