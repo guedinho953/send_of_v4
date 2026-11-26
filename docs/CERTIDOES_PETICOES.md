@@ -57,6 +57,19 @@ O evento do protocolo do recurso e o evento da intimação considerada
 (sentença ou embargos) são identificados no processo e podem ser ajustados
 na tela.
 
+O **recorrente** é extraído do cabeçalho da petição, priorizando o nome que
+antecede a expressão **“nos autos da Ação”**. Exemplo:
+
+```text
+BANCO BRADESCO S/A., nos autos da Ação de Indenização que lhe move
+JOSEFA TEIXEIRA LIMA, por intermédio dos seus procuradores...
+```
+
+Nesse caso, o recorrente é **BANCO BRADESCO S/A**; Josefa é a recorrida.
+Isso evita confundir o recorrido com o recorrente e faz a intimação
+considerada ser a do polo correto (evento 31, de Bradesco, e não o evento
+30, de Josefa).
+
 ### Demais tipos
 1. Procura a primeira intimação **após a data de envio** da petição.
 2. Se não localizar, usa a data de envio como fallback.

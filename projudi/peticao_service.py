@@ -223,6 +223,10 @@ class PeticaoQueueService:
                             trecho = trecho[:corte.start()]
 
                         padroes = (
+                            # "BANCO X S/A., nos autos da Ação que lhe move
+                            # JOSEFA..." — o primeiro nome é o recorrente.
+                            r'^[ \t]*([A-ZÀ-Ú0-9][A-ZÀ-Ú0-9\.\-&/ \t]{3,120}?),'
+                            r'[ \t]*nos\s+autos\s+d[ae]\b',
                             r'^[ \t]*([A-ZÀ-Ú0-9][A-ZÀ-Ú0-9\.\-&/ \t]{3,120}?),'
                             r'[ \t]*(?i:j[áa]\s+devidamente\s+qualificad[oa])',
                             r'([A-ZÀ-Ú0-9][A-ZÀ-Ú0-9\.\-&/ \t]{3,120}?),'
