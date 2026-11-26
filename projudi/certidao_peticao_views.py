@@ -548,6 +548,16 @@ class CertidaoPeticaoJuntarIntimarView(LoginRequiredMixin, View):
         logger = logging.getLogger('projudi.certidoes')
         service = MovimentacaoService(request.user)
 
+        # A certidão da fila de petições nasce com recipient_name
+        # "Petição: ...". A certidão específica de custas nasce como
+        # "Certidão: ..." e pertence às movimentações.
+        origem_certidao = (
+            'peticao'
+            if (rotulo_certidao != NOME_CERTIDAO_CUSTAS
+                and (doc.recipient_name or '').startswith('Petição:'))
+            else 'movimentacao'
+        )
+
         # ── 1. Juntada da certidão ──────────────────────────────────
         certidao_juntada = bool(doc.exported_to_projudi)
         if acao in ('juntar', 'juntar_intimar') and not certidao_juntada:
@@ -559,6 +569,7 @@ class CertidaoPeticaoJuntarIntimarView(LoginRequiredMixin, View):
                         f'Juntada da {rotulo_certidao}. ' + observacao
                     ).strip(),
                     categoria='certidao',
+                    origem=origem_certidao,
                     processo_cnj=processo,
                     parte_nome=recorrente,
                     url_processo=url_processo,

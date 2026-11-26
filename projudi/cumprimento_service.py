@@ -667,6 +667,11 @@ class CumprimentoService:
             act_verb='certifique-se' if certidao_html else 'registre-se',
             defaults={
                 'categoria': 'certidao' if certidao_html else 'registro',
+                'origem': (
+                    'peticao'
+                    if getattr(record, 'rag_example', None)
+                    else 'movimentacao'
+                ),
                 'observacao': observacao,
                 'codigo_movimentacao': '581',
                 'descricao_movimentacao': ('Certidão de Prazo'
@@ -683,10 +688,15 @@ class CumprimentoService:
         if mov.pk:  # já existia: atualiza observação/categoria
             mov.observacao = observacao
             mov.categoria = 'certidao' if certidao_html else 'registro'
+            mov.origem = (
+                'peticao'
+                if getattr(record, 'rag_example', None)
+                else 'movimentacao'
+            )
             mov.act_verb = 'certifique-se' if certidao_html else 'registre-se'
             mov.parte_papel = record.parte_papel or ''
             mov.status = 'pendente'
-            mov.save(update_fields=['observacao', 'categoria',
+            mov.save(update_fields=['observacao', 'categoria', 'origem',
                                     'act_verb', 'parte_papel', 'status'])
 
         try:
@@ -966,6 +976,11 @@ class CumprimentoService:
                 act_verb='registre-se',
                 defaults={
                     'categoria': 'registro',
+                    'origem': (
+                        'peticao'
+                        if getattr(record, 'rag_example', None)
+                        else 'movimentacao'
+                    ),
                     'observacao': record.observacao_prazo or '',
                     'codigo_movimentacao': '581',
                     'descricao_movimentacao': 'Cumprimento de Decisão',

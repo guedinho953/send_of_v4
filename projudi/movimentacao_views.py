@@ -24,7 +24,10 @@ class MovimentacaoDashboardView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
-        qs = MovimentacaoRecord.objects.filter(user=user)
+        # Certidões ficam exclusivamente no módulo de Certidões.
+        qs = MovimentacaoRecord.objects.filter(user=user).exclude(
+            categoria='certidao'
+        )
 
         context['total'] = qs.count()
         context['pendentes'] = qs.filter(status='pendente').count()
@@ -67,7 +70,9 @@ class MovimentacaoListView(LoginRequiredMixin, ListView):
     paginate_by = 20
 
     def get_queryset(self):
-        qs = MovimentacaoRecord.objects.filter(user=self.request.user)
+        qs = MovimentacaoRecord.objects.filter(
+            user=self.request.user
+        ).exclude(categoria='certidao')
         status = self.request.GET.get('status', '')
         cat = self.request.GET.get('categoria', '')
         if status and status in dict(MovimentacaoRecord.STATUS_CHOICES):

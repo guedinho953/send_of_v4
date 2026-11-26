@@ -464,6 +464,12 @@ class MovimentacaoRecord(TimeStampedModel):
         ('outro', 'Outro'),
     ]
 
+    ORIGEM_CHOICES = [
+        ('peticao', 'Petição'),
+        ('movimentacao', 'Movimentação'),
+        ('outro', 'Outro'),
+    ]
+
     STATUS_CHOICES = [
         ('pendente', 'Pendente'),
         ('processando', 'Processando'),
@@ -480,6 +486,10 @@ class MovimentacaoRecord(TimeStampedModel):
         help_text='Ex: certifique-se, arquive-se, publique-se, registre-se')
     categoria = models.CharField('Categoria', max_length=20,
         choices=CATEGORIA_CHOICES, default='outro')
+    origem = models.CharField(
+        'Origem', max_length=20, choices=ORIGEM_CHOICES,
+        default='movimentacao', db_index=True,
+        help_text='Separa certidões/procedimentos de petições e de movimentações')
     observacao = models.TextField('Observação', blank=True,
         help_text='Texto a ser registrado como observação da movimentação')
 

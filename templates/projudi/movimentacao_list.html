@@ -52,8 +52,6 @@
 <div class="filtro-bar">
     <a href="?{% if request.GET.status %}status={{ request.GET.status }}{% endif %}"
        class="filtro-btn {% if not request.GET.categoria %}active{% endif %}">Todas as categorias</a>
-    <a href="?categoria=certidao{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}"
-       class="filtro-btn {% if request.GET.categoria == 'certidao' %}active{% endif %}">Certidões</a>
     <a href="?categoria=intimacao{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}"
        class="filtro-btn {% if request.GET.categoria == 'intimacao' %}active{% endif %}">Intimações</a>
     <a href="?categoria=arquivamento{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}"

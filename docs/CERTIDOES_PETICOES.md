@@ -172,6 +172,19 @@ Travessão (`—`), aspas curvas e reticências são convertidos para
 equivalentes ASCII antes do envio, e caracteres fora do latin-1 são
 removidos. Isso evita os `?` no texto da observação no Projudi.
 
+## Separação por origem
+
+O campo `MovimentacaoRecord.origem` separa os registros:
+
+```text
+peticao      → certidões/procedimentos gerados pela fila/análise de petições
+movimentacao → certidões/procedimentos gerados pela análise de movimentações
+```
+
+O dashboard de **Certidões** usa esse campo para montar os dois grupos.
+O dashboard e a lista de **Movimentações** excluem `categoria='certidao'`,
+de modo que todas as certidões ficam dentro do módulo de Certidões.
+
 ## Certidão de inexistência de custas da execução
 
 Essa certidão fica na área de **Certidões**, dentro do grupo

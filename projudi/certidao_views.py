@@ -1,11 +1,12 @@
 """Dashboard de Certidões.
 
-Separa as certidões em dois grupos:
+Separa as certidões/procedimentos em dois grupos, pelo campo `origem`:
 
-- **Análises de petições**: `MovimentacaoRecord` com `rag_example` preenchido
-  (a certidão nasceu de uma decisão/petição analisada pela RAG).
-- **Movimentações**: `MovimentacaoRecord` sem `rag_example`
-  (a certidão nasceu da varredura de movimentações do Projudi).
+- **Petições**: gerados pela fila/análise de petições;
+- **Movimentações**: gerados pela análise/varredura de movimentações.
+
+Tudo fica dentro do módulo de Certidões; o dashboard de Movimentações não
+lista mais os registros com `categoria='certidao'`.
 """
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic import TemplateView
@@ -30,8 +31,8 @@ class CertidaoDashboardView(LoginRequiredMixin, TemplateView):
                 MovimentacaoRecord.STATUS_CHOICES):
             qs = qs.filter(status=status_filter)
 
-        peticoes = qs.filter(rag_example__isnull=False)
-        movimentacoes = qs.filter(rag_example__isnull=True)
+        peticoes = qs.filter(origem='peticao')
+        movimentacoes = qs.exclude(origem='peticao')
 
         total_peticoes = peticoes.count()
         total_movimentacoes = movimentacoes.count()

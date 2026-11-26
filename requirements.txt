@@ -24,6 +24,10 @@ google-auth-httplib2>=0.1
 # ── Celery / background tasks ──
 celery>=5.3
 
+# ── NLP / análise de comandos ──
+spacy>=3.8
+pt-core-news-sm>=3.8.0
+
 # ── IA local (opcional) ──
 # llama-cpp-python>=0.2
 
