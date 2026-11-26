@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% block title %}Fila de Movimentações — Send of v4{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .stat-card { background: #fff; border-radius: 10px; padding: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.06); border-left: 4px solid; text-align: center; }
+    .stat-card h4 { margin: 0; font-size: 27px; color: #1e3a5f; font-weight: 700; }
+    .stat-card p { margin: 4px 0 0; font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: .5px; }
+    .stat-card.total { border-left-color: #2563eb; }
+    .stat-card.hoje { border-left-color: #059669; }
+    .stat-card.falhas { border-left-color: #dc2626; }
+
+    .bulk-bar { background: #f3f4f6; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .filtro-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .filtro-btn { padding: 6px 14px; border-radius: 20px; font-size: 13px; border: 1px solid #e5e7eb; background: #fff; color: #374151; cursor: pointer; text-decoration: none; }
+    .filtro-btn.active { background: #2563eb; color: white; border-color: #2563eb; }
+    .filtro-btn:hover:not(.active) { background: #f9fafb; }
+
+    .mov-card { background: #fff; border-radius: 8px; padding: 14px 16px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border-left: 4px solid #d97706; transition: transform .1s; }
+    .mov-card:hover { transform: translateX(4px); }
+    .mov-card.falha { border-left-color: #dc2626; }
+    .mov-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+    .mov-processo { font-size: 15px; font-weight: 600; color: #1e3a5f; font-family: monospace; }
+    .mov-ato { font-size: 13px; color: #374151; margin-top: 4px; }
+    .mov-meta { font-size: 11px; color: #9ca3af; margin-top: 5px; }
+    .mov-obs { font-size: 12px; color: #6b7280; margin-top: 8px; background: #f9fafb; padding: 8px 10px; border-radius: 6px; }
+    .mov-actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+    .tag-status { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; white-space: nowrap; }
+    .tag-pendente { background: #fef3c7; color: #92400e; }
+    .tag-falha { background: #fee2e2; color: #991b1b; }
+    .tag-processando { background: #ede9fe; color: #5b21b6; }
+    .tag-cumprido { background: #d1fae5; color: #065f46; }
+    .tag-dispensado { background: #f3e8ff; color: #6b21a8; }
+    .btn-sm { padding: 5px 12px; font-size: 12px; border-radius: 5px; }
+    .btn-green { background: #059669; color: white; }
+    .btn-green:hover { background: #047857; }
+    .btn-orange { background: #ea580c; color: white; }
+    .btn-orange:hover { background: #c2410c; }
+    .btn-outline { background: transparent; border: 1px solid #d1d5db; color: #374151; }
+    .btn-outline:hover { background: #f3f4f6; }
+    .empty-state { text-align: center; padding: 40px 20px; color: #6b7280; background: #fff; border-radius: 8px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:16px;">
+    <div>
+        <h1 class="section-title" style="font-size:22px; margin:0;">📥 Fila de Movimentações</h1>
+        <p style="font-size:13px; color:#6b7280; margin:4px 0 0;">
+            Fila operacional com todos os pendentes. As certidões continuam
+            separadas no módulo de Certidões para consulta e geração.
+        </p>
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <a href="{% url 'projudi:movimentacao_dashboard' %}" class="btn btn-outline">← Dashboard</a>
+        <a href="{% url 'projudi:movimentacao_list' %}" class="btn btn-outline">📋 Todas</a>
+        <a href="{% url 'projudi:certidao_dashboard' %}" class="btn btn-outline">📄 Certidões</a>
+    </div>
+</div>
+
+{% if not session_active %}
+<div class="alert alert-warning">
+    ⚠️ Sessão do Projudi não está ativa.
+    <a href="{% url 'projudi:sync_session' %}">Clique aqui para sincronizar</a>
+    antes de executar movimentações.
+</div>
+{% endif %}
+
+<div class="stats-grid">
+    <div class="stat-card total"><h4>{{ total_pendentes }}</h4><p>Pendentes na fila</p></div>
+    <div class="stat-card hoje"><h4>{{ total_hoje }}</h4><p>Pendentes de hoje</p></div>
+    <div class="stat-card falhas"><h4>{{ total_pendentes }}</h4><p>Na fila atual</p></div>
+</div>
+
+<div class="bulk-bar">
+    <form method="post" action="{% url 'projudi:movimentacao_sync' %}" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-orange">🔄 Sincronizar Movimentações</button>
+        <button type="submit" name="hoje" value="1" class="btn btn-outline">📅 Sincronizar somente hoje</button>
+    </form>
+    <form method="post" action="{% url 'projudi:movimentacao_batch' %}" style="display:inline;"
+          onsubmit="return confirm('Executar todas as movimentações pendentes da fila?');">
+        {% csrf_token %}
+        <input type="hidden" name="incluir_certidoes" value="1">
+        {% if filtro_hoje %}<input type="hidden" name="hoje" value="1">{% endif %}
+        <button type="submit" class="btn btn-green">
+            ▶️ Executar {% if filtro_hoje %}pendentes de hoje{% else %}todos os pendentes{% endif %}
+        </button>
+    </form>
+    <a href="{% url 'projudi:certidao_peticoes' %}" class="btn btn-outline">📥 Fila de Petições</a>
+</div>
+
+<div class="filtro-bar">
+    <a href="{% url 'projudi:movimentacao_fila' %}"
+       class="filtro-btn {% if not filtro_hoje %}active{% endif %}">Todos os pendentes</a>
+    <a href="?data=hoje"
+       class="filtro-btn {% if filtro_hoje %}active{% endif %}">📅 Somente hoje</a>
+</div>
+
+{% if movimentacoes %}
+    {% for m in movimentacoes %}
+    <div class="mov-card {{ m.status }}">
+        <div class="mov-header">
+            <div>
+                <div class="mov-processo">{{ m.numero_processo_cnj|default:m.processo }}</div>
+                <div class="mov-ato">
+                    <strong>{{ m.act_verb|default:"Movimentação" }}</strong>
+                    {% if m.descricao_movimentacao %} — {{ m.descricao_movimentacao }}{% endif %}
+                </div>
+                <div class="mov-meta">
+                    {{ m.get_categoria_display }}
+                    {% if m.categoria == 'certidao' %}
+                    <span class="tag-status tag-pendente" style="margin-left:6px;">Certidão</span>
+                    {% endif %}
+                    {% if m.parte_nome %} | 👤 {{ m.parte_nome }}{% endif %}
+                    {% if m.data_movimentacao %} | 📅 {{ m.data_movimentacao|date:"d/m/Y" }}{% endif %}
+                    | 🕒 criada em {{ m.created_at|date:"d/m/Y H:i" }}
+                </div>
+            </div>
+            <span class="tag-status tag-{{ m.status }}">{{ m.get_status_display }}</span>
+        </div>
+
+        {% if m.observacao %}
+        <div class="mov-obs">{{ m.observacao|striptags|truncatechars:300 }}</div>
+        {% endif %}
+
+        <div class="mov-actions">
+            <form method="post" action="{% url 'projudi:movimentacao_executar' m.pk %}" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-green">▶️ Executar</button>
+            </form>
+            <a href="{% url 'projudi:movimentacao_detail' m.pk %}" class="btn btn-sm btn-outline">🔍 Detalhes</a>
+            {% if m.categoria == 'certidao' %}
+            <a href="{% url 'projudi:certidao_dashboard' %}" class="btn btn-sm btn-outline">📄 Ver em Certidões</a>
+            {% endif %}
+            {% if m.url_processo %}
+            <a href="{{ m.url_processo }}" target="_blank" class="btn btn-sm btn-outline">🔗 Processo</a>
+            {% endif %}
+            <form method="post" action="{% url 'projudi:movimentacao_dispensar' m.pk %}" style="display:inline;"
+                  onsubmit="return confirm('Dispensar esta movimentação?');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-outline" style="color:#6b21a8;">🚫 Dispensar</button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+<div class="empty-state">
+    📭 Nenhuma movimentação pendente
+    {% if filtro_hoje %}de hoje{% endif %}.
+    Use o botão <strong>Sincronizar</strong> para buscar no Projudi.
+</div>
+{% endif %}
+{% endblock %}

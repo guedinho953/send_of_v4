@@ -74,6 +74,58 @@ class MovimentacaoDashboardView(LoginRequiredMixin, TemplateView):
         return False
 
 
+class MovimentacaoFilaView(LoginRequiredMixin, TemplateView):
+    """Fila de movimentações pendentes, análoga à Fila de Petições."""
+
+    template_name = 'projudi/movimentacao_fila.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from datetime import date
+
+        user = self.request.user
+        # Fila operacional: inclui todos os pendentes, inclusive certidões.
+        # A separação por origem continua nos dashboards de Certidões e
+        # Movimentações.
+        qs = MovimentacaoRecord.objects.filter(
+            user=user,
+            status__in=['pendente', 'falha'],
+        )
+
+        filtro_hoje = self.request.GET.get('data') == 'hoje'
+        if filtro_hoje:
+            qs = qs.filter(data_movimentacao=date.today())
+
+        context.update({
+            'movimentacoes': qs.order_by(
+                'data_movimentacao', 'created_at'
+            ),
+            'filtro_hoje': filtro_hoje,
+            'total_pendentes': qs.count(),
+            'total_hoje': (
+                MovimentacaoRecord.objects
+                .filter(
+                    user=user,
+                    status__in=['pendente', 'falha'],
+                    data_movimentacao=date.today(),
+                )
+                .count()
+            ),
+            'session_active': self._session_ativa(user),
+        })
+        return context
+
+    def _session_ativa(self, user):
+        try:
+            sessao = ProjudiSession.objects.filter(
+                user=user, status='active').first()
+            if sessao:
+                return ProjudiService(user).check_session()
+        except Exception:
+            pass
+        return False
+
+
 class MovimentacaoListView(LoginRequiredMixin, ListView):
     template_name = 'projudi/movimentacao_list.html'
     context_object_name = 'movimentacoes'
@@ -257,7 +309,9 @@ class MovimentacaoBatchView(LoginRequiredMixin, View):
         service = MovimentacaoService(request.user)
         pendentes = MovimentacaoRecord.objects.filter(
             user=request.user, status__in=['pendente', 'falha']
-        ).exclude(categoria='certidao')
+        )
+        if request.POST.get('incluir_certidoes') != '1':
+            pendentes = pendentes.exclude(categoria='certidao')
         if request.POST.get('hoje') == '1':
             from datetime import date
             pendentes = pendentes.filter(

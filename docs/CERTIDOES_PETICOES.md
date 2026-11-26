@@ -204,6 +204,29 @@ A geração da certidão em si continua usando `CumprimentoService` e o
 `MovimentacaoRecord` gerado entra em **Certidões vindas das movimentações**
 com `origem='movimentacao'`.
 
+## Fila de Movimentações
+
+Rota:
+
+```text
+/projudi/movimentacoes/fila/
+```
+
+A fila operacional mostra todos os `MovimentacaoRecord` pendentes/falhas,
+inclusive os classificados como `certidao`. Cada item pode ser executado,
+dispensado ou aberto nos detalhes.
+
+Ações disponíveis:
+
+- **Sincronizar Movimentações**;
+- **Sincronizar somente hoje**;
+- **Executar pendentes** (ou somente os de hoje quando o filtro está ativo);
+- filtro **📅 Somente hoje**.
+
+A separação por origem continua nos dashboards: as certidões aparecem em
+**Certidões**, e os demais atos em **Movimentações**. A fila é a visão
+operacional unificada para execução.
+
 ## Movimentações de hoje
 
 A listagem do Projudi traz a data da movimentação. Os fluxos de

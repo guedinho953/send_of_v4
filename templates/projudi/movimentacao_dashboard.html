@@ -91,6 +91,7 @@
         <button type="submit" class="btn btn-green">▶️ Executar pendentes de hoje ({{ pendentes_hoje }})</button>
     </form>
     {% endif %}
+    <a href="{% url 'projudi:movimentacao_fila' %}" class="btn" style="background:#0891b2; color:white;">📥 Fila de Movimentações</a>
     <a href="{% url 'projudi:movimentacao_list' %}" class="btn btn-outline">📋 Ver Lista Completa</a>
     <a href="{% url 'projudi:certidao_dashboard' %}" class="btn" style="background:#7c3aed; color:white;">📄 Certidões</a>
     <a href="{% url 'projudi:cumprimento_dashboard' %}" class="btn btn-outline">📬 Cumprimentos</a>
