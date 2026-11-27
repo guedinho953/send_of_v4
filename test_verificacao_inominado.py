@@ -67,6 +67,19 @@ class VerificacaoInominadoTest(unittest.TestCase):
         self.assertIsNotNone(mov)
         self.assertEqual(mov['evento'], '55')
 
+    def test_evento_explicito_aceita_juntada_generica(self):
+        movs = [
+            {
+                'evento': '58',
+                'ato': 'Juntada de Cumprimento Genérico',
+                'observacao': 'Documento: RECURSO INOMINADO - ri.pdf',
+                'data_obj': date(2026, 11, 26),
+            }
+        ]
+        mov = achar_recurso_inominado(movs, evento=58)
+        self.assertIsNotNone(mov)
+        self.assertEqual(mov['evento'], '58')
+
     def test_intimacao_prioriza_djen(self):
         mov, data, origem = achar_intimacao_djen(self.movs, 70)
         self.assertIsNotNone(mov)

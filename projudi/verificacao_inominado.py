@@ -90,11 +90,17 @@ def _forca_recurso(mov) -> int:
 def achar_recurso_inominado(movs, evento=None):
     """Localiza o evento de interposição do recurso inominado.
 
-    Dá preferência ao ato explícito de juntada do recurso. Movimentos
-    genéricos (ex.: "Juntada de Cumprimento Genérico") que apenas citam
-    "recurso inominado" no texto não podem vencer o evento real.
+    No modo automático, dá preferência ao ato explícito de juntada do
+    recurso. Movimentos genéricos (ex.: "Juntada de Cumprimento Genérico")
+    que apenas citam "recurso inominado" no texto não podem vencer o evento
+    real.
+
+    Se ``evento`` for informado, a escolha é explícita: aceita também uma
+    juntada genérica que mencione o recurso, pois o usuário pode querer
+    referenciar o evento da juntada.
     """
     candidatos = []
+    escolha_explicita = bool(evento)
     for mov in movs:
         ev = evento_mov(mov)
         if evento and ev != int(evento):
@@ -109,8 +115,10 @@ def achar_recurso_inominado(movs, evento=None):
                 'DESPROVIDO', 'PROVIDO')):
             continue
         forca = _forca_recurso(mov)
-        if forca <= 0:
+        if not escolha_explicita and forca <= 0:
             continue
+        # Escolha explícita: aceita a juntada genérica, mas mantém o peso
+        # do ato para eventual desempate.
         candidatos.append((forca, ev, mov))
 
     if not candidatos:
