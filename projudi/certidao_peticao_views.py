@@ -1148,15 +1148,21 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
             processo=(request.GET.get('processo') or '').strip(),
             evento=(request.GET.get('evento') or '').strip(),
             executado=(request.GET.get('executado') or '').strip(),
+            evento_requerimento=(
+                request.GET.get('evento_requerimento') or '').strip(),
         ))
 
     def post(self, request):
         processo = (request.POST.get('processo') or '').strip()
         evento = (request.POST.get('evento') or '').strip()
         executado = (request.POST.get('executado') or '').strip()
-        return self.processar(request, processo, evento, executado)
+        evento_requerimento = (
+            request.POST.get('evento_requerimento') or '').strip()
+        return self.processar(
+            request, processo, evento, executado, evento_requerimento)
 
-    def processar(self, request, processo, evento='', executado=''):
+    def processar(self, request, processo, evento='', executado='',
+                  evento_requerimento=''):
         from django.template import Context, Template
         from base.utils import normalize_process_number
         from processes.models import (
@@ -1177,6 +1183,17 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
             )
             return render(request, self.template_name, self._contexto(
                 processo=processo, evento=evento, executado=executado,
+                evento_requerimento=evento_requerimento,
+            ))
+        if evento_requerimento and not evento_requerimento.isdigit():
+            messages.error(
+                request,
+                'Evento do requerimento inválido. Informe apenas o número '
+                'do evento ou deixe em branco para busca automática.'
+            )
+            return render(request, self.template_name, self._contexto(
+                processo=processo, evento=evento, executado=executado,
+                evento_requerimento=evento_requerimento,
             ))
 
         assinante = (
@@ -1195,12 +1212,14 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
             )
 
         resultado = DecursoPagamentoService(request.user).analisar(
-            processo, evento, parte_nome=executado
+            processo, evento, parte_nome=executado,
+            evento_requerimento=evento_requerimento,
         )
         if resultado.get('erro'):
             messages.error(request, resultado['erro'])
             return render(request, self.template_name, self._contexto(
                 processo=processo, evento=evento, executado=executado,
+                evento_requerimento=evento_requerimento,
             ))
 
         # Enquanto o prazo não decorrer, não há certidão de decurso:
@@ -1285,7 +1304,19 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
                 'executado': resultado['executado'],
                 'evento_despacho': resultado['evento_despacho'],
                 'evento_intimacao': resultado['evento_intimacao'],
+                'evento_requerimento': (
+                    resultado.get('evento_requerimento') or ''),
+                'data_requerimento': (
+                    resultado['data_requerimento'].strftime('%d/%m/%Y')
+                    if resultado.get('data_requerimento') else ''
+                ),
                 'data_intimacao': resultado['data_intimacao'].strftime(
+                    '%d/%m/%Y'
+                ),
+                'data_publicacao': resultado['data_intimacao'].strftime(
+                    '%d/%m/%Y'
+                ),
+                'data_inicio_contagem': resultado['data_inicio'].strftime(
                     '%d/%m/%Y'
                 ),
                 'ultimo_dia': resultado['ultimo_dia'].strftime('%d/%m/%Y'),

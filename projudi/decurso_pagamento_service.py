@@ -18,7 +18,8 @@ class DecursoPagamentoService:
     def __init__(self, user):
         self.user = user
 
-    def analisar(self, numero, evento='', parte_nome='', dias=15):
+    def analisar(self, numero, evento='', parte_nome='', dias=15,
+                 evento_requerimento=''):
         digitos = normalize_process_number(numero)
         if len(digitos) < 15:
             return {'erro': 'Número de processo inválido.'}
@@ -81,6 +82,30 @@ class DecursoPagamentoService:
             evento = despacho['evento']
             despacho_auto = True
 
+        evento_requerimento = str(evento_requerimento or '').strip()
+        if evento_requerimento:
+            if not evento_requerimento.isdigit():
+                return {
+                    'erro': (
+                        'Evento do requerimento inválido. Informe apenas '
+                        'o número do evento.'
+                    )
+                }
+            requerimento = next(
+                (m for m in movs
+                 if m['evento'] == evento_requerimento),
+                None,
+            )
+            if not requerimento:
+                return {
+                    'erro': (
+                        f'Evento {evento_requerimento} do requerimento não '
+                        'encontrado.'
+                    )
+                }
+        else:
+            requerimento = self._localizar_requerimento(movs, evento)
+
         parte = None
         if parte_nome:
             alvo = _nome_compacto(parte_nome)
@@ -133,6 +158,12 @@ class DecursoPagamentoService:
             'despacho_texto': despacho['texto'][:500],
             'despacho_auto': despacho_auto,
             'despacho_trecho': (despacho.get('trecho') or '')[:500],
+            'evento_requerimento': (
+                requerimento['evento'] if requerimento else ''
+            ),
+            'data_requerimento': (
+                requerimento.get('data') if requerimento else None
+            ),
             'executado': parte['nome'],
             'parte_papel': parte.get('papel') or '',
             'evento_intimacao': intima['evento'],
@@ -244,6 +275,38 @@ class DecursoPagamentoService:
             if m:
                 return m.group(0)[:500]
         return ''
+
+    @staticmethod
+    def _localizar_requerimento(movs, evento_despacho):
+        """Localiza a petição/requerimento que antecedeu o despacho."""
+        candidatos = []
+        for mov in movs:
+            try:
+                if int(mov['evento']) >= int(evento_despacho):
+                    continue
+            except (TypeError, ValueError):
+                continue
+            up = _norm(mov['texto'])
+            inicio = _norm(re.sub(r'^\s*\d+\s*', '', mov['texto']))
+            if not re.match(
+                    r'JUNTADA DE (PETICAO|REQUERIMENTO)\b', inicio):
+                continue
+            if 'PETICAO' not in inicio and 'REQUERIMENTO' not in inicio:
+                continue
+            if not any(k in up for k in (
+                'EXECUCAO', 'CUMPRIMENTO', 'PAGAMENTO', 'REQUERIMENTO',
+            )):
+                continue
+            if any(k in up for k in (
+                'INTIMA', 'DISPONIBILIZ', 'CERTIDAO', 'DESPACHO',
+                'DECISAO', 'JULGADA', 'JULGADO',
+            )):
+                continue
+            candidatos.append(mov)
+        if not candidatos:
+            return None
+        candidatos.sort(key=lambda m: int(m['evento']))
+        return candidatos[-1]
 
     @staticmethod
     def _descricao_evento(texto):

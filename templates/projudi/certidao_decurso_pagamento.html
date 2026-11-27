@@ -52,6 +52,15 @@
                 </div>
             </div>
             <div>
+                <label for="evento_requerimento" style="display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:4px;">Evento do requerimento (opcional)</label>
+                <input id="evento_requerimento" name="evento_requerimento"
+                       value="{{ evento_requerimento }}" placeholder="automático"
+                       style="width:130px; padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px;">
+                <div style="font-size:11px; color:#6b7280; margin-top:4px; max-width:260px;">
+                    Petição/requerimento que antecedeu o despacho.
+                </div>
+            </div>
+            <div>
                 <label for="executado" style="display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:4px;">Executado(a) (opcional)</label>
                 <input id="executado" name="executado" value="{{ executado }}"
                        placeholder="deixe vazio para usar o promovido"
