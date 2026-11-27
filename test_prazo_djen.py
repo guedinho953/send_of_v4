@@ -14,11 +14,11 @@ class PrazoDjenTest(unittest.TestCase):
 
     def test_disponibilizacao_sabado(self):
         r = self.svc.contar_prazo_djen(date(2026, 11, 28), 10)
-        self.assertEqual(r.data_disponibilizacao_efetiva, date(2026, 11, 30))
-        self.assertEqual(r.data_publicacao, date(2026, 12, 1))
-        self.assertEqual(r.data_inicio_contagem, date(2026, 12, 2))
-        self.assertEqual(r.ultimo_dia, date(2026, 12, 15))
-        self.assertEqual(r.data_decurso, date(2026, 12, 16))
+        self.assertEqual(r.data_disponibilizacao_efetiva, date(2026, 11, 28))
+        self.assertEqual(r.data_publicacao, date(2026, 11, 30))
+        self.assertEqual(r.data_inicio_contagem, date(2026, 12, 1))
+        self.assertEqual(r.ultimo_dia, date(2026, 12, 14))
+        self.assertEqual(r.data_decurso, date(2026, 12, 15))
 
     def test_disponibilizacao_sexta(self):
         r = self.svc.contar_prazo_djen(date(2026, 11, 27), 10)
@@ -31,12 +31,22 @@ class PrazoDjenTest(unittest.TestCase):
     def test_disponibilizacao_domingo_feriado(self):
         # 15/11/2026 é domingo e feriado nacional.
         r = self.svc.contar_prazo_djen(date(2026, 11, 15), 10)
-        self.assertEqual(r.data_disponibilizacao_efetiva, date(2026, 11, 16))
-        self.assertEqual(r.data_publicacao, date(2026, 11, 17))
-        self.assertEqual(r.data_inicio_contagem, date(2026, 11, 18))
+        self.assertEqual(r.data_disponibilizacao_efetiva, date(2026, 11, 15))
+        self.assertEqual(r.data_publicacao, date(2026, 11, 16))
+        self.assertEqual(r.data_inicio_contagem, date(2026, 11, 17))
         # 20/11 (Consciência Negra) é feriado nacional.
-        self.assertEqual(r.ultimo_dia, date(2026, 12, 2))
-        self.assertEqual(r.data_decurso, date(2026, 12, 3))
+        self.assertEqual(r.ultimo_dia, date(2026, 12, 1))
+        self.assertEqual(r.data_decurso, date(2026, 12, 2))
+
+    def test_disponibilizacao_finados(self):
+        # 02/11/2026 é Finados (feriado). O próximo dia útil (03/11) já é a
+        # publicação; o prazo inicia em 04/11.
+        r = self.svc.contar_prazo_djen(date(2026, 11, 2), 15)
+        self.assertEqual(r.data_disponibilizacao_efetiva, date(2026, 11, 2))
+        self.assertEqual(r.data_publicacao, date(2026, 11, 3))
+        self.assertEqual(r.data_inicio_contagem, date(2026, 11, 4))
+        self.assertEqual(r.ultimo_dia, date(2026, 11, 25))
+        self.assertEqual(r.data_decurso, date(2026, 11, 26))
 
     def test_prazo_inclui_o_dia_de_inicio(self):
         r = self.svc.contar_prazo_djen(date(2026, 11, 27), 1)

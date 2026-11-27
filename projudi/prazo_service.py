@@ -389,27 +389,29 @@ class PrazoService:
         data_disponibilizacao: date,
         prazo_dias: int,
     ) -> ResultadoPrazo:
-        """Conta prazo pela regra do DJEN informada pela 2ª VSJ:
+        """Conta prazo pela regra do DJEN:
 
-        1. disponibilização em sábado/domingo/feriado/dia sem expediente é
-           considerada no primeiro dia útil seguinte;
-        2. publicação no DJEN = primeiro dia útil seguinte à disponibilização
-           considerada;
-        3. início do prazo = primeiro dia útil seguinte à publicação
+        1. a disponibilização é a data bruta informada, ainda que caia em
+           sábado/domingo/feriado;
+        2. a publicação no DJEN é o primeiro dia útil seguinte à
+           disponibilização;
+        3. o início do prazo é o primeiro dia útil seguinte à publicação
            (exclui-se a publicação; o dia de início conta como 1º dia);
         4. o vencimento é o N-ésimo dia útil contado a partir do início;
         5. o trânsito/decurso é o primeiro dia útil seguinte ao vencimento.
+
+        Base: Lei 11.419/2006, art. 5º, §3º, e Resolução CNJ 455/2022 —
+        considera-se publicação o primeiro dia útil seguinte ao da
+        disponibilização.
         """
         if prazo_dias <= 0:
             raise ValueError('prazo_dias deve ser > 0')
 
+        # Não se desloca a disponibilização. Se ela cair em feriado/fim de
+        # semana, o próximo dia útil já é a publicação.
         disponibilizacao_efetiva = data_disponibilizacao
-        if not self.is_dia_util(disponibilizacao_efetiva):
-            disponibilizacao_efetiva = self._proximo_dia_util(
-                disponibilizacao_efetiva, incluir=True)
-
         publicacao = self._proximo_dia_util(
-            disponibilizacao_efetiva, incluir=False)
+            data_disponibilizacao, incluir=False)
         inicio = self._proximo_dia_util(publicacao, incluir=False)
 
         contados: List[date] = []

@@ -60,7 +60,6 @@
         <div><strong>Tipo</strong> {{ tipo_label|default:registro.tipo_prazo }}</div>
         <div><strong>Prazo</strong> {{ registro.prazo_dias }} dias úteis</div>
         <div><strong>Disponibilização</strong> {{ registro.data_disponibilizacao|date:"d/m/Y"|default:"—" }}</div>
-        <div><strong>Considerada em</strong> {{ registro.data_disponibilizacao_efetiva|date:"d/m/Y"|default:"—" }}</div>
         <div><strong>Publicação DJEN</strong> {{ registro.data_publicacao|date:"d/m/Y"|default:"—" }}</div>
         <div><strong>Início do prazo</strong> {{ registro.data_inicio_contagem|date:"d/m/Y"|default:"—" }}</div>
         <div><strong>Último dia</strong> {{ registro.ultimo_dia|date:"d/m/Y"|default:"—" }}</div>

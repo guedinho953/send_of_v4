@@ -162,10 +162,7 @@ class Command(BaseCommand):
         self.stdout.write('=' * 70)
         self.stdout.write('CONTAGEM DJEN — ' + str(info['label']).upper())
         self.stdout.write('=' * 70)
-        self.stdout.write(f'Disponibilização bruta ..: {_fmt(dispo)}')
-        self.stdout.write(
-            f'Disponibilização efetiva .: '
-            f'{_fmt(res.data_disponibilizacao_efetiva)}')
+        self.stdout.write(f'Disponibilização .........: {_fmt(dispo)}')
         self.stdout.write(f'Publicação (DJEN) ........: {_fmt(res.data_publicacao)}')
         self.stdout.write(
             f'Início do prazo (1º dia) .: {_fmt(res.data_inicio_contagem)}')
@@ -283,9 +280,7 @@ class Command(BaseCommand):
                 habilitacao_regular=None, evento_recurso='', tipo=''):
         """Memória completa, só para controle (não vai na certidão)."""
         linhas = [
-            f'Disponibilização bruta: {_fmt(res.data_disponibilizacao)}',
-            f'Disponibilização considerada: '
-            f'{_fmt(res.data_disponibilizacao_efetiva)}',
+            f'Disponibilização: {_fmt(res.data_disponibilizacao)}',
             f'Publicação DJEN: {_fmt(res.data_publicacao)}',
             f'Início do prazo: {_fmt(res.data_inicio_contagem)}',
             f'Prazo: {res.prazo_dias} dias úteis ({info["label"]})',

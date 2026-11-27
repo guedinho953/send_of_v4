@@ -3,9 +3,7 @@
 Calcula a cadeia:
 
 ```
-disponibilização
-   ↓ (se sábado/domingo/feriado/sem expediente → 1º dia útil seguinte)
-disponibilização considerada
+disponibilização (data bruta)
    ↓ (1º dia útil seguinte)
 publicação no DJEN
    ↓ (1º dia útil seguinte; exclui a publicação)
@@ -15,6 +13,10 @@ publicação no DJEN
    ↓ (1º dia útil seguinte)
 trânsito em julgado
 ```
+
+Base: Lei 11.419/2006, art. 5º, §3º, e Resolução CNJ 455/2022 —
+considera-se publicação o primeiro dia útil seguinte ao da disponibilização,
+sem deslocar a disponibilização.
 
 ## Tipos iniciais
 
