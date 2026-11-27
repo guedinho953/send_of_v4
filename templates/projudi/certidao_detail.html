@@ -109,6 +109,7 @@
 <div class="acoes">
     {% if preview_disponivel %}
         <a class="btn-sm" href="{% url 'projudi:certidao_preview' registro.id %}" target="_blank">🖨️ Abrir preview</a>
+        <a class="btn-sm" href="{% url 'projudi:certidao_juntar_intimar' registro.id %}">🔗 Juntar/Intimar</a>
     {% endif %}
     <a class="btn-sm" href="{% url 'admin:projudi_prazodjenrecord_change' registro.id %}">Ver no Admin</a>
 </div>

@@ -6,6 +6,7 @@ from . import cumprimento_views
 from . import movimentacao_views
 from . import certidao_views
 from . import decurso_views
+from . import juntar_views
 from . import peticoes_views
 
 app_name = 'projudi'
@@ -94,6 +95,11 @@ urlpatterns = [
         name='certidao_decurso_pagamento',
     ),
     path('certidoes/<int:pk>/', certidao_views.CertidaoDetailView.as_view(), name='certidao_detail'),
+    path(
+        'certidoes/<int:pk>/juntar-intimar/',
+        juntar_views.CertidaoJuntarIntimarView.as_view(),
+        name='certidao_juntar_intimar',
+    ),
     path('certidoes/<int:pk>/preview/', certidao_views.CertidaoPreviewView.as_view(), name='certidao_preview'),
 
     # Aba Movimentações (NOVO — atos internos via Mov581)

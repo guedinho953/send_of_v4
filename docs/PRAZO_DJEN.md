@@ -323,6 +323,34 @@ do decurso e não gera. Tudo na mesma página da fila.
 A tela gera a certidão, registra na aba **Petições** e abre o detalhe com o
 preview. Nada é juntado/movimentado no Projudi nesta etapa.
 
+## Juntar/Intimar — primeira etapa (simulação)
+
+No detalhe de uma certidão com preview há o botão **🔗 Juntar/Intimar**:
+
+```
+/projudi/certidoes/<id>/juntar-intimar/
+```
+
+Nesta etapa a tela monta o **plano** e **não escreve no Projudi**:
+
+- certidão e template que serão juntados;
+- URL do processo e número interno do Projudi;
+- situação (preparo/gratuidade/intempestivo);
+- polo sugerido para intimação (Autoras/Réus);
+- prazo (5, 10 ou 15 dias);
+- observação da juntada e da intimação;
+- prévia da certidão.
+
+A execução real será habilitada depois de validar o plano com um processo de
+teste. Quando habilitada, usará os métodos já existentes do
+`MovimentacaoService`:
+
+- `executar_requests` — Mov581 + inserção/assinatura da certidão;
+- `executar_com_intimacao` — intimação do polo e prazo escolhidos.
+
+Por enquanto a tela informa que a execução real está bloqueada e nada é
+enviado.
+
 ## Dashboard de certidões
 
 Acesse **Certidões** no menu ou:

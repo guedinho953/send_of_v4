@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}Juntar/Intimar — Certidão #{{ registro.id }}{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:16px;">
+    <div>
+        <h1 class="section-title" style="font-size:20px; margin:0;">🔗 Juntar/Intimar certidão #{{ registro.id }}</h1>
+        <div style="font-size:13px; color:#6b7280; margin-top:4px;">
+            {{ plano.processo }} · {{ plano.template_nome }}
+        </div>
+    </div>
+    <div style="display:flex; gap:8px;">
+        <a href="{% url 'projudi:certidao_detail' registro.id %}" class="btn btn-outline">← Detalhe</a>
+        <a href="{% url 'projudi:certidao_dashboard' %}" class="btn btn-outline">Certidões</a>
+    </div>
+</div>
+
+<div style="background:#fef3c7; border:1px solid #f59e0b; color:#92400e; padding:10px 14px; border-radius:8px; margin-bottom:16px; font-size:12px; line-height:1.5;">
+    <strong>SIMULAÇÃO:</strong> nada será enviado ao Projudi nesta etapa.
+    Confira o plano, o polo e o prazo. A execução real será habilitada depois
+    da validação com um processo de teste.
+</div>
+
+<div style="background:#fff; border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,.08); padding:16px; margin-bottom:16px;">
+    <h3 style="margin-top:0; color:#1e3a5f;">Plano</h3>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:8px 20px; font-size:13px;">
+        <div><strong>Processo:</strong> {{ plano.processo }}</div>
+        <div><strong>Certidão:</strong> {{ plano.template_nome }}</div>
+        <div><strong>Parte/recorrente:</strong> {{ plano.parte|default:"—" }}</div>
+        <div><strong>Situação:</strong> {{ plano.situacao }}</div>
+        <div><strong>Polo sugerido:</strong> {{ plano.polo }}</div>
+        <div><strong>Prazo:</strong> {{ plano.prazo }} dias úteis</div>
+        <div><strong>Número interno:</strong> {{ plano.proc_projudi|default:"—" }}</div>
+        <div><strong>HTML da certidão:</strong> {{ plano.html_tamanho }} caracteres</div>
+    </div>
+
+    {% if plano.erros %}
+    <div style="margin-top:12px; background:#fef2f2; border:1px solid #fecaca; color:#991b1b; padding:10px 12px; border-radius:6px; font-size:12px;">
+        {% for erro in plano.erros %}<div>• {{ erro }}</div>{% endfor %}
+    </div>
+    {% endif %}
+
+    <div style="margin-top:12px; font-size:12px;">
+        <strong>Observação da juntada:</strong> {{ plano.observacao_juntada }}<br>
+        {% if plano.observacao_intimacao %}
+        <strong>Intimação:</strong> {{ plano.observacao_intimacao }}
+        {% endif %}
+    </div>
+</div>
+
+{% if plano.preview_disponivel %}
+<div style="background:#fff; border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,.08); padding:12px; margin-bottom:16px;">
+    <h3 style="margin-top:0; color:#1e3a5f;">Certidão</h3>
+    <iframe src="{% url 'projudi:certidao_preview' registro.id %}"
+            title="Certidão #{{ registro.id }}"
+            style="width:100%; height:700px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;"></iframe>
+</div>
+{% endif %}
+
+<div style="background:#fff; border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,.08); padding:16px;">
+    <h3 style="margin-top:0; color:#1e3a5f;">Ajustar e simular</h3>
+    <form method="post">
+        {% csrf_token %}
+        <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
+            <div style="flex:1; min-width:320px;">
+                <label style="display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:4px;">URL DadosProcesso</label>
+                <input name="processo_url" value="{{ processo_url }}"
+                       placeholder="https://projudi.tjba.jus.br/projudi/listagens/DadosProcesso?numeroProcesso=..."
+                       style="width:100%; padding:7px 9px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px;">
+            </div>
+            <div>
+                <label style="display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:4px;">Polo da intimação</label>
+                <select name="polo" style="padding:7px 9px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px;">
+                    {% for valor, label in polos %}
+                    <option value="{{ valor }}" {% if valor == polo %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label style="display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:4px;">Prazo</label>
+                <select name="prazo" style="padding:7px 9px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px;">
+                    {% for valor, label in prazos %}
+                    <option value="{{ valor }}" {% if valor == prazo %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label style="display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:4px;">Ação</label>
+                <select name="acao" style="padding:7px 9px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px;">
+                    {% for valor, label in acoes %}
+                    <option value="{{ valor }}" {% if valor == acao %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:#374151; margin-bottom:12px;">
+            <input type="checkbox" name="confirmo">
+            Confirmo que conferi a certidão, o processo, o polo e o prazo.
+        </label>
+        <button type="submit" class="btn" style="background:#0891b2; color:#fff;">
+            Simular plano
+        </button>
+    </form>
+</div>
+{% endblock %}
