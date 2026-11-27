@@ -245,6 +245,7 @@ class CertidaoImpugnacaoEmbargosView(LoginRequiredMixin, View):
                 disponibilizacao=data_intimacao.strftime('%d/%m/%Y'),
                 protocolo=data_protocolo.strftime('%d/%m/%Y'),
                 processo=processo,
+                processo_url=processo_url or None,
                 parte=resultado.get('executado') or executado,
                 origem='movimentacao',
                 evento_recurso=evento_impugnacao or '',

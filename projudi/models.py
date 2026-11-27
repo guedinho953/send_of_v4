@@ -788,6 +788,8 @@ class PrazoDjenRecord(models.Model):
 
     processo = models.CharField(
         'Processo (CNJ)', max_length=25, blank=True, db_index=True)
+    processo_url = models.URLField(
+        'URL do processo', max_length=500, blank=True)
     parte = models.CharField('Parte', max_length=300, blank=True)
     origem = models.CharField(
         'Origem', max_length=20, choices=ORIGEM_CHOICES,

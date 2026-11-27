@@ -46,6 +46,8 @@ def _processo_url(registro, url_informada='') -> str:
     from processes.models import Process
     from projudi.models import OficioRecord
 
+    if getattr(registro, 'processo_url', ''):
+        return registro.processo_url
     proc = Process.objects.filter(number=registro.processo).first()
     if proc and proc.projudi_url:
         return proc.projudi_url

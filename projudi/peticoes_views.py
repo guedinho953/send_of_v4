@@ -241,6 +241,7 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
                         '%d/%m/%Y'),
                     protocolo=data_protocolo.strftime('%d/%m/%Y'),
                     processo=processo,
+                    processo_url=processo_url or None,
                     parte=parte,
                     origem='peticao',
                     peticao_documento=peticao_documento,

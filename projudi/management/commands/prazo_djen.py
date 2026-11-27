@@ -197,6 +197,9 @@ class Command(BaseCommand):
             '--habilitacao', choices=['regular', 'omitir'], default='regular',
             help='Cláusula de habilitação dos advogados (default: regular)')
         parser.add_argument('--processo', help='Número CNJ')
+        parser.add_argument(
+            '--processo-url', default='',
+            help='URL DadosProcesso do Projudi para a juntada')
         parser.add_argument('--parte', help='Nome da parte')
         parser.add_argument(
             '--origem', choices=['peticao', 'movimentacao'],
@@ -497,6 +500,7 @@ class Command(BaseCommand):
         try:
             rec = PrazoDjenRecord.objects.create(
                 processo=options['processo'] or '',
+                processo_url=options.get('processo_url') or '',
                 parte=options['parte'] or '',
                 origem=options.get('origem') or 'movimentacao',
                 peticao_documento=options.get('peticao_documento') or '',
@@ -544,6 +548,7 @@ class Command(BaseCommand):
             payload = {
                 'id': registro_id,
                 'processo': options['processo'] or '',
+                'processo_url': options.get('processo_url') or '',
                 'parte': options['parte'] or '',
                 'origem': options.get('origem') or 'movimentacao',
                 'peticao_documento': options.get('peticao_documento') or '',
