@@ -527,7 +527,7 @@ class CriarRagMovimentacaoView(LoginRequiredMixin, View):
     """Cria uma RAG a partir de uma movimentação/documento do Projudi."""
 
     def post(self, request):
-        from processes.models import Process, RAGExample
+        from processes.models import Process, RAGExample, DocumentTemplate
         from base.utils import normalize_process_number
         from .certidao_sugestao import _texto_documento, _tipo_por_texto
 
@@ -599,10 +599,28 @@ class CriarRagMovimentacaoView(LoginRequiredMixin, View):
             tipo_certidao=tipo_certidao,
             active=True,
         )
+        template_por_tipo = {
+            'inominado': 'Certidão de Recurso Inominado',
+            'decurso_pagamento': (
+                'Certidão de Decurso de Prazo para Pagamento Voluntário'
+            ),
+            'cumprimento_sentenca': 'Certidão de Prazo',
+            'pagamento_impugnacao_penhora': 'Certidão de Prazo',
+            'impugnacao_embargos_execucao': 'Certidão de Prazo',
+            'contrarrazoes_inominado': 'Certidão de Prazo',
+        }
+        template = DocumentTemplate.objects.filter(
+            name=template_por_tipo.get(tipo_certidao, ''),
+            template_type='certidao',
+            active=True,
+        ).first()
+        if template:
+            rag.suggested_templates.add(template)
         messages.success(
             request,
-            f'✅ RAG #{rag.id} criada a partir da movimentação. '
-            'Revise o tipo de certidão e os parâmetros no admin.',
+            f'✅ RAG #{rag.id} criada a partir da movimentação'
+            + (f' com template "{template.name}" vinculado.' if template else '.')
+            + ' Revise o tipo de certidão e os parâmetros no admin.',
         )
         if request.user.is_staff:
             return HttpResponseRedirect(reverse(
@@ -692,5 +710,175 @@ class RagCertidaoListView(LoginRequiredMixin, TemplateView):
             'total_peticoes': contagem['peticao'],
             'total_movimentacoes': contagem['movimentacao'],
             'is_staff': self.request.user.is_staff,
+        })
+        return context
+
+
+class CertidaoTabelaView(LoginRequiredMixin, TemplateView):
+    """Visão em tabela das certidões, preservando o dashboard atual.
+
+    Reúne, sem alterar os fluxos existentes:
+    - documentos de certidão ainda não juntados;
+    - cumprimentos/RAG de certidão;
+    - movimentações de certidão já registradas.
+    """
+
+    template_name = 'projudi/certidao_tabela.html'
+
+    @staticmethod
+    def _data_iso(valor):
+        if not valor:
+            return None
+        if hasattr(valor, 'year'):
+            return valor
+        try:
+            from datetime import date
+            return date.fromisoformat(str(valor)[:10])
+        except (ValueError, TypeError):
+            return None
+
+    @staticmethod
+    def _origem_por_template(nome, recipient=''):
+        alvo = f'{nome or ""} {recipient or ""}'.upper()
+        if (str(recipient or '').startswith('Petição:')
+                or 'RECURSO INOMINADO' in alvo
+                or 'CONTRARRAZ' in alvo):
+            return 'peticao'
+        return 'movimentacao'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from processes.models import GeneratedDocument
+        from .models import CumprimentoRecord, MovimentacaoRecord
+
+        user = self.request.user
+        tenant = getattr(user, 'tenant', None)
+
+        rows = []
+
+        docs = GeneratedDocument.objects.filter(
+            template__template_type='certidao',
+            exported_to_projudi=False,
+        ).select_related('process', 'template')
+        if tenant:
+            docs = docs.filter(tenant=tenant)
+        docs = docs.order_by('-created_at')[:300]
+        for doc in docs:
+            nome = doc.template.name if doc.template else (
+                doc.recipient_name or 'Certidão')
+            rows.append({
+                'data': doc.created_at,
+                'processo': doc.process.number if doc.process else '—',
+                'origem': self._origem_por_template(
+                    nome, doc.recipient_name),
+                'parte': '',
+                'tipo': nome,
+                'ultimo_dia': None,
+                'status': 'Gerada',
+                'status_classe': 'gerada',
+                'detail_url': reverse(
+                    'projudi:certidao_peticao_preview', args=[doc.id]),
+                'preview_url': reverse(
+                    'projudi:certidao_peticao_preview', args=[doc.id]),
+                'fonte': 'Documento gerado',
+                'fonte_classe': 'doc',
+            })
+
+        cumprimentos = (
+            CumprimentoRecord.objects
+            .filter(user=user, template_used__template_type='certidao')
+            .exclude(status='dispensado')
+            .select_related('template_used', 'rag_example')
+            .order_by('-created_at')[:300]
+        )
+        for reg in cumprimentos:
+            nome = (
+                reg.template_used.name if reg.template_used
+                else (reg.act_verb or 'Certidão')
+            )
+            info = reg.prazo_info or {}
+            rows.append({
+                'data': reg.created_at,
+                'processo': reg.numero_processo_cnj or reg.processo,
+                'origem': self._origem_por_template(nome),
+                'parte': reg.parte_nome,
+                'tipo': nome,
+                'ultimo_dia': self._data_iso(info.get('ultimo_dia')),
+                'status': reg.get_status_display(),
+                'status_classe': reg.status,
+                'detail_url': reverse(
+                    'projudi:cumprimento_detail', args=[reg.id]),
+                'preview_url': '',
+                'fonte': 'RAG / cumprimento',
+                'fonte_classe': 'rag',
+            })
+
+        movimentacoes = (
+            MovimentacaoRecord.objects
+            .filter(user=user, categoria='certidao')
+            .select_related('template_used', 'rag_example')
+            .order_by('-created_at')[:300]
+        )
+        for reg in movimentacoes:
+            nome = reg.descricao_movimentacao or reg.act_verb or 'Certidão'
+            rows.append({
+                'data': reg.created_at,
+                'processo': reg.numero_processo_cnj or reg.processo,
+                'origem': (
+                    reg.origem if reg.origem in ('peticao', 'movimentacao')
+                    else 'movimentacao'
+                ),
+                'parte': reg.parte_nome,
+                'tipo': nome,
+                'ultimo_dia': None,
+                'status': reg.get_status_display(),
+                'status_classe': reg.status,
+                'detail_url': reverse(
+                    'projudi:movimentacao_detail', args=[reg.id]),
+                'preview_url': '',
+                'fonte': 'Movimentação',
+                'fonte_classe': 'mov',
+            })
+
+        origem = (self.request.GET.get('origem') or '').strip()
+        if origem not in ('peticao', 'movimentacao'):
+            origem = ''
+        status = (self.request.GET.get('status') or '').strip()
+        busca = (self.request.GET.get('q') or '').strip().lower()
+
+        total = len(rows)
+        total_peticoes = sum(1 for r in rows if r['origem'] == 'peticao')
+        total_movimentacoes = total - total_peticoes
+        total_geradas = sum(
+            1 for r in rows if r['status_classe'] == 'gerada')
+        total_pendentes = sum(
+            1 for r in rows if r['status_classe'] in
+            ('pendente', 'processando', 'falha'))
+
+        if origem:
+            rows = [r for r in rows if r['origem'] == origem]
+        if status:
+            rows = [r for r in rows if r['status_classe'] == status]
+        if busca:
+            rows = [
+                r for r in rows
+                if busca in str(r['processo']).lower()
+                or busca in str(r['parte']).lower()
+                or busca in str(r['tipo']).lower()
+                or busca in str(r['fonte']).lower()
+            ]
+        rows.sort(key=lambda r: r['data'], reverse=True)
+
+        context.update({
+            'registros': rows,
+            'busca': self.request.GET.get('q', ''),
+            'origem_filtro': origem,
+            'status_filtro': status,
+            'total': total,
+            'total_peticoes': total_peticoes,
+            'total_movimentacoes': total_movimentacoes,
+            'total_geradas': total_geradas,
+            'total_pendentes': total_pendentes,
+            'total_visivel': len(rows),
         })
         return context

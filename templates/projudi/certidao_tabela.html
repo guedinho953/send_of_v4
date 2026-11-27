@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block title %}Certidões em Tabela — Send of v4{% endblock %}
+
+{% block extra_css %}
+<style>
+    .ct-top { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+    .ct-top h1 { margin:0; font-size:22px; }
+    .ct-top p { margin:4px 0 0; font-size:13px; color:#6b7280; }
+    .ct-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:10px; margin-bottom:16px; }
+    .stat-card { background:#fff; border-radius:9px; padding:12px 14px; box-shadow:0 1px 3px rgba(0,0,0,.06); border-left:4px solid #7c3aed; }
+    .stat-card h4 { margin:0; font-size:25px; color:#1e3a5f; }
+    .stat-card p { margin:3px 0 0; font-size:11px; color:#6b7280; text-transform:uppercase; }
+    .filtro-btn { padding:7px 14px; border-radius:20px; font-size:12px; border:1px solid #e5e7eb; background:#fff; color:#374151; text-decoration:none; }
+    .filtro-btn.active { background:#7c3aed; color:#fff; border-color:#7c3aed; }
+    .filtro-btn:hover:not(.active) { background:#f9fafb; }
+    .tabela { width:100%; border-collapse:collapse; background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,.07); font-size:13px; }
+    .tabela th { background:#f8fafc; color:#475569; text-align:left; padding:10px 12px; font-size:11px; text-transform:uppercase; border-bottom:1px solid #e5e7eb; }
+    .tabela td { padding:9px 12px; border-bottom:1px solid #f1f5f9; vertical-align:top; }
+    .tabela tr:hover td { background:#f8fafc; }
+    .processo { font-family:monospace; font-weight:700; color:#1e3a5f; font-size:12px; }
+    .tipo { font-weight:600; color:#374151; }
+    .meta { color:#6b7280; font-size:11px; margin-top:3px; }
+    .tag { display:inline-block; padding:2px 8px; border-radius:9px; font-size:10px; font-weight:700; }
+    .tag-peticao { background:#dbeafe; color:#1e40af; }
+    .tag-movimentacao { background:#fef3c7; color:#92400e; }
+    .st-gerada { background:#e0e7ff; color:#3730a3; }
+    .st-pendente { background:#fef3c7; color:#92400e; }
+    .st-processando { background:#ede9fe; color:#5b21b6; }
+    .st-cumprido { background:#d1fae5; color:#065f46; }
+    .st-falha { background:#fee2e2; color:#991b1b; }
+    .st-dispensado { background:#f3e8ff; color:#6b21a8; }
+    .acoes { display:flex; gap:5px; flex-wrap:wrap; }
+    .btn-sm { padding:5px 10px; font-size:11px; border-radius:5px; }
+    .empty-state { text-align:center; padding:44px 20px; color:#6b7280; background:#fff; border-radius:10px; }
+    .busca-form { display:flex; gap:6px; align-items:center; margin-left:auto; }
+    .busca-form input { padding:6px 9px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px; min-width:220px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ct-top">
+    <div>
+        <h1>📄 Certidões em Tabela</h1>
+        <p>
+            Visão unificada dos documentos gerados, RAGs e movimentações de
+            certidão. O dashboard atual continua disponível.
+        </p>
+    </div>
+    <div class="ct-actions">
+        <a href="{% url 'projudi:certidao_dashboard' %}" class="btn btn-outline">← Dashboard atual</a>
+        <a href="{% url 'projudi:rag_certidoes' %}" class="btn btn-outline">🧠 RAGs de Certidão</a>
+        <a href="{% url 'projudi:certidao_peticoes' %}" class="btn btn-outline">📥 Fila de Petições</a>
+        <a href="{% url 'projudi:movimentacoes' %}" class="btn btn-outline">📋 Movimentações Projudi</a>
+    </div>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card"><h4>{{ total }}</h4><p>Total</p></div>
+    <div class="stat-card" style="border-left-color:#2563eb;"><h4>{{ total_peticoes }}</h4><p>Petições</p></div>
+    <div class="stat-card" style="border-left-color:#d97706;"><h4>{{ total_movimentacoes }}</h4><p>Movimentações</p></div>
+    <div class="stat-card" style="border-left-color:#0f766e;"><h4>{{ total_geradas }}</h4><p>Geradas / não juntadas</p></div>
+    <div class="stat-card" style="border-left-color:#dc2626;"><h4>{{ total_pendentes }}</h4><p>Pendentes / falhas</p></div>
+</div>
+
+<div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:14px;">
+    <a href="?{% if status_filtro %}status={{ status_filtro }}{% endif %}{% if busca %}&q={{ busca|urlencode }}{% endif %}"
+       class="filtro-btn {% if not origem_filtro %}active{% endif %}">
+        Todas ({{ total }})
+    </a>
+    <a href="?origem=peticao{% if status_filtro %}&status={{ status_filtro }}{% endif %}{% if busca %}&q={{ busca|urlencode }}{% endif %}"
+       class="filtro-btn {% if origem_filtro == 'peticao' %}active{% endif %}">
+        📄 Petições ({{ total_peticoes }})
+    </a>
+    <a href="?origem=movimentacao{% if status_filtro %}&status={{ status_filtro }}{% endif %}{% if busca %}&q={{ busca|urlencode }}{% endif %}"
+       class="filtro-btn {% if origem_filtro == 'movimentacao' %}active{% endif %}">
+        ⚙️ Movimentações ({{ total_movimentacoes }})
+    </a>
+    <form method="get" class="busca-form">
+        {% if origem_filtro %}<input type="hidden" name="origem" value="{{ origem_filtro }}">{% endif %}
+        <input name="q" value="{{ busca }}" placeholder="processo, parte ou tipo">
+        <select name="status" onchange="this.form.submit()"
+                style="padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px;">
+            <option value="">Todos os status</option>
+            <option value="gerada" {% if status_filtro == 'gerada' %}selected{% endif %}>Gerada / não juntada</option>
+            <option value="pendente" {% if status_filtro == 'pendente' %}selected{% endif %}>Pendente</option>
+            <option value="processando" {% if status_filtro == 'processando' %}selected{% endif %}>Processando</option>
+            <option value="cumprido" {% if status_filtro == 'cumprido' %}selected{% endif %}>Cumprida</option>
+            <option value="falha" {% if status_filtro == 'falha' %}selected{% endif %}>Falha</option>
+            <option value="dispensado" {% if status_filtro == 'dispensado' %}selected{% endif %}>Dispensada</option>
+        </select>
+        <button type="submit" class="btn btn-sm btn-outline">Filtrar</button>
+    </form>
+</div>
+
+{% if registros %}
+<div style="overflow-x:auto;">
+    <table class="tabela">
+        <thead>
+            <tr>
+                <th>Data</th>
+                <th>Processo</th>
+                <th>Origem</th>
+                <th>Parte</th>
+                <th>Tipo</th>
+                <th>Último dia</th>
+                <th>Status</th>
+                <th>Fonte</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in registros %}
+            <tr>
+                <td>{{ r.data|date:"d/m/Y H:i" }}</td>
+                <td><div class="processo">{{ r.processo }}</div></td>
+                <td>
+                    <span class="tag tag-{{ r.origem }}">
+                        {% if r.origem == 'peticao' %}Petição{% else %}Movimentação{% endif %}
+                    </span>
+                </td>
+                <td>{{ r.parte|default:"—"|truncatechars:40 }}</td>
+                <td><div class="tipo">{{ r.tipo }}</div></td>
+                <td>{{ r.ultimo_dia|date:"d/m/Y"|default:"—" }}</td>
+                <td><span class="tag st-{{ r.status_classe }}">{{ r.status }}</span></td>
+                <td><span class="meta">{{ r.fonte }}</span></td>
+                <td>
+                    <div class="acoes">
+                        {% if r.detail_url %}
+                        <a class="btn btn-sm btn-outline"
+                           href="{{ r.detail_url }}"
+                           {% if r.preview_url %}target="_blank"{% endif %}>
+                            {% if r.preview_url %}👁 Preview{% else %}🔍 Detalhe{% endif %}
+                        </a>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+<div style="font-size:11px; color:#6b7280; margin-top:8px;">
+    Exibindo {{ total_visivel }} registro(s) após os filtros.
+</div>
+{% else %}
+<div class="empty-state">
+    Nenhuma certidão encontrada para os filtros selecionados.
+</div>
+{% endif %}
+{% endblock %}

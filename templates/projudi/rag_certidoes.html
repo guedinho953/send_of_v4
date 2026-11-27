@@ -45,6 +45,7 @@
     </div>
     <div class="rag-actions">
         <a href="{% url 'projudi:certidao_dashboard' %}" class="btn btn-outline">📄 Certidões</a>
+        <a href="{% url 'projudi:certidao_tabela' %}" class="btn btn-outline">📊 Certidões em Tabela</a>
         <a href="{% url 'projudi:movimentacoes' %}" class="btn btn-outline">📋 Movimentações Projudi</a>
         {% if is_staff %}
         <a href="{% url 'admin:processes_ragexample_add' %}" class="btn btn-outline">➕ Nova RAG</a>

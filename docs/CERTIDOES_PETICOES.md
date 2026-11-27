@@ -622,6 +622,29 @@ Depois da análise da RAG:
   **✏️ Configurar RAG**;
 - se nenhuma RAG foi encontrada, aparece **🧠 Criar RAG**.
 
+## Certidões em tabela
+
+Além do dashboard atual, existe uma visão em tabela:
+
+```text
+/projudi/certidoes/tabela/
+```
+
+Ela reúne, sem alterar os fluxos existentes:
+
+- documentos de certidão gerados e ainda não juntados;
+- cumprimentos/RAG de certidão;
+- movimentações de certidão já registradas.
+
+A tabela tem abas **Todas / Petições / Movimentações**, filtros por status,
+busca por processo/parte/tipo e links para detalhe ou preview.
+
+O dashboard antigo continua funcionando em:
+
+```text
+/projudi/certidoes/dashboard/
+```
+
 ## Desempenho
 
 A primeira leitura consulta a fila e os processos no Projudi e pode levar
