@@ -312,13 +312,13 @@ impugnação/embargos com o termo final e conclui pela **TEMPESTIVIDADE** ou
 Exemplo de texto público:
 
 > Certifico, para os devidos fins, a **INTEMPESTIVIDADE** da
-> Impugnação/Embargos à Execução apresentada **NO EVENTO 88** (**PRAZO DE 15
-> (QUINZE) DIAS**), referente ao **DESPACHO (EVENTO 80)** e à **INTIMAÇÃO
-> ELETRÔNICA (DJEN) (EVENTO 84)**. **PUBLICAÇÃO EM 03/11/2026; INÍCIO DO
-> PRAZO EM 04/11/2026; TERMO FINAL EM 25/11/2026.** Certifico ainda que houve
-> depósito **PARCIAL, NÃO HAVENDO SEGURANÇA INTEGRAL DO JUÍZO**, observados o
-> **VALOR EXECUTADO (CONSIDERANDO O VALOR DA EXECUÇÃO)** e o **VALOR
-> DEPOSITADO/PENHORADO (ENUNCIADO N. 117 DO FONAJE)**.
+> Impugnação/Embargos à Execução apresentada no evento 88 (prazo de 15
+> (quinze) dias), referente ao despacho (evento 80) e à intimação eletrônica
+> (DJEN) (evento 84). publicação em 03/11/2026; início do prazo em
+> 04/11/2026; termo final em 25/11/2026. Certifico ainda que houve depósito
+> **PARCIAL, NÃO HAVENDO SEGURANÇA INTEGRAL DO JUÍZO**, observados o valor
+> executado (considerando o valor da execução) e o valor depositado/penhorado
+> (Enunciado n. 117 do FONAJE).
 
 O evento da petição é opcional (se ainda não juntada, o texto usa “nos
 autos”). O evento da intimação é incluído sempre que localizado. O campo

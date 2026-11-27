@@ -128,19 +128,19 @@ class PrazoDjenTest(unittest.TestCase):
             tempestivo=True,
         )
         self.assertIn('TEMPESTIVIDADE', parcial)
-        self.assertIn('apresentada NO EVENTO 88', parcial)
-        self.assertIn('(EVENTO 84)', parcial)
-        self.assertIn('(PRAZO DE 15 (QUINZE) DIAS)', parcial)
-        self.assertIn('DESPACHO (EVENTO 80)', parcial)
-        self.assertIn('PUBLICAÇÃO EM 03/11/2026', parcial)
-        self.assertIn('INÍCIO DO PRAZO EM 04/11/2026', parcial)
-        self.assertIn('TERMO FINAL EM 25/11/2026', parcial)
+        self.assertIn('apresentada no evento 88', parcial)
+        self.assertIn('(evento 84)', parcial)
+        self.assertIn('(prazo de 15 (quinze) dias)', parcial)
+        self.assertIn('despacho (evento 80)', parcial)
+        self.assertIn('publicação em 03/11/2026', parcial)
+        self.assertIn('início do prazo em 04/11/2026', parcial)
+        self.assertIn('termo final em 25/11/2026', parcial)
         self.assertIn(
             'houve depósito PARCIAL, NÃO HAVENDO SEGURANÇA INTEGRAL '
             'DO JUÍZO', parcial)
         self.assertIn(
-            'VALOR EXECUTADO (CONSIDERANDO O VALOR DA EXECUÇÃO)', parcial)
-        self.assertIn('ENUNCIADO N. 117 DO FONAJE', parcial)
+            'valor executado (considerando o valor da execução)', parcial)
+        self.assertIn('Enunciado n. 117 do FONAJE', parcial)
 
         integral = _texto_publico_prazo(
             res, info, {**base, 'seguranca_juizo': 'integral'},
@@ -164,7 +164,7 @@ class PrazoDjenTest(unittest.TestCase):
             },
             tempestivo=True,
         )
-        self.assertIn('apresentada NOS AUTOS', sem_evento)
+        self.assertIn('apresentada nos autos', sem_evento)
 
     def test_texto_certidao_inominado(self):
         grat = texto_certidao_inominado(

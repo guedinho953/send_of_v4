@@ -57,19 +57,19 @@ def _texto_publico_prazo(res, info, options, tempestivo=None):
 
     if tipo == 'impugnacao_embargos_execucao' and tempestivo is not None:
         evento_imp = (
-            f'NO EVENTO {evento_recurso}'
-            if evento_recurso.isdigit() else 'NOS AUTOS'
+            f'no evento {evento_recurso}'
+            if evento_recurso.isdigit() else 'nos autos'
         )
         evento_int = str(options.get('evento_intimacao') or '').strip()
         evento_int_txt = (
-            f'(EVENTO {evento_int})' if evento_int.isdigit()
-            else '(EVENTO NÃO INFORMADO)'
+            f'(evento {evento_int})' if evento_int.isdigit()
+            else '(evento não informado)'
         )
         evento_origem = str(
             options.get('evento_origem') or '').strip()
         despacho_txt = (
-            f'(EVENTO {evento_origem})'
-            if evento_origem.isdigit() else '(EVENTO NÃO INFORMADO)')
+            f'(evento {evento_origem})'
+            if evento_origem.isdigit() else '(evento não informado)')
         seguranca = options.get('seguranca_juizo') or 'nenhuma'
         seguranca_txt = {
             'integral': 'o juízo está INTEGRALMENTE SEGURO',
@@ -83,15 +83,15 @@ def _texto_publico_prazo(res, info, options, tempestivo=None):
         return (
             'Certifico, para os devidos fins, a '
             f'{conclusao} da Impugnação/Embargos à Execução apresentada '
-            f'{evento_imp} (PRAZO DE 15 (QUINZE) DIAS), referente ao '
-            f'DESPACHO {despacho_txt} e à INTIMAÇÃO ELETRÔNICA (DJEN) '
-            f'{evento_int_txt}. PUBLICAÇÃO EM '
-            f'{_fmt_curta(res.data_publicacao)}; INÍCIO DO PRAZO EM '
-            f'{_fmt_curta(res.data_inicio_contagem)}; TERMO FINAL EM '
+            f'{evento_imp} (prazo de 15 (quinze) dias), referente ao '
+            f'despacho {despacho_txt} e à intimação eletrônica (DJEN) '
+            f'{evento_int_txt}. publicação em '
+            f'{_fmt_curta(res.data_publicacao)}; início do prazo em '
+            f'{_fmt_curta(res.data_inicio_contagem)}; termo final em '
             f'{_fmt_curta(res.ultimo_dia)}. Certifico ainda que '
-            f'{seguranca_txt}, observados o VALOR EXECUTADO '
-            '(CONSIDERANDO O VALOR DA EXECUÇÃO) e o VALOR '
-            'DEPOSITADO/PENHORADO (ENUNCIADO N. 117 DO FONAJE).'
+            f'{seguranca_txt}, observados o valor executado '
+            '(considerando o valor da execução) e o valor '
+            'depositado/penhorado (Enunciado n. 117 do FONAJE).'
         )
 
     if tipo == 'contrarrazoes_inominado' and tempestivo is not None:
