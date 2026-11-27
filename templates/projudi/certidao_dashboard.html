@@ -12,6 +12,7 @@
     .stat-card.tempestivas { border-left-color: #059669; }
     .stat-card.intempestivas { border-left-color: #dc2626; }
     .stat-card.sem { border-left-color: #6b7280; }
+    .stat-card.decurso { border-left-color: #f59e0b; }
     .filtro-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
     .filtro-btn { padding: 6px 14px; border-radius: 20px; font-size: 13px; border: 1px solid #e5e7eb; background: #fff; color: #374151; cursor: pointer; text-decoration: none; }
     .filtro-btn.active { background: #2563eb; color: white; border-color: #2563eb; }
@@ -24,6 +25,7 @@
     .tag-tempestivo { background: #d1fae5; color: #065f46; }
     .tag-intempestivo { background: #fee2e2; color: #991b1b; }
     .tag-sem_protocolo { background: #e5e7eb; color: #374151; }
+    .tag-decurso { background: #fef3c7; color: #92400e; }
     .btn-sm { padding: 4px 10px; font-size: 12px; border-radius: 5px; border: 1px solid #d1d5db; background: #fff; color: #374151; text-decoration: none; display: inline-block; }
     .btn-sm:hover { background: #f3f4f6; }
     .motivo { color: #6b7280; font-size: 12px; line-height: 1.35; max-width: 360px; }
@@ -50,6 +52,10 @@
        href="{% url 'projudi:certidao_peticoes' %}">📄 Petições ({{ total_peticoes }})</a>
     <a class="filtro-btn {% if origem_filtro == 'movimentacao' %}active{% endif %}"
        href="{% url 'projudi:certidao_movimentacoes' %}">⚙️ Movimentações ({{ total_movimentacoes }})</a>
+    {% if origem_filtro == 'movimentacao' or not origem_filtro %}
+    <a class="btn-sm" style="margin-left:auto;"
+       href="{% url 'projudi:certidao_decurso_pagamento' %}">📄 Nova certidão de decurso (15 dias)</a>
+    {% endif %}
 </div>
 
 <div class="stats-grid">
@@ -57,6 +63,7 @@
     <div class="stat-card tempestivas"><h4>{{ tempestivas }}</h4><p>Tempestivas</p></div>
     <div class="stat-card intempestivas"><h4>{{ intempestivas }}</h4><p>Intempestivas</p></div>
     <div class="stat-card sem"><h4>{{ sem_protocolo }}</h4><p>Sem protocolo</p></div>
+    <div class="stat-card decurso"><h4>{{ decurso }}</h4><p>Decursos</p></div>
 </div>
 
 <div class="filtro-bar">

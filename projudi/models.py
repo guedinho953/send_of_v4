@@ -760,6 +760,8 @@ class PrazoDjenRecord(models.Model):
         'Protocolo', null=True, blank=True)
     evento_recurso = models.CharField(
         'Evento do recurso', max_length=20, blank=True)
+    evento_origem = models.CharField(
+        'Evento de origem', max_length=20, blank=True)
     evento_intimacao = models.CharField(
         'Evento da intimação', max_length=20, blank=True)
     preparo_status = models.CharField(

@@ -52,7 +52,7 @@
         <div><strong>Último dia</strong> {{ registro.ultimo_dia|date:"d/m/Y"|default:"—" }}</div>
         <div><strong>Decurso/trânsito</strong> {{ registro.data_decurso|date:"d/m/Y"|default:"—" }}</div>
         <div><strong>Protocolo</strong> {{ registro.data_protocolo|date:"d/m/Y"|default:"não informado" }}</div>
-        <div><strong>Evento do recurso</strong> {{ registro.evento_recurso|default:"—" }}</div>
+        <div><strong>{% if registro.origem == 'peticao' %}Evento do recurso{% else %}Evento de origem{% endif %}</strong> {{ registro.evento_origem|default:registro.evento_recurso|default:"—" }}</div>
         <div><strong>Evento da intimação</strong> {{ registro.evento_intimacao|default:"—" }}</div>
         <div><strong>Preparo</strong> {{ registro.get_preparo_status_display|default:"—" }}</div>
         <div><strong>Habilitação</strong>

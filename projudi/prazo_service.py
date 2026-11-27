@@ -58,6 +58,13 @@ TIPOS_PRAZO: Dict[str, Dict[str, object]] = {
         'ato': 'pagamento ou impugnação',
         'protocolo_frase': 'A manifestação foi protocolada',
     },
+    'decurso_pagamento': {
+        'dias': 15,
+        'label': 'Decurso de pagamento voluntário',
+        'transito': False,
+        'ato': 'decurso de pagamento',
+        'protocolo_frase': 'O prazo de pagamento decorreu',
+    },
 }
 
 # Feriados nacionais fixos (mês, dia). Móveis (carnaval, sexta santa,

@@ -17,6 +17,8 @@ from .prazo_service import TIPOS_PRAZO
 
 
 def _status_registro(reg):
+    if reg.tipo_prazo == 'decurso_pagamento':
+        return 'decurso', 'DECURSO'
     if reg.tempestivo is True:
         return 'tempestivo', 'TEMPESTIVO'
     if reg.tempestivo is False:
@@ -84,7 +86,12 @@ class CertidaoDashboardView(LoginRequiredMixin, TemplateView):
             'total': base.count(),
             'tempestivas': base.filter(tempestivo=True).count(),
             'intempestivas': base.filter(tempestivo=False).count(),
-            'sem_protocolo': base.filter(tempestivo__isnull=True).count(),
+            'sem_protocolo': (
+                base.filter(tempestivo__isnull=True)
+                .exclude(tipo_prazo='decurso_pagamento').count()
+            ),
+            'decurso': base.filter(
+                tipo_prazo='decurso_pagamento').count(),
             'total_geral': todos.count(),
             'total_peticoes': todos.filter(origem='peticao').count(),
             'total_movimentacoes': todos.filter(

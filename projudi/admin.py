@@ -33,7 +33,8 @@ class PrazoDjenRecordAdmin(admin.ModelAdmin):
         'data_disponibilizacao', 'data_disponibilizacao_efetiva',
         'data_publicacao', 'data_inicio_contagem', 'ultimo_dia',
         'data_decurso', 'data_protocolo', 'evento_recurso',
-        'evento_intimacao', 'preparo_status', 'habilitacao_regular',
+        'evento_origem', 'evento_intimacao', 'preparo_status',
+        'habilitacao_regular',
         'texto_certidao', 'tempestivo', 'motivo',
         'prazo_info', 'certidao_path', 'servidor', 'created_at',
     ]

@@ -183,6 +183,46 @@ A migração `projudi/0018` adiciona `origem`, `peticao_documento` e
 `peticao_url` e marca os registros antigos de recurso/contrarrazões como
 `peticao`.
 
+## Certidão de decurso de pagamento voluntário (15 dias)
+
+A certidão de decurso apura o prazo de **15 dias úteis** para o pagamento
+voluntário no cumprimento de sentença/execução:
+
+1. localiza o despacho que determinou o pagamento em 15 dias
+   (automático ou `--evento`);
+2. identifica o executado/promovido (ou `--executado`);
+3. localiza a intimação desse despacho para o executado;
+4. calcula os 15 dias úteis conforme o meio de intimação;
+5. só gera a certidão depois do **decurso**; antes disso, informa a data.
+
+Pela tela:
+
+```
+/projudi/certidoes/movimentacoes/decurso-pagamento/
+```
+
+Ou pelo comando:
+
+```bat
+python manage.py certidao_decurso_pagamento ^
+  --processo 0000000-00.0000.8.05.0191
+```
+
+Opções úteis:
+
+| Opção | Efeito |
+|-------|--------|
+| `--evento` | Número do despacho, se a busca automática não achar |
+| `--executado` | Nome do executado, se houver dúvida |
+| `--url` | URL `DadosProcesso` do Projudi |
+| `--nao-registrar` | Teste: gera o preview sem gravar no dashboard |
+| `--saida` | Caminho do HTML do preview |
+
+A certidão é registrada na aba **Movimentações**, com status **DECURSO** e
+o evento do despacho em `evento_origem`. O template é
+`Certidão de Decurso de Prazo para Pagamento Voluntário`, criado pela
+migração `processes/0024`.
+
 ## Dashboard de certidões
 
 Acesse **Certidões** no menu ou:
@@ -216,7 +256,7 @@ ficam registradas em:
 
 ```bat
 python -m unittest test_prazo_djen test_verificacao_inominado test_peticoes_inominado test_partes_inominado
-python manage.py test test_certidao_origem
+python manage.py test test_certidao_origem test_decurso_pagamento
 ```
 
 Casos cobertos:
@@ -235,7 +275,10 @@ Casos cobertos:
   (ex.: evento da Maria x evento do Banco);
 - linha `PARA` com promovente/promovido ou omissão quando não localizados;
 - separação das certidões por origem (petição × movimentação) no dashboard
-  e nos comandos.
+  e nos comandos;
+- localização do despacho de pagamento, intimação do executado e cálculo do
+  decurso de 15 dias;
+- geração do HTML e registro da certidão de decurso em Movimentações.
 
 ## Limitações / próximos passos
 
