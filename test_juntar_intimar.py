@@ -266,6 +266,44 @@ class JuntarIntimarPlanTest(TestCase):
         self.assertEqual(kwargs['tipo_conclusao'], '18')
         self.assertEqual(kwargs['juiz_conclusao'], '41201')
 
+    @patch('projudi.juntar_views.agendar_pos_intimacao')
+    @patch('projudi.juntar_views.executar_juntada_e_intimacao')
+    def test_agenda_somente_conclusao(self, juntar, agendar):
+        from datetime import date
+
+        registro = PrazoDjenRecord.objects.create(
+            processo='0000012-12.2026.8.05.0191',
+            origem='movimentacao',
+            tipo_prazo='impugnacao_embargos_execucao',
+            prazo_dias=15,
+            tempestivo=True,
+            seguranca_juizo='parcial',
+            certidao_path=str(self.preview),
+        )
+        juntar.return_value = (True, SimpleNamespace(id=500), True, '')
+        agendar.return_value = (
+            date(2027, 1, 26),
+            [SimpleNamespace(get_tipo_display=lambda: 'Conclusão ao Juiz')],
+        )
+        resposta = self.client.post(
+            reverse('projudi:certidao_juntar_intimar',
+                    args=[registro.id]),
+            {
+                'acao': 'juntar_intimar',
+                'processo_url': (
+                    'https://projudi.tjba.jus.br/projudi/listagens/'
+                    'DadosProcesso?numeroProcesso=12345678901234'),
+                'polo': 'autores',
+                'prazo': '15',
+                'fazer_conclusao': 'on',
+                'tipo_conclusao': '18',
+                'confirmo': 'on',
+            },
+        )
+        self.assertEqual(resposta.status_code, 200)
+        args, _kwargs = agendar.call_args
+        self.assertEqual(args[2], ['conclusao'])
+
     @patch('projudi.acoes_agendadas.data_decurso_intimacao')
     def test_agendar_pos_intimacao_cria_acoes(self, data_decurso):
         from datetime import date

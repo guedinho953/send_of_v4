@@ -435,8 +435,8 @@ O texto público da certidão segue o modelo base e incorpora o despacho:
 prazo de 15 dias para pagamento, art. 525, caput, do CPC e observação dos
 valores executado/depositado (Enunciado n. 117 do FONAJE).
 
-A tela também permite agendar ações para **depois do prazo da intimação
-realizada agora**:
+A tela também permite agendar **uma ou mais** ações para **depois do prazo
+da intimação realizada agora** (qualquer combinação):
 
 - **Colocar no localizador** (usa o localizador da RAG);
 - **Remeter à contadoria**;

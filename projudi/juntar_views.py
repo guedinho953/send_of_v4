@@ -226,10 +226,16 @@ class CertidaoJuntarIntimarView(LoginRequiredMixin, View):
 
             if ok and intimacao_ok:
                 tipos = []
-                if agendar_localizador and (
-                        plano.get('tipo_localizador')
-                        or plano.get('localizador')):
-                    tipos.append('localizador')
+                if agendar_localizador:
+                    if (plano.get('tipo_localizador')
+                            or plano.get('localizador')):
+                        tipos.append('localizador')
+                    else:
+                        messages.warning(
+                            request,
+                            'O localizador não foi agendado porque não há '
+                            'código de localizador definido na RAG.',
+                        )
                 if agendar_contadoria:
                     tipos.append('contadoria')
                 if fazer_conclusao:
@@ -323,6 +329,13 @@ class CertidaoJuntarIntimarView(LoginRequiredMixin, View):
                     f'✅ Juntada concluída no Projudi '
                     f'(movimentação #{record.id}).',
                 )
+                if (agendar_localizador or agendar_contadoria
+                        or fazer_conclusao):
+                    messages.info(
+                        request,
+                        'As ações pós-prazo só são agendadas na ação '
+                        '"Juntar + intimar".',
+                    )
             else:
                 messages.error(
                     request,
