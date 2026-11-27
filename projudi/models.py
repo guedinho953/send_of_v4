@@ -448,6 +448,53 @@ class CumprimentoLog(TimeStampedModel):
         return f'[{self.tipo}] {self.cumprimento_id}'
 
 
+class AcaoCertidaoAgendada(TimeStampedModel):
+    """Ação pós-intimação que será executada depois do prazo."""
+
+    TIPO_CHOICES = [
+        ('localizador', 'Colocar no localizador'),
+        ('contadoria', 'Remeter à contadoria'),
+        ('conclusao', 'Conclusão ao Juiz'),
+    ]
+    STATUS_CHOICES = [
+        ('pendente', 'Pendente'),
+        ('executada', 'Executada'),
+        ('falha', 'Falha'),
+        ('cancelada', 'Cancelada'),
+    ]
+
+    registro = models.ForeignKey(
+        'projudi.PrazoDjenRecord', on_delete=models.CASCADE,
+        related_name='acoes_agendadas')
+    tipo = models.CharField('Ação', max_length=20, choices=TIPO_CHOICES)
+    data_agendada = models.DateField('Data agendada', db_index=True)
+    status = models.CharField(
+        'Status', max_length=20, choices=STATUS_CHOICES,
+        default='pendente', db_index=True)
+    tipo_localizador = models.CharField(
+        'Tipo de localizador', max_length=20, blank=True)
+    localizador = models.CharField('Localizador', max_length=20, blank=True)
+    tipo_conclusao = models.CharField(
+        'Tipo de conclusão', max_length=2, blank=True)
+    juiz_conclusao = models.CharField(
+        'Juiz da conclusão', max_length=20, blank=True)
+    observacao = models.TextField('Observação', blank=True)
+    erro = models.TextField('Erro', blank=True)
+    executado_em = models.DateTimeField(
+        'Executado em', null=True, blank=True)
+    user = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='acoes_certidao_agendadas')
+
+    class Meta:
+        verbose_name = 'Ação agendada de certidão'
+        verbose_name_plural = 'Ações agendadas de certidões'
+        ordering = ['data_agendada', 'id']
+
+    def __str__(self):
+        return f'{self.get_tipo_display()} — {self.registro_id} — {self.data_agendada}'
+
+
 class MovimentacaoRecord(TimeStampedModel):
     """Registro de movimentação interna no Projudi (Mov581).
 

@@ -9,7 +9,7 @@ from .models import (
     CumprimentoRecord, CumprimentoLog,
     MovimentacaoRecord, MovimentacaoLog,
     Feriado, SuspensaoPrazo,
-    PrazoDjenRecord,
+    PrazoDjenRecord, AcaoCertidaoAgendada,
 )
 
 
@@ -56,6 +56,16 @@ class PrazoDjenRecordAdmin(admin.ModelAdmin):
         return 'SEM PROTOCOLO'
 
     status.short_description = 'Tempestividade'
+
+
+@admin.register(AcaoCertidaoAgendada)
+class AcaoCertidaoAgendadaAdmin(admin.ModelAdmin):
+    list_display = [
+        'data_agendada', 'tipo', 'registro', 'status', 'executado_em',
+    ]
+    list_filter = ['tipo', 'status', 'data_agendada']
+    search_fields = ['registro__processo', 'observacao', 'erro']
+    readonly_fields = ['executado_em']
 
 
 @admin.register(ProjudiSession)

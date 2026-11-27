@@ -100,6 +100,40 @@
     </div>
 </div>
 
+{% if registro.acoes_agendadas.all %}
+<div class="box">
+    <h3 style="margin-top:0; color:#1e3a5f;">Ações agendadas pós-intimação</h3>
+    <table style="width:100%; border-collapse:collapse; font-size:13px;">
+        <thead>
+            <tr>
+                <th style="text-align:left; padding:6px; border-bottom:1px solid #e5e7eb;">Data</th>
+                <th style="text-align:left; padding:6px; border-bottom:1px solid #e5e7eb;">Ação</th>
+                <th style="text-align:left; padding:6px; border-bottom:1px solid #e5e7eb;">Status</th>
+                <th style="text-align:left; padding:6px; border-bottom:1px solid #e5e7eb;">Detalhe</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for a in registro.acoes_agendadas.all %}
+            <tr>
+                <td style="padding:6px; border-bottom:1px solid #f1f5f9;">{{ a.data_agendada|date:"d/m/Y" }}</td>
+                <td style="padding:6px; border-bottom:1px solid #f1f5f9;">{{ a.get_tipo_display }}</td>
+                <td style="padding:6px; border-bottom:1px solid #f1f5f9;">{{ a.get_status_display }}</td>
+                <td style="padding:6px; border-bottom:1px solid #f1f5f9;">
+                    {% if a.tipo == 'localizador' %}
+                        {{ a.tipo_localizador|default:"—" }}{% if a.localizador %} / {{ a.localizador }}{% endif %}
+                    {% elif a.tipo == 'conclusao' %}
+                        tipo {{ a.tipo_conclusao|default:"—" }} / juiz {{ a.juiz_conclusao|default:"—" }}
+                    {% elif a.erro %}
+                        {{ a.erro|truncatechars:120 }}
+                    {% else %}—{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
 <div class="box">
     <h3 style="margin-top:0; color:#1e3a5f;">Texto da certidão</h3>
     {% if registro.texto_certidao %}

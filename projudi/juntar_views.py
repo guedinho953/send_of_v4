@@ -7,9 +7,9 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import get_object_or_404, render
 from django.views import View
 
+from projudi.acoes_agendadas import agendar_pos_intimacao
 from projudi.juntar_service import (
-    executar_conclusao, executar_juntada, executar_juntada_e_intimacao,
-    montar_plano,
+    executar_juntada, executar_juntada_e_intimacao, montar_plano,
 )
 from projudi.models import PrazoDjenRecord
 
@@ -67,6 +67,9 @@ class CertidaoJuntarIntimarView(LoginRequiredMixin, View):
             'polo': plano.get('polo', 'autores'),
             'prazo': plano.get('prazo', '10'),
             'fazer_conclusao': plano.get('fazer_conclusao', False),
+            'agendar_localizador': plano.get(
+                'agendar_localizador', False),
+            'agendar_contadoria': plano.get('agendar_contadoria', False),
             'tipo_conclusao': plano.get('tipo_conclusao', '18'),
             'conclusao_opcoes': CONCLUSAO_OPCOES,
             'juiz_conclusao': plano.get(
@@ -94,6 +97,14 @@ class CertidaoJuntarIntimarView(LoginRequiredMixin, View):
             request.POST.get('fazer_conclusao') == 'on'
             and registro.tipo_prazo == 'impugnacao_embargos_execucao'
         )
+        agendar_localizador = (
+            request.POST.get('agendar_localizador') == 'on'
+            and registro.tipo_prazo == 'impugnacao_embargos_execucao'
+        )
+        agendar_contadoria = (
+            request.POST.get('agendar_contadoria') == 'on'
+            and registro.tipo_prazo == 'impugnacao_embargos_execucao'
+        )
         tipo_conclusao = (
             request.POST.get('tipo_conclusao') or '18').strip()
         juiz_conclusao = (
@@ -110,6 +121,8 @@ class CertidaoJuntarIntimarView(LoginRequiredMixin, View):
         plano['fazer_conclusao'] = fazer_conclusao
         plano['tipo_conclusao'] = tipo_conclusao
         plano['juiz_conclusao'] = juiz_conclusao
+        plano['agendar_localizador'] = agendar_localizador
+        plano['agendar_contadoria'] = agendar_contadoria
 
         if acao == 'simular':
             messages.info(
@@ -211,31 +224,41 @@ class CertidaoJuntarIntimarView(LoginRequiredMixin, View):
                     f'#{getattr(record, "id", "?")} e os logs.',
                 )
 
-            if (fazer_conclusao and ok
-                    and (intimacao_ok or not plano.get('pode_intimar'))):
-                try:
-                    conc_ok, conc_record = executar_conclusao(
-                        registro, request.user, plano,
-                        tipo_conclusao=tipo_conclusao,
-                        juiz_conclusao=juiz_conclusao)
-                except Exception as exc:
-                    messages.warning(
-                        request,
-                        'A juntada/intimação foi feita, mas a conclusão '
-                        f'falhou: {exc}',
-                    )
-                else:
-                    if conc_ok:
-                        messages.success(
-                            request,
-                            '✅ Conclusão ao Juiz registrada '
-                            f'(movimentação #{conc_record.id}).',
+            if ok and intimacao_ok:
+                tipos = []
+                if agendar_localizador and (
+                        plano.get('tipo_localizador')
+                        or plano.get('localizador')):
+                    tipos.append('localizador')
+                if agendar_contadoria:
+                    tipos.append('contadoria')
+                if fazer_conclusao:
+                    tipos.append('conclusao')
+                if tipos:
+                    try:
+                        data_ag, acoes = agendar_pos_intimacao(
+                            registro,
+                            request.user,
+                            tipos,
+                            tipo_localizador=plano.get(
+                                'tipo_localizador') or '',
+                            localizador=plano.get('localizador') or '',
+                            tipo_conclusao=tipo_conclusao,
+                            juiz_conclusao=juiz_conclusao,
                         )
-                    else:
+                    except Exception as exc:
                         messages.warning(
                             request,
-                            'A juntada/intimação foi feita, mas a conclusão '
-                            'não foi confirmada. Confira o Projudi.',
+                            'A juntada/intimação foi feita, mas não foi '
+                            f'possível agendar as ações: {exc}',
+                        )
+                    else:
+                        messages.success(
+                            request,
+                            f'📅 {len(acoes)} ação(ões) agendada(s) para '
+                            f'{data_ag.strftime("%d/%m/%Y")}: '
+                            + ', '.join(
+                                a.get_tipo_display() for a in acoes) + '.',
                         )
 
             novo_plano = montar_plano(
@@ -300,31 +323,6 @@ class CertidaoJuntarIntimarView(LoginRequiredMixin, View):
                     f'✅ Juntada concluída no Projudi '
                     f'(movimentação #{record.id}).',
                 )
-                if fazer_conclusao:
-                    try:
-                        conc_ok, conc_record = executar_conclusao(
-                            registro, request.user, plano,
-                            tipo_conclusao=tipo_conclusao,
-                            juiz_conclusao=juiz_conclusao)
-                    except Exception as exc:
-                        messages.warning(
-                            request,
-                            'A certidão foi juntada, mas a conclusão '
-                            f'falhou: {exc}',
-                        )
-                    else:
-                        if conc_ok:
-                            messages.success(
-                                request,
-                                '✅ Conclusão ao Juiz registrada '
-                                f'(movimentação #{conc_record.id}).',
-                            )
-                        else:
-                            messages.warning(
-                                request,
-                                'A certidão foi juntada, mas a conclusão '
-                                'não foi confirmada. Confira o Projudi.',
-                            )
             else:
                 messages.error(
                     request,

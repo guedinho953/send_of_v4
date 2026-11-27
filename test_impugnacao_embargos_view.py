@@ -39,6 +39,30 @@ class ImpugnacaoEmbargosViewTest(TestCase):
         self.assertContains(resposta, 'Data do protocolo')
         self.assertContains(resposta, 'Evento do despacho/pagamento')
 
+    def test_detalhe_mostra_acoes_agendadas(self):
+        from datetime import date
+        from projudi.models import AcaoCertidaoAgendada
+
+        registro = PrazoDjenRecord.objects.create(
+            processo='0000010-10.2026.8.05.0191',
+            origem='movimentacao',
+            tipo_prazo='impugnacao_embargos_execucao',
+            prazo_dias=15,
+        )
+        AcaoCertidaoAgendada.objects.create(
+            registro=registro,
+            tipo='conclusao',
+            data_agendada=date(2026, 12, 24),
+            tipo_conclusao='18',
+            juiz_conclusao='41201',
+        )
+        resposta = self.client.get(
+            reverse('projudi:certidao_detail', args=[registro.id]))
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'Ações agendadas pós-intimação')
+        self.assertContains(resposta, 'Conclusão ao Juiz')
+        self.assertContains(resposta, '24/12/2026')
+
     def test_fila_de_movimentacoes_tem_acao_para_certidao(self):
         from django.template.loader import render_to_string
 

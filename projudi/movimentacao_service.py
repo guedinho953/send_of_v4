@@ -619,7 +619,8 @@ class MovimentacaoService:
                            certidao_html: str = None,
                            certidao_titulo: str = 'Certidão Criminal - art. 76 Lei 9.099/95',
                            conclusao: str = '',
-                           login_conclusao_pessoal: str = '') -> bool:
+                           login_conclusao_pessoal: str = '',
+                           enviar_contador: bool = False) -> bool:
         """Executa movimentação via Playwright headless + submit via JavaScript.
 
         Args:
@@ -1567,7 +1568,11 @@ class MovimentacaoService:
                         'enviaDelegacia', 'enviaMP', 'enviaTurmaRecursal',
                         'enviaCartorioExtrajudicial', 'arquivar',
                         'psicossocial', 'contador']:
+            if campo == 'contador' and enviar_contador:
+                continue
             payload.pop(campo, None)
+        if enviar_contador:
+            payload['contador'] = 'contador'
 
         # Localizador
         if record.tipo_localizador:

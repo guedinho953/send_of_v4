@@ -114,29 +114,49 @@
         </div>
 
         {% if registro.tipo_prazo == 'impugnacao_embargos_execucao' %}
-        <div style="background:#eef2ff; border:1px solid #c7d2fe; border-radius:8px; padding:10px 12px; margin-bottom:12px; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
-            <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:#3730a3; font-weight:600;">
-                <input type="checkbox" name="fazer_conclusao" {% if fazer_conclusao %}checked{% endif %}>
-                Fazer conclusão ao Juiz
-            </label>
-            <div>
-                <label style="font-size:11px; color:#3730a3; margin-right:4px;">Tipo:</label>
-                <select name="tipo_conclusao" style="padding:5px 8px; border:1px solid #a5b4fc; border-radius:5px; font-size:12px;">
-                    {% for valor, label in conclusao_opcoes %}
-                    <option value="{{ valor }}" {% if valor == tipo_conclusao %}selected{% endif %}>{{ label }}</option>
-                    {% endfor %}
-                </select>
+        <div style="background:#eef2ff; border:1px solid #c7d2fe; border-radius:8px; padding:10px 12px; margin-bottom:12px;">
+            <div style="font-size:12px; font-weight:700; color:#3730a3; margin-bottom:8px;">
+                Depois do prazo da intimação realizada agora
             </div>
-            <div>
-                <label style="font-size:11px; color:#3730a3; margin-right:4px;">Juiz:</label>
-                <select name="juiz_conclusao" style="padding:5px 8px; border:1px solid #a5b4fc; border-radius:5px; font-size:12px;">
-                    {% for valor, label in juizes_conclusao %}
-                    <option value="{{ valor }}" {% if valor == juiz_conclusao %}selected{% endif %}>{{ label }}</option>
-                    {% endfor %}
-                </select>
+            <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap; margin-bottom:8px;">
+                <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:#3730a3;">
+                    <input type="checkbox" name="agendar_localizador" {% if agendar_localizador %}checked{% endif %}>
+                    Colocar no localizador
+                </label>
+                <span style="font-size:11px; color:#6b7280;">
+                    {{ plano.tipo_localizador|default:"sem código" }}
+                    {% if plano.localizador %} / {{ plano.localizador }}{% endif %}
+                </span>
+                <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:#3730a3;">
+                    <input type="checkbox" name="agendar_contadoria" {% if agendar_contadoria %}checked{% endif %}>
+                    Remeter à contadoria
+                </label>
+                <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:#3730a3; font-weight:600;">
+                    <input type="checkbox" name="fazer_conclusao" {% if fazer_conclusao %}checked{% endif %}>
+                    Agendar conclusão ao Juiz
+                </label>
             </div>
-            <div style="font-size:11px; color:#4338ca;">
-                Movimentação 11383, na sequência da juntada/intimação.
+            <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+                <div>
+                    <label style="font-size:11px; color:#3730a3; margin-right:4px;">Tipo:</label>
+                    <select name="tipo_conclusao" style="padding:5px 8px; border:1px solid #a5b4fc; border-radius:5px; font-size:12px;">
+                        {% for valor, label in conclusao_opcoes %}
+                        <option value="{{ valor }}" {% if valor == tipo_conclusao %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label style="font-size:11px; color:#3730a3; margin-right:4px;">Juiz:</label>
+                    <select name="juiz_conclusao" style="padding:5px 8px; border:1px solid #a5b4fc; border-radius:5px; font-size:12px;">
+                        {% for valor, label in juizes_conclusao %}
+                        <option value="{{ valor }}" {% if valor == juiz_conclusao %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div style="font-size:11px; color:#4338ca;">
+                    Serão agendadas para o 1º dia útil após os 15 dias da intimação.
+                    Conclusão usa a movimentação 11383.
+                </div>
             </div>
         </div>
         {% endif %}

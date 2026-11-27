@@ -43,9 +43,14 @@ Sugestão de campos:
    detalhe da certidão. O sistema intima o embargado/exequente para
    manifestação em 15 dias;
 4. se **INTEMPESTIVA**, usa-se apenas **Juntar certidão**, sem intimação;
-5. opcionalmente, marque **Fazer conclusão ao Juiz** para registrar a
-   movimentação 11383, com o tipo e o juiz sugeridos pela RAG (padrão do
-   juiz: `41201` — Dr. Martinho).
+5. opcionalmente, marque as ações pós-intimação:
+   - **Colocar no localizador**;
+   - **Remeter à contadoria**;
+   - **Conclusão ao Juiz** — movimentação 11383, com o tipo e o juiz
+     sugeridos pela RAG (padrão do juiz: `41201` — Dr. Martinho).
+
+   Elas ficam agendadas para o 1º dia útil após os 15 dias da intimação e
+   aparecem no detalhe da certidão.
 
 Exemplo de passo de tarefa (não executa a certidão automaticamente):
 

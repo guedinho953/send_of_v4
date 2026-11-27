@@ -435,10 +435,27 @@ O texto público da certidão segue o modelo base e incorpora o despacho:
 prazo de 15 dias para pagamento, art. 525, caput, do CPC e observação dos
 valores executado/depositado (Enunciado n. 117 do FONAJE).
 
-A tela também permite marcar **Fazer conclusão ao Juiz**. Nesse caso, após
-a juntada/intimação, o sistema registra a movimentação **11383** com o
-radio `conclusao` escolhido (ex.: 18 = Embargos de Execução) e o
-`loginConclusaoPessoal` do juiz (padrão `41201` — Dr. Martinho).
+A tela também permite agendar ações para **depois do prazo da intimação
+realizada agora**:
+
+- **Colocar no localizador** (usa o localizador da RAG);
+- **Remeter à contadoria**;
+- **Conclusão ao Juiz** (movimentação 11383, radio `conclusao`, ex.: 18 =
+  Embargos de Execução; juiz padrão `41201` — Dr. Martinho).
+
+As ações ficam registradas no detalhe da certidão com a data prevista e o
+status. A data é o **1º dia útil após os 15 dias** contados da intimação.
+Elas não são executadas automaticamente: rode quando o prazo vencer:
+
+```bat
+python manage.py executar_acoes_certidoes --data 2026-12-24
+```
+
+Para apenas listar as vencidas:
+
+```bat
+python manage.py executar_acoes_certidoes --data 2026-12-24 --dry-run
+```
 
 ### Senha da assinatura
 

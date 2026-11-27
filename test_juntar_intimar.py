@@ -216,42 +216,122 @@ class JuntarIntimarPlanTest(TestCase):
         self.assertEqual(kwargs['polo_intimacao'], 'autores')
         self.assertEqual(kwargs['proc_projudi'], '12345678901234')
 
-    @patch('projudi.juntar_views.executar_conclusao')
-    @patch('projudi.juntar_views.executar_juntada')
-    def test_juntar_com_conclusao_usa_codigo_11383(self, juntar, conclusao):
+    @patch('projudi.juntar_views.agendar_pos_intimacao')
+    @patch('projudi.juntar_views.executar_juntada_e_intimacao')
+    def test_agenda_acoes_depois_da_intimacao(self, juntar, agendar):
+        from datetime import date
+
         registro = PrazoDjenRecord.objects.create(
             processo='0000006-66.2026.8.05.0191',
             origem='movimentacao',
             tipo_prazo='impugnacao_embargos_execucao',
             prazo_dias=15,
-            tempestivo=False,
-            seguranca_juizo='nenhuma',
+            tempestivo=True,
+            seguranca_juizo='integral',
+            tipo_localizador='15286',
+            localizador='1',
             certidao_path=str(self.preview),
         )
-        juntar.return_value = (True, SimpleNamespace(id=200))
-        conclusao.return_value = (True, SimpleNamespace(id=201))
+        juntar.return_value = (True, SimpleNamespace(id=200), True, '')
+        agendar.return_value = (
+            date(2026, 12, 24),
+            [SimpleNamespace(get_tipo_display=lambda: 'Localizador')],
+        )
         resposta = self.client.post(
             reverse('projudi:certidao_juntar_intimar',
                     args=[registro.id]),
             {
-                'acao': 'juntar',
+                'acao': 'juntar_intimar',
                 'processo_url': (
                     'https://projudi.tjba.jus.br/projudi/listagens/'
                     'DadosProcesso?numeroProcesso=12345678901234'),
                 'polo': 'autores',
                 'prazo': '15',
+                'agendar_localizador': 'on',
+                'agendar_contadoria': 'on',
                 'fazer_conclusao': 'on',
                 'tipo_conclusao': '18',
+                'juiz_conclusao': '41201',
                 'confirmo': 'on',
             },
         )
         self.assertEqual(resposta.status_code, 200)
-        self.assertContains(resposta, 'Conclusão ao Juiz registrada')
-        conclusao.assert_called_once()
+        self.assertContains(resposta, 'agendada(s) para 24/12/2026')
+        agendar.assert_called_once()
+        args, kwargs = agendar.call_args
         self.assertEqual(
-            conclusao.call_args.kwargs['tipo_conclusao'], '18')
+            args[2], ['localizador', 'contadoria', 'conclusao'])
+        self.assertEqual(kwargs['tipo_localizador'], '15286')
+        self.assertEqual(kwargs['localizador'], '1')
+        self.assertEqual(kwargs['tipo_conclusao'], '18')
+        self.assertEqual(kwargs['juiz_conclusao'], '41201')
+
+    @patch('projudi.acoes_agendadas.data_decurso_intimacao')
+    def test_agendar_pos_intimacao_cria_acoes(self, data_decurso):
+        from datetime import date
+        from projudi.acoes_agendadas import agendar_pos_intimacao
+        from projudi.models import AcaoCertidaoAgendada
+
+        data_decurso.return_value = date(2026, 12, 24)
+        registro = PrazoDjenRecord.objects.create(
+            processo='0000009-99.2026.8.05.0191',
+            origem='movimentacao',
+            tipo_prazo='impugnacao_embargos_execucao',
+            prazo_dias=15,
+            tempestivo=True,
+        )
+        data_ag, acoes = agendar_pos_intimacao(
+            registro,
+            self.user,
+            ['localizador', 'contadoria', 'conclusao'],
+            tipo_localizador='15286',
+            localizador='1',
+            tipo_conclusao='18',
+            juiz_conclusao='41201',
+        )
+        self.assertEqual(data_ag, date(2026, 12, 24))
+        self.assertEqual(len(acoes), 3)
         self.assertEqual(
-            conclusao.call_args.kwargs['juiz_conclusao'], '41201')
+            set(AcaoCertidaoAgendada.objects.filter(
+                registro=registro).values_list('tipo', flat=True)),
+            {'localizador', 'contadoria', 'conclusao'},
+        )
+        loc = AcaoCertidaoAgendada.objects.get(
+            registro=registro, tipo='localizador')
+        self.assertEqual(loc.tipo_localizador, '15286')
+        self.assertEqual(loc.data_agendada, date(2026, 12, 24))
+
+    @patch('projudi.acoes_agendadas._processo_url',
+           return_value='https://projudi/processo')
+    @patch('projudi.movimentacao_service.MovimentacaoService')
+    def test_executar_contadoria_usa_11383(self, service_cls, _url):
+        from datetime import date
+        from projudi.acoes_agendadas import executar_acao
+        from projudi.models import AcaoCertidaoAgendada
+
+        registro = PrazoDjenRecord.objects.create(
+            processo='0000011-11.2026.8.05.0191',
+            origem='movimentacao',
+            tipo_prazo='impugnacao_embargos_execucao',
+            prazo_dias=15,
+        )
+        acao = AcaoCertidaoAgendada.objects.create(
+            registro=registro,
+            tipo='contadoria',
+            data_agendada=date(2026, 12, 24),
+            user=self.user,
+        )
+        service = service_cls.return_value
+        service.importar.return_value = SimpleNamespace(id=400)
+        service.executar_requests.return_value = True
+        ok = executar_acao(acao, self.user)
+        self.assertTrue(ok)
+        acao.refresh_from_db()
+        self.assertEqual(acao.status, 'executada')
+        kwargs = service.importar.call_args.kwargs
+        self.assertEqual(kwargs['codigo_movimentacao'], '11383')
+        self.assertTrue(
+            service.executar_requests.call_args.kwargs['enviar_contador'])
 
     @patch('projudi.movimentacao_service.MovimentacaoService')
     def test_executar_conclusao_chama_11383(self, service_cls):
