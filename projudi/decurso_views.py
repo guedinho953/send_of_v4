@@ -7,7 +7,9 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import redirect, render
 from django.views import View
 
-from projudi.assinantes_certidao import ASSINANTE_PADRAO, ASSINANTES
+from projudi.assinantes_certidao import (
+    ASSINANTE_PADRAO, ASSINANTES, resolver_assinante,
+)
 from projudi.decurso_certidao import gerar_e_registrar
 from projudi.decurso_pagamento_service import DecursoPagamentoService
 
@@ -61,16 +63,11 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
         assinante = (
             request.POST.get('assinante') or ASSINANTE_PADRAO
         ).strip()
-        if assinante == 'outro':
-            servidor = (
-                request.POST.get('assinante_nome') or ''
-            ).strip() or ASSINANTES[ASSINANTE_PADRAO][0]
-            servidor_cargo = (
-                request.POST.get('assinante_cargo') or ''
-            ).strip() or ASSINANTES[ASSINANTE_PADRAO][1]
-        else:
-            servidor, servidor_cargo = ASSINANTES.get(
-                assinante, ASSINANTES[ASSINANTE_PADRAO])
+        servidor, servidor_cargo = resolver_assinante(
+            assinante,
+            request.POST.get('assinante_nome') or '',
+            request.POST.get('assinante_cargo') or '',
+        )
 
         resultado = DecursoPagamentoService(request.user).analisar(
             processo, evento=evento, parte_nome=executado)

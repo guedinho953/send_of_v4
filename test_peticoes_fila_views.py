@@ -1,6 +1,7 @@
 """Testes da fila de petições com escolha manual da certidão/ação."""
 
 from datetime import date
+from pathlib import Path
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -19,6 +20,32 @@ FALSA = [{
     'peticao': {'nome': 'recurso.pdf', 'url': 'https://projudi/recurso.pdf'},
     'preparo_docs': [],
 }]
+
+
+def resultado_decurso():
+    return {
+        'processo': '0000001-11.2026.8.05.0191',
+        'url': 'https://projudi/processo',
+        'executado': 'FULANO DE TAL',
+        'parte_papel': 'PROMOVIDO',
+        'evento_despacho': '10',
+        'despacho_auto': False,
+        'despacho_trecho': 'pagamento em 15 dias',
+        'evento_intimacao': '11',
+        'data_intimacao': date(2026, 12, 2),
+        'data_inicio': date(2026, 12, 4),
+        'ultimo_dia': date(2026, 12, 24),
+        'data_decurso': date(2026, 12, 25),
+        'meio': 'eletronico',
+        'meio_label': 'DJEN / domicílio eletrônico',
+        'dias': 15,
+        'decorrido': True,
+        'prazo_info': {
+            'data_publicacao': '2026-12-03',
+            'ultimo_dia': '2026-12-24',
+            'data_decurso': '2026-12-25',
+        },
+    }
 
 
 class PeticaoFilaViewsTest(TestCase):
@@ -101,20 +128,53 @@ class PeticaoFilaViewsTest(TestCase):
         self.assertEqual(resposta.status_code, 302)
         comando.assert_not_called()
 
-    @patch('projudi.peticoes_views.call_command')
-    def test_decurso_redireciona_para_tela_especifica(self, comando):
+    @patch('projudi.peticoes_views.DecursoPagamentoService.analisar')
+    def test_decurso_gera_na_propria_fila(self, analisar):
+        analisar.return_value = resultado_decurso()
         resposta = self.client.post(
             reverse('projudi:certidao_peticoes_fila_gerar'),
             {
                 'processo': '0000001-11.2026.8.05.0191',
-                'data_envio': '25/11/2026',
+                'processo_url': 'https://projudi/processo',
                 'tipo_prazo': 'decurso_pagamento',
+                'evento_despacho': '10',
+                'executado': 'FULANO DE TAL',
+                'assinante': 'ivan',
                 'acao': 'gerar',
             },
         )
         self.assertEqual(resposta.status_code, 302)
-        self.assertIn(
-            '/projudi/certidoes/movimentacoes/decurso-pagamento/',
-            resposta.url,
+        registro = PrazoDjenRecord.objects.get(
+            tipo_prazo='decurso_pagamento')
+        self.addCleanup(
+            lambda: Path(registro.certidao_path).unlink(missing_ok=True))
+        self.assertRedirects(
+            resposta,
+            reverse('projudi:certidao_detail', args=[registro.id]),
+            fetch_redirect_response=False,
         )
-        comando.assert_not_called()
+        self.assertEqual(registro.origem, 'movimentacao')
+        self.assertEqual(registro.evento_origem, '10')
+        self.assertEqual(registro.parte, 'FULANO DE TAL')
+        analisar.assert_called_once()
+
+    @patch('projudi.peticoes_views.DecursoPagamentoService.analisar')
+    def test_decurso_nao_gera_antes_do_prazo(self, analisar):
+        resultado = resultado_decurso()
+        resultado['decorrido'] = False
+        analisar.return_value = resultado
+        resposta = self.client.post(
+            reverse('projudi:certidao_peticoes_fila_gerar'),
+            {
+                'processo': '0000001-11.2026.8.05.0191',
+                'tipo_prazo': 'decurso_pagamento',
+                'evento_despacho': '',
+                'executado': '',
+                'assinante': 'ivan',
+                'acao': 'gerar',
+            },
+        )
+        self.assertEqual(resposta.status_code, 302)
+        self.assertFalse(
+            PrazoDjenRecord.objects.filter(
+                tipo_prazo='decurso_pagamento').exists())

@@ -7,11 +7,39 @@ from unittest.mock import patch
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.urls import reverse
 
 from projudi.decurso_certidao import (
     gerar_preview, motivo, registrar, texto_certidao,
 )
 from projudi.decurso_pagamento_service import DecursoPagamentoService
+from projudi.models import PrazoDjenRecord
+
+
+def resultado_fake():
+    return {
+        'processo': '0000001-11.2026.8.05.0191',
+        'url': 'https://exemplo/processo',
+        'executado': 'FULANO DE TAL',
+        'parte_papel': 'PROMOVIDO',
+        'evento_despacho': '10',
+        'despacho_auto': True,
+        'despacho_trecho': 'pagamento em 15 dias',
+        'evento_intimacao': '11',
+        'data_intimacao': date(2026, 12, 2),
+        'data_inicio': date(2026, 12, 4),
+        'ultimo_dia': date(2026, 12, 24),
+        'data_decurso': date(2026, 12, 25),
+        'meio': 'eletronico',
+        'meio_label': 'DJEN / domicílio eletrônico',
+        'dias': 15,
+        'decorrido': True,
+        'prazo_info': {
+            'data_publicacao': '2026-12-03',
+            'ultimo_dia': '2026-12-24',
+            'data_decurso': '2026-12-25',
+        },
+    }
 
 
 class DecursoPagamentoHelpersTest(TestCase):
@@ -77,13 +105,13 @@ class DecursoPagamentoHelpersTest(TestCase):
         self.assertGreater(resultado['data_decurso'], resultado['ultimo_dia'])
 
     def test_texto_e_motivo(self):
-        resultado = self._resultado()
+        resultado = resultado_fake()
         self.assertIn('15 (quinze) dias', texto_certidao(resultado))
         self.assertIn('evento n.º 10', texto_certidao(resultado))
         self.assertIn('Despacho: evento 10', motivo(resultado))
 
     def test_gerar_preview_e_registrar(self):
-        resultado = self._resultado()
+        resultado = resultado_fake()
         saida = Path(settings.BASE_DIR) / 'var' / 'teste_decurso_pagamento.html'
         self.addCleanup(lambda: saida.unlink(missing_ok=True))
 
@@ -106,27 +134,57 @@ class DecursoPagamentoHelpersTest(TestCase):
         self.assertEqual(registro.evento_origem, '10')
         self.assertIsNone(registro.tempestivo)
 
-    def _resultado(self):
-        return {
-            'processo': '0000001-11.2026.8.05.0191',
-            'url': 'https://exemplo/processo',
-            'executado': 'FULANO DE TAL',
-            'parte_papel': 'PROMOVIDO',
-            'evento_despacho': '10',
-            'despacho_auto': True,
-            'despacho_trecho': 'pagamento em 15 dias',
-            'evento_intimacao': '11',
-            'data_intimacao': date(2026, 12, 2),
-            'data_inicio': date(2026, 12, 4),
-            'ultimo_dia': date(2026, 12, 24),
-            'data_decurso': date(2026, 12, 25),
-            'meio': 'eletronico',
-            'meio_label': 'DJEN / domicílio eletrônico',
-            'dias': 15,
-            'decorrido': True,
-            'prazo_info': {
-                'data_publicacao': '2026-12-03',
-                'ultimo_dia': '2026-12-24',
-                'data_decurso': '2026-12-25',
+
+class CertidaoDecursoViewTest(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            email='teste-decurso-view@local', password='x',
+            first_name='Teste')
+        self.client.force_login(self.user)
+
+    @patch('projudi.decurso_views.DecursoPagamentoService.analisar')
+    def test_post_gera_certidao(self, analisar):
+        analisar.return_value = resultado_fake()
+        resposta = self.client.post(
+            reverse('projudi:certidao_decurso_pagamento'),
+            {
+                'processo': '0000001-11.2026.8.05.0191',
+                'evento': '10',
+                'executado': 'FULANO DE TAL',
+                'assinante': 'ivan',
             },
-        }
+        )
+        self.assertEqual(resposta.status_code, 302)
+        registro = PrazoDjenRecord.objects.get(
+            tipo_prazo='decurso_pagamento')
+        self.addCleanup(
+            lambda: Path(registro.certidao_path).unlink(missing_ok=True))
+        self.assertRedirects(
+            resposta,
+            reverse('projudi:certidao_detail', args=[registro.id]),
+            fetch_redirect_response=False,
+        )
+        self.assertEqual(registro.origem, 'movimentacao')
+        self.assertEqual(registro.evento_origem, '10')
+        self.assertEqual(registro.parte, 'FULANO DE TAL')
+        analisar.assert_called_once()
+
+    @patch('projudi.decurso_views.DecursoPagamentoService.analisar')
+    def test_post_nao_gera_antes_do_decurso(self, analisar):
+        resultado = resultado_fake()
+        resultado['decorrido'] = False
+        analisar.return_value = resultado
+        resposta = self.client.post(
+            reverse('projudi:certidao_decurso_pagamento'),
+            {
+                'processo': '0000001-11.2026.8.05.0191',
+                'evento': '',
+                'executado': '',
+                'assinante': 'ivan',
+            },
+        )
+        self.assertEqual(resposta.status_code, 200)
+        self.assertFalse(
+            PrazoDjenRecord.objects.filter(
+                tipo_prazo='decurso_pagamento').exists())
+        self.assertContains(resposta, 'ainda não decorreu')

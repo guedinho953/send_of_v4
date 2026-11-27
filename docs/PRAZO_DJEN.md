@@ -248,6 +248,13 @@ Opções da tela:
   **Juntar + intimar** aparecem como “em breve” e serão habilitadas na
   próxima etapa.
 
+Ao escolher **Decurso de Pagamento** no seletor, aparecem no próprio card os
+campos **Evento do despacho (opcional)**, **Executado(a) (opcional)** e
+**Assinatura da certidão**. O sistema usa o evento informado ou localiza o
+despacho automaticamente, confere a intimação do executado e só gera a
+certidão se o prazo já tiver decorrido. Se ainda não decorreu, mostra a data
+do decurso e não gera. Tudo na mesma página da fila.
+
 A tela gera a certidão, registra na aba **Petições** e abre o detalhe com o
 preview. Nada é juntado/movimentado no Projudi nesta etapa.
 

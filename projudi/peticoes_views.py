@@ -16,6 +16,11 @@ from django.shortcuts import redirect, render
 from django.views import View
 from django.views.generic import TemplateView
 
+from projudi.assinantes_certidao import (
+    ASSINANTE_PADRAO, ASSINANTES, resolver_assinante,
+)
+from projudi.decurso_certidao import gerar_e_registrar
+from projudi.decurso_pagamento_service import DecursoPagamentoService
 from projudi.models import PrazoDjenRecord
 from projudi.peticoes_inominado import TIPOS_CERTIDAO, carregar_fila
 
@@ -54,6 +59,11 @@ class CertidaoPeticaoFilaView(LoginRequiredMixin, TemplateView):
             'tipos_certidao': TIPOS_CERTIDAO,
             'preparos': PREPAROS,
             'acoes': ACOES,
+            'assinantes': [
+                {'chave': chave, 'nome': dados[0], 'cargo': dados[1]}
+                for chave, dados in ASSINANTES.items()
+            ],
+            'assinante_padrao': ASSINANTE_PADRAO,
         })
         return context
 
@@ -73,6 +83,15 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
         peticao_url = (request.POST.get('peticao_url') or '').strip()
         peticao_documento = (
             request.POST.get('peticao_documento') or '').strip()
+        evento_despacho = (
+            request.POST.get('evento_despacho') or '').strip()
+        executado = (request.POST.get('executado') or '').strip()
+        assinante = (
+            request.POST.get('assinante') or ASSINANTE_PADRAO).strip()
+        assinante_nome = (
+            request.POST.get('assinante_nome') or '').strip()
+        assinante_cargo = (
+            request.POST.get('assinante_cargo') or '').strip()
 
         voltar = redirect('projudi:certidao_peticoes_fila')
 
@@ -92,14 +111,15 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
             return voltar
 
         if tipo_prazo == 'decurso_pagamento':
-            messages.info(
+            return self._gerar_decurso(
                 request,
-                'Decurso de pagamento é uma certidão de movimentação. '
-                'Use a tela específica com o processo preenchido.',
-            )
-            return redirect(
-                f"/projudi/certidoes/movimentacoes/decurso-pagamento/"
-                f"?processo={processo}"
+                processo=processo,
+                processo_url=processo_url,
+                evento=evento_despacho,
+                executado=executado,
+                assinante=assinante,
+                assinante_nome=assinante_nome,
+                assinante_cargo=assinante_cargo,
             )
 
         data_protocolo = self._data(data_envio)
@@ -182,6 +202,66 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
             'Confira a aba Petições.',
         )
         return redirect('projudi:certidao_peticoes')
+
+    def _gerar_decurso(self, request, *, processo, processo_url, evento,
+                       executado, assinante, assinante_nome,
+                       assinante_cargo):
+        voltar = redirect('projudi:certidao_peticoes_fila')
+        if evento and not evento.isdigit():
+            messages.error(
+                request,
+                'Evento do despacho inválido. Informe apenas o número ou '
+                'deixe em branco para busca automática.',
+            )
+            return voltar
+
+        try:
+            resultado = DecursoPagamentoService(request.user).analisar(
+                processo,
+                evento=evento,
+                parte_nome=executado,
+                url=processo_url or None,
+            )
+        except Exception as exc:
+            messages.error(
+                request, f'Erro ao analisar o decurso: {exc}')
+            return voltar
+
+        if resultado.get('erro'):
+            messages.error(request, resultado['erro'])
+            return voltar
+
+        if not resultado['decorrido']:
+            messages.info(
+                request,
+                'O prazo de 15 dias ainda não decorreu. '
+                f'Último dia: '
+                f'{resultado["ultimo_dia"].strftime("%d/%m/%Y")}; '
+                f'decurso: '
+                f'{resultado["data_decurso"].strftime("%d/%m/%Y")}. '
+                'A certidão não foi gerada.',
+            )
+            return voltar
+
+        servidor, servidor_cargo = resolver_assinante(
+            assinante, assinante_nome, assinante_cargo)
+        try:
+            _html, _caminho, registro = gerar_e_registrar(
+                resultado,
+                servidor=servidor,
+                servidor_cargo=servidor_cargo,
+            )
+        except Exception as exc:
+            messages.error(
+                request, f'Erro ao gerar a certidão de decurso: {exc}')
+            return voltar
+
+        messages.success(
+            request,
+            'Certidão de decurso gerada e registrada em Movimentações '
+            f'(#{registro.id}).',
+        )
+        return redirect('projudi:certidao_detail', pk=registro.id)
 
     @staticmethod
     def _data(valor):

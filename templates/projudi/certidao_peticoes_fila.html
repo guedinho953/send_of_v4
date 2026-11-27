@@ -30,8 +30,11 @@
     Para <strong>recurso inominado</strong>, informe o preparo e o sistema
     calcula automaticamente a intimação do recorrente. Para
     <strong>contrarrazões/impugnação</strong>, informe a data da intimação que
-    abriu o prazo. A ação <strong>Juntar/Intimar</strong> será habilitada na
-    próxima etapa; por ora use <strong>Gerar certidão</strong>.
+    abriu o prazo. Ao escolher <strong>Decurso de Pagamento</strong>, os campos
+    <strong>Evento do despacho</strong>, <strong>Executado(a)</strong> e
+    <strong>Assinatura</strong> aparecem no próprio card; não precisa sair da
+    fila. A ação <strong>Juntar/Intimar</strong> será habilitada na próxima
+    etapa; por ora use <strong>Gerar certidão</strong>.
 </div>
 
 {% if peticoes %}
@@ -78,6 +81,7 @@
             {% endif %}
 
             <form method="post" action="{% url 'projudi:certidao_peticoes_fila_gerar' %}"
+                  class="fila-peticao-form"
                   style="margin-top:12px; padding-top:12px; border-top:1px solid #f1f5f9;">
                 {% csrf_token %}
                 <input type="hidden" name="processo" value="{{ p.processo }}">
@@ -125,8 +129,36 @@
                         </select>
                     </div>
                     <button type="submit" class="btn" style="background:#0891b2; color:#fff; padding:7px 12px; font-size:12px;">
-                        Executar
+                        📄 Analisar e gerar certidão
                     </button>
+                </div>
+
+                <div class="decurso-campos" style="display:none; margin-top:10px; padding:10px; background:#f5f3ff; border:1px solid #ddd6fe; border-radius:8px; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+                    <div>
+                        <label style="display:block; font-size:11px; font-weight:600; color:#5b21b6; margin-bottom:3px;">Evento do despacho (opcional)</label>
+                        <input name="evento_despacho" placeholder="automático"
+                               style="width:110px; padding:6px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px;">
+                        <div style="font-size:11px; color:#6b7280;">Deixe vazio para localizar.</div>
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:11px; font-weight:600; color:#5b21b6; margin-bottom:3px;">Executado(a) (opcional)</label>
+                        <input name="executado" placeholder="deixe vazio para usar o promovido"
+                               style="width:260px; padding:6px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:11px; font-weight:600; color:#5b21b6; margin-bottom:3px;">Assinatura da certidão</label>
+                        <select name="assinante" class="assinante-select"
+                                style="padding:6px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px;">
+                            {% for a in assinantes %}
+                                <option value="{{ a.chave }}" {% if a.chave == assinante_padrao %}selected{% endif %}>{{ a.nome }} — {{ a.cargo }}</option>
+                            {% endfor %}
+                            <option value="outro">Outro (digitar)</option>
+                        </select>
+                        <input name="assinante_nome" class="assinante-nome" placeholder="Nome"
+                               style="display:none; padding:6px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px; min-width:200px;">
+                        <input name="assinante_cargo" class="assinante-cargo" placeholder="Cargo"
+                               style="display:none; padding:6px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px; min-width:160px;">
+                    </div>
                 </div>
             </form>
         </div>
@@ -139,4 +171,33 @@
     </div>
     {% endif %}
 {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('form.fila-peticao-form').forEach(function (form) {
+    const tipo = form.querySelector('[name="tipo_prazo"]');
+    const bloco = form.querySelector('.decurso-campos');
+    const sel = form.querySelector('.assinante-select');
+    const nome = form.querySelector('.assinante-nome');
+    const cargo = form.querySelector('.assinante-cargo');
+
+    function atualizarTipo() {
+        if (bloco && tipo) {
+            bloco.style.display = tipo.value === 'decurso_pagamento'
+                ? 'flex' : 'none';
+        }
+    }
+    function atualizarAssinante() {
+        const outro = sel && sel.value === 'outro';
+        if (nome) nome.style.display = outro ? 'inline-block' : 'none';
+        if (cargo) cargo.style.display = outro ? 'inline-block' : 'none';
+    }
+
+    if (tipo) tipo.addEventListener('change', atualizarTipo);
+    if (sel) sel.addEventListener('change', atualizarAssinante);
+    atualizarTipo();
+    atualizarAssinante();
+});
+</script>
 {% endblock %}
