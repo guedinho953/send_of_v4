@@ -322,32 +322,55 @@ class DecursoPagamentoService:
         for mov in movs:
             if int(mov['evento']) <= int(evento):
                 continue
-            up = _norm(mov['texto'])
+            # O HTML do Projudi repete os movimentos anteriores dentro do
+            # texto do movimento atual. Para escolher a intimação é preciso
+            # olhar só a linha do próprio evento; caso contrário um evento
+            # antigo aninhado pode "emprestar" a data/publicação e vencer.
+            texto = re.split(
+                r'\s+Movimentação sem arquivos\b',
+                mov['texto'],
+                maxsplit=1,
+                flags=re.I,
+            )[0]
+            inicio = _norm(re.sub(r'^\s*\d+\s*', '', texto))
+            if inicio.startswith(('DECORRIDO PRAZO', 'TERMINO DA CONTAGEM')):
+                continue
+            # A juntada é o ato/documento, não a publicação da intimação.
+            # Mantemos como fallback para processos antigos que só têm a
+            # juntada, mas com pontuação bem menor que o DJEN.
+            eh_juntada = inicio.startswith('JUNTADA DE INTIMACAO')
+            up = _norm(texto)
             if not any(k in up for k in ('INTIMA', 'DISPONIBILIZ')):
                 continue
-            if alvo not in _nome_compacto(mov['texto']):
+            if alvo not in _nome_compacto(texto):
                 continue
-            data = _data_disponibilizacao(mov['texto']) or mov['data']
+            data = _data_disponibilizacao(texto) or mov['data']
             if not data:
                 continue
-            if 'AGUARDANDO DISPONIBILIZACAO' in up:
+            if eh_juntada:
+                meio = 'intimacao'
+            elif 'AGUARDANDO DISPONIBILIZACAO' in up:
                 meio = 'intimacao'
             elif 'DISPONIBILIZACAO NO DIARIO' in up or 'DJEN' in up:
                 meio = 'eletronico'
             else:
                 meio = 'intimacao'
 
-            # A intimação correta é a que referencia o próprio despacho.
-            # Ex.: evento 84 referencia "Proferido despacho de mero
-            # expediente"; o evento 80 referencia "Transitado em Julgado"
-            # e não deve ser usado para o prazo de pagamento.
+            # A intimação correta é a publicação eletrônica quando existir.
+            # Ex.: no processo 694, evento 77 é DJEN de BANCO BRADESCO;
+            # no 2019, evento 84 é DJEN do despacho 78.
             score = 0
             if descricao_despacho and descricao_despacho in up:
                 score += 100
             elif 'REFERENTE AO EVENTO' in up and descricao_despacho:
                 score -= 100
             if meio == 'eletronico':
-                score += 50
+                score += 200
+            if 'DISPONIBILIZACAO NO DIARIO' in up:
+                # Publicação efetiva tem prioridade sobre a expedição.
+                score += 200
+            if eh_juntada:
+                score -= 300
 
             candidatas.append({
                 'evento': mov['evento'],
