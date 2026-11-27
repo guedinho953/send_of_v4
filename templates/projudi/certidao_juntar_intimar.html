@@ -169,9 +169,37 @@
             <input type="checkbox" name="confirmo">
             Confirmo que conferi a certidão, o processo, o polo e o prazo.
         </label>
-        <button type="submit" class="btn" style="background:#0891b2; color:#fff;">
+        <button type="submit" class="btn btn-acao" style="background:#0891b2; color:#fff;">
             Simular plano
         </button>
+        <div style="font-size:11px; color:#6b7280; margin-top:6px;">
+            O botão muda para <strong>Executar ação</strong> quando você
+            escolher uma ação real.
+        </div>
     </form>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    const form = document.querySelector('form');
+    if (!form) return;
+    const acao = form.querySelector('[name="acao"]');
+    const botao = form.querySelector('.btn-acao');
+    if (!acao || !botao) return;
+
+    function atualizarBotao() {
+        if (acao.value === 'simular') {
+            botao.textContent = 'Simular plano';
+            botao.style.background = '#0891b2';
+        } else {
+            botao.textContent = 'Executar ação';
+            botao.style.background = '#dc2626';
+        }
+    }
+    acao.addEventListener('change', atualizarBotao);
+    atualizarBotao();
+})();
+</script>
 {% endblock %}
