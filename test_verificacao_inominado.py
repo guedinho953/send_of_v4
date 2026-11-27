@@ -49,6 +49,24 @@ class VerificacaoInominadoTest(unittest.TestCase):
         self.assertIsNotNone(mov)
         self.assertEqual(mov['evento'], '70')
 
+    def test_ignora_juntada_generica_que_cita_recurso(self):
+        movs = [
+            {
+                'evento': '58',
+                'ato': 'Juntada de Cumprimento Genérico',
+                'observacao': 'Documento: RECURSO INOMINADO - ri.pdf',
+                'data_obj': date(2026, 11, 26),
+            },
+            {
+                'evento': '55',
+                'ato': 'Juntada de Petição de Recurso Inominado',
+                'data_obj': date(2026, 11, 25),
+            },
+        ]
+        mov = achar_recurso_inominado(movs)
+        self.assertIsNotNone(mov)
+        self.assertEqual(mov['evento'], '55')
+
     def test_intimacao_prioriza_djen(self):
         mov, data, origem = achar_intimacao_djen(self.movs, 70)
         self.assertIsNotNone(mov)

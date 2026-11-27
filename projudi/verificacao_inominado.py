@@ -60,8 +60,40 @@ def data_djen(mov) -> Optional[date]:
     return None
 
 
+def _forca_recurso(mov) -> int:
+    """Classifica o quanto o movimento representa a interposição do recurso.
+
+    3 = ato explícito "Juntada de Petição de Recurso Inominado";
+    2 = ato que já cita "Recurso Inominado";
+    1 = outro ato, mas o texto menciona o recurso;
+    0 = juntada genérica/ato meramente referencial (não é o recurso).
+    """
+    ato = _normalizar(mov.get('ato') or mov.get('ato_normalizado') or '')
+    if 'JUNTADA DE PETICAO DE RECURSO INOMINADO' in ato:
+        return 3
+    if 'RECURSO INOMINADO' in ato:
+        return 2
+    if any(k in ato for k in (
+            'JUNTADA DE CUMPRIMENTO GENERICO',
+            'JUNTADA DE OUTROS TIPOS',
+            'JUNTADA DE INTIMACAO',
+            'JUNTADA DE CERTIDAO',
+            'JUNTADA DE DESPACHO',
+            'JUNTADA DE DECISAO',
+            'DECORRIDO PRAZO',
+            'DISPONIBILIZACAO',
+            'INTIMACAO EXPEDIDA')):
+        return 0
+    return 1
+
+
 def achar_recurso_inominado(movs, evento=None):
-    """Localiza o evento de interposição do recurso inominado."""
+    """Localiza o evento de interposição do recurso inominado.
+
+    Dá preferência ao ato explícito de juntada do recurso. Movimentos
+    genéricos (ex.: "Juntada de Cumprimento Genérico") que apenas citam
+    "recurso inominado" no texto não podem vencer o evento real.
+    """
     candidatos = []
     for mov in movs:
         ev = evento_mov(mov)
@@ -76,13 +108,16 @@ def achar_recurso_inominado(movs, evento=None):
                 'DECISAO', 'DECISÃO', 'NAO CONHECIDO', 'NAO PROVIDO',
                 'DESPROVIDO', 'PROVIDO')):
             continue
-        candidatos.append((ev, mov))
+        forca = _forca_recurso(mov)
+        if forca <= 0:
+            continue
+        candidatos.append((forca, ev, mov))
 
     if not candidatos:
         return None
 
-    # O evento mais recente de interposição (evita pegar petições antigas).
-    return max(candidatos, key=lambda item: item[0])[1]
+    # Primeiro o ato mais específico; depois o evento mais recente.
+    return max(candidatos, key=lambda item: (item[0], item[1]))[2]
 
 
 def _normalizar_parte(texto) -> str:
