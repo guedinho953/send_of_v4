@@ -279,6 +279,8 @@ class PeticaoFilaViewsTest(TestCase):
             reverse('projudi:certidao_movimentacao_fila_gerar'),
         )
         self.assertContains(resposta, 'Gerar certidão daqui')
+        self.assertContains(resposta, 'Só RAGs')
+        self.assertContains(resposta, 'mostrar todas as certidões')
         self.assertContains(resposta, 'Impugnação/Embargos à Execução')
         self.assertContains(resposta, 'Decurso de Pagamento Voluntário')
         self.assertContains(

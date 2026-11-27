@@ -37,9 +37,16 @@
 <div class="container">
     <div class="topbar">
         <h1>Movimentações Projudi</h1>
-        <a class="btn" href="{% url 'projudi:certidao_impugnacao_embargos' %}">
-            📄 Certidão de impugnação/embargos
-        </a>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <button type="button" id="btn-so-rag" class="btn btn-sm"
+                    style="background:#0f766e; color:#fff; border:0; cursor:pointer;">
+                🔎 Só RAGs
+            </button>
+            <span id="rag-contador" style="font-size:11px; color:#6b7280;"></span>
+            <a class="btn" href="{% url 'projudi:certidao_impugnacao_embargos' %}">
+                📄 Certidão de impugnação/embargos
+            </a>
+        </div>
     </div>
 
     {% if messages %}
@@ -68,7 +75,7 @@
             </thead>
             <tbody>
                 {% for m in movimentacoes %}
-                <tr>
+                <tr class="mov-row" data-tem-rag="0">
                     <td>{{ m.processo }}</td>
                     <td>{{ m.tipo }}</td>
                     <td>{{ m.data }}</td>
@@ -119,6 +126,11 @@
                                             <option value="{{ t.valor }}">{{ t.label }} ({{ t.dias }} dias)</option>
                                             {% endfor %}
                                         </select>
+                                        <small>A RAG restringe à certidão encontrada; sem RAG, todas ficam disponíveis.</small>
+                                        <a href="#" class="mostrar-todas"
+                                           style="display:none; font-size:10px; color:#0f766e;">
+                                            mostrar todas as certidões
+                                        </a>
                                     </div>
                                     <div class="campo campo-protocolo">
                                         <label>Data do protocolo</label>
@@ -206,9 +218,55 @@
         </div>
     {% endif %}
 
+    <div id="rag-vazio" style="display:none; text-align:center; color:#6b7280; padding:30px;">
+        Nenhuma movimentação com RAG encontrada.
+    </div>
+
     <a href="{% url 'dashboard' %}" class="back">&larr; Dashboard</a>
 </div>
 <script>
+(function () {
+    const botao = document.getElementById('btn-so-rag');
+    const contador = document.getElementById('rag-contador');
+    const vazio = document.getElementById('rag-vazio');
+    let ativo = false;
+
+    function aplicarFiltro() {
+        const linhas = document.querySelectorAll('tr.mov-row');
+        let comRag = 0;
+        linhas.forEach(function (linha) {
+            const temRag = linha.dataset.temRag === '1';
+            if (temRag) comRag += 1;
+            const mostrar = !ativo || temRag;
+            linha.style.display = mostrar ? '' : 'none';
+            const formRow = linha.nextElementSibling;
+            if (formRow && formRow.classList.contains('form-row')) {
+                formRow.style.display = mostrar ? '' : 'none';
+            }
+        });
+        if (contador) {
+            contador.textContent = comRag + ' com RAG de ' + linhas.length;
+        }
+        if (vazio) {
+            vazio.style.display = (ativo && comRag === 0) ? 'block' : 'none';
+        }
+        if (botao) {
+            botao.textContent = ativo ? 'Mostrar todas' : '🔎 Só RAGs';
+            botao.style.background = ativo ? '#475569' : '#0f766e';
+        }
+    }
+
+    if (botao) {
+        botao.addEventListener('click', function () {
+            ativo = !ativo;
+            aplicarFiltro();
+        });
+    }
+
+    window.aplicarFiltroRag = aplicarFiltro;
+    aplicarFiltro();
+})();
+
 document.querySelectorAll('form.fila-mov-form').forEach(function (form) {
     const tipo = form.querySelector('.tipo-prazo');
     const impugnacao = form.querySelector('.bloco-impugnacao');
@@ -216,6 +274,44 @@ document.querySelectorAll('form.fila-mov-form').forEach(function (form) {
     const protocolo = form.querySelector('.campo-protocolo');
     const assinante = form.querySelector('.assinante-select');
     const outro = form.querySelector('.campo-assinante-outro');
+    const mostrarTodas = form.querySelector('.mostrar-todas');
+    const opcoesOriginais = tipo
+        ? Array.from(tipo.options).map(function (opcao) {
+            return { valor: opcao.value, texto: opcao.textContent };
+        })
+        : [];
+
+    function restaurarOpcoes() {
+        if (!tipo) return;
+        const valorAtual = tipo.value;
+        tipo.innerHTML = '';
+        opcoesOriginais.forEach(function (opcao) {
+            tipo.add(new Option(opcao.texto, opcao.valor));
+        });
+        tipo.value = valorAtual;
+        if (mostrarTodas) mostrarTodas.style.display = 'none';
+    }
+
+    function aplicarRag(valorRag) {
+        if (!tipo || tipo.value) return;
+        const encontrada = opcoesOriginais.find(function (opcao) {
+            return opcao.valor === valorRag;
+        });
+        if (!encontrada) return;
+        tipo.innerHTML = '';
+        tipo.add(new Option('Selecione...', ''));
+        tipo.add(new Option(encontrada.texto, encontrada.valor));
+        tipo.value = encontrada.valor;
+        if (mostrarTodas) mostrarTodas.style.display = 'inline';
+        tipo.dispatchEvent(new Event('change'));
+    }
+
+    if (mostrarTodas) {
+        mostrarTodas.addEventListener('click', function (evento) {
+            evento.preventDefault();
+            restaurarOpcoes();
+        });
+    }
 
     function atualizarTipo() {
         const valor = tipo ? tipo.value : '';
@@ -237,6 +333,7 @@ document.querySelectorAll('form.fila-mov-form').forEach(function (form) {
         outro.style.display = assinante.value === 'outro' ? 'flex' : 'none';
     }
 
+    form.aplicarRag = aplicarRag;
     if (tipo) tipo.addEventListener('change', atualizarTipo);
     if (assinante) assinante.addEventListener('change', atualizarAssinante);
     atualizarTipo();
@@ -255,12 +352,17 @@ document.querySelectorAll('.sugestao-certidao').forEach(async function (el) {
             params.toString()
         );
         const dados = await resposta.json();
+        const linha = el.closest('tr.mov-row');
+        if (linha) {
+            linha.dataset.temRag = dados.tipo_certidao ? '1' : '0';
+            if (typeof window.aplicarFiltroRag === 'function') {
+                window.aplicarFiltroRag();
+            }
+        }
         const form = document.getElementById(el.dataset.formId || '');
         if (form) {
-            const select = form.querySelector('.tipo-prazo');
-            if (select && !select.value && dados.tipo_certidao) {
-                select.value = dados.tipo_certidao;
-                select.dispatchEvent(new Event('change'));
+            if (typeof form.aplicarRag === 'function') {
+                form.aplicarRag(dados.tipo_certidao);
             }
             [
                 ['tipo_localizador', dados.tipo_localizador],
@@ -315,6 +417,13 @@ document.querySelectorAll('.sugestao-certidao').forEach(async function (el) {
             el.appendChild(link);
         }
     } catch (erro) {
+        const linha = el.closest('tr.mov-row');
+        if (linha) {
+            linha.dataset.temRag = '0';
+            if (typeof window.aplicarFiltroRag === 'function') {
+                window.aplicarFiltroRag();
+            }
+        }
         el.textContent = 'não foi possível analisar';
     }
 });
