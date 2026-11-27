@@ -2477,6 +2477,14 @@ class MovimentacaoService:
                     # 581 → busca → grade → obs → Autoras/Rés (motivo+prazo) → Concluir.
                     sucesso = True
 
+                # O Concluir pode abrir o diálogo de assinatura da intimação.
+                # Antes esse trecho não preenchia a senha salva e deixava a
+                # assinatura pendente para o usuário.
+                if sucesso and not nao_concluir:
+                    assinou = self._assinar_intimacao_se_pendente(page)
+                    if assinou is False:
+                        print('   ⚠️ Assinatura da intimação ficou pendente.')
+
                 # ═══════════════════════════════════════════════════
                 # EXPEDIÇÃO PELOS CORREIOS (AR DIGITAL) — 2º clique
                 # Após a intimação concluída, navega para o link genérico
@@ -3149,6 +3157,64 @@ class MovimentacaoService:
             print('   ⚠️ AR expedido, mas assinatura pode ter ficado pendente.')
             self._ar_assinado = False
         return True  # expedição ocorreu; assinatura reportada no log
+
+    def _assinar_intimacao_se_pendente(self, page, timeout=12):
+        """Assina automaticamente a intimação após o Concluir.
+
+        O ``#Concluir`` pode abrir o diálogo de assinatura (senha + botão
+        Assinar). Se a senha estiver salva no usuário, preenche e confirma;
+        se não houver diálogo, não faz nada. Retorna ``True`` quando assinou,
+        ``False`` quando o diálogo apareceu e falhou, e ``None`` quando não
+        havia assinatura a fazer.
+        """
+        senha = getattr(self.user, 'projudi_password', None)
+        if not senha:
+            print('   ⏳ Sem senha salva — assinatura da intimação manual.')
+            return None
+
+        # Às vezes o campo já está visível; outras vezes só aparece depois
+        # do primeiro clique em Assinar.
+        campo = _procurar_campo_senha(page, timeout=2)
+        if not campo:
+            clicou = False
+            for sel in (
+                    'img[src*="bot-assinar"]',
+                    'input[value="Assinar"]',
+                    'input[value="assinar"]',
+                    'button:has-text("Assinar")'):
+                try:
+                    botao = page.locator(sel).first
+                    if botao.count():
+                        botao.click(timeout=3000)
+                        clicou = True
+                        print('   ✅ Assinar 1ª (intimação)')
+                        break
+                except Exception:
+                    continue
+            if not clicou:
+                return None
+            time.sleep(1)
+            campo = _procurar_campo_senha(page, timeout=timeout)
+
+        if not campo:
+            print('   ⚠️ Campo senha da intimação não apareceu')
+            return False
+
+        try:
+            campo.fill(senha)
+            time.sleep(0.5)
+            print('   ✅ Senha da intimação preenchida')
+        except Exception as exc:
+            print(f'   ⚠️ Senha da intimação: {exc}')
+            return False
+
+        if _clicar_botao_assinar(page, timeout=8):
+            time.sleep(2)
+            print('   ✅ Intimação assinada automaticamente')
+            return True
+
+        print('   ⚠️ Botão Assinar da intimação não encontrado')
+        return False
 
     def _assinar_expedicao_ar(self, page) -> bool:
         """Assina o documento na página ExpedirIntimacao.
