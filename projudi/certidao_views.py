@@ -10,7 +10,7 @@ lista mais os registros com `categoria='certidao'`.
 """
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.views import View
@@ -495,3 +495,25 @@ class CertidaoExecutarRagPendentesView(LoginRequiredMixin, View):
             f'falhas: {falhas}.'
         )
         return HttpResponseRedirect(reverse('projudi:certidao_dashboard'))
+
+
+class CertidaoSugestaoMovimentacaoView(LoginRequiredMixin, View):
+    """Sugere a certidão de uma movimentação a partir do match RAG."""
+
+    def get(self, request):
+        from .certidao_sugestao import sugerir_certidao
+
+        processo = (request.GET.get('processo') or '').strip()
+        documento = (request.GET.get('documento') or '').strip()
+        processo_url = (request.GET.get('url') or '').strip()
+        if not processo:
+            return JsonResponse(
+                {'erro': 'Processo não informado.'}, status=400)
+        try:
+            return JsonResponse(sugerir_certidao(
+                request.user, processo, documento, processo_url))
+        except Exception as exc:
+            return JsonResponse(
+                {'erro': f'Erro ao sugerir certidão: {exc}'},
+                status=500,
+            )

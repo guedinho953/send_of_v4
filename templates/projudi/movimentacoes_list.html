@@ -1,59 +1,295 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <title>Movimentações Projudi</title>
-    <style>
-        body { font-family: 'Segoe UI', Arial, sans-serif; background: #f3f4f6; padding: 20px; }
-        .container { max-width: 1000px; margin: 0 auto; background: #fff; padding: 24px; border-radius: 8px; }
-        h1 { color: #1e3a5f; margin-top: 0; }
-        .alert { padding: 12px 16px; border-radius: 6px; margin-bottom: 16px; }
-        .alert-error { background: #fee2e2; color: #991b1b; border-left: 4px solid #ef4444; }
-        table { width: 100%; border-collapse: collapse; font-size: 14px; }
-        th, td { text-align: left; padding: 10px; border-bottom: 1px solid #e5e7eb; }
-        th { background: #f9fafb; font-weight: 600; }
-        .empty { text-align: center; color: #6b7280; padding: 40px; }
-        .back { display: inline-block; margin-top: 20px; color: #2563eb; text-decoration: none; }
-    </style>
-</head>
-<body>
-<div class="container">
-    <h1>Movimentações Projudi</h1>
+{% extends "base.html" %}
 
-    {% if not session_active %}
-        <div class="alert alert-error">
-            Nenhuma sessão ativa. <a href="{% url 'projudi:sync_session' %}">Sincronize primeiro</a>.
-        </div>
-    {% endif %}
+{% block title %}Movimentações Projudi — Send of v4{% endblock %}
 
-    {% if movimentacoes %}
-        <table>
-            <thead>
-                <tr>
-                    <th>Processo</th>
-                    <th>Tipo</th>
-                    <th>Data</th>
-                    <th>Link</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for m in movimentacoes %}
-                <tr>
-                    <td>{{ m.processo }}</td>
-                    <td>{{ m.tipo }}</td>
-                    <td>{{ m.data }}</td>
-                    <td><a href="{{ m.link }}" target="_blank">Abrir</a></td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    {% else %}
-        <div class="empty">
-            Nenhuma movimentação encontrada.
-        </div>
-    {% endif %}
+{% block extra_css %}
+<style>
+    .mov-top { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+    .mov-top h1 { margin:0; font-size:22px; }
+    .mov-top p { margin:4px 0 0; font-size:13px; color:#6b7280; }
+    .mov-actions-top { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .filtro-btn { padding:7px 14px; border-radius:20px; font-size:12px; border:1px solid #e5e7eb; background:#fff; color:#374151; cursor:pointer; text-decoration:none; }
+    .filtro-btn.active { background:#0f766e; color:#fff; border-color:#0f766e; }
+    .filtro-btn:hover:not(.active) { background:#f9fafb; }
+    .tabela { width:100%; border-collapse:collapse; background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,.07); font-size:13px; }
+    .tabela th { background:#f8fafc; color:#475569; text-align:left; padding:10px 12px; font-size:11px; text-transform:uppercase; letter-spacing:.4px; border-bottom:1px solid #e5e7eb; }
+    .tabela td { padding:10px 12px; border-bottom:1px solid #f1f5f9; vertical-align:top; }
+    .tabela tr:hover td { background:#f8fafc; }
+    .processo { font-family:monospace; font-size:12px; font-weight:700; color:#1e3a5f; white-space:nowrap; }
+    .tipo { font-weight:600; color:#374151; }
+    .data { color:#6b7280; font-size:12px; white-space:nowrap; }
+    .sugestao { font-size:12px; line-height:1.45; min-width:190px; }
+    .sugestao strong { color:#0f766e; }
+    .sugestao .rag { display:block; color:#6b7280; font-size:11px; margin-top:2px; }
+    .sugestao .sem-rag { display:block; color:#a16207; font-size:11px; margin-top:2px; }
+    .sugestao .aviso { display:block; color:#b45309; font-size:11px; margin-top:2px; }
+    .acoes { display:flex; gap:5px; flex-wrap:wrap; }
+    .btn-sm { padding:5px 10px; font-size:11px; border-radius:5px; }
+    .empty-state { text-align:center; padding:46px 20px; color:#6b7280; background:#fff; border-radius:10px; }
+    .alert { padding:11px 14px; border-radius:7px; margin-bottom:14px; font-size:13px; }
+    .alert-error { background:#fee2e2; color:#991b1b; border-left:4px solid #ef4444; }
+    .alert-success { background:#dcfce7; color:#166534; border-left:4px solid #22c55e; }
+    .alert-info { background:#dbeafe; color:#1e40af; border-left:4px solid #3b82f6; }
+    .alert-warning { background:#fef3c7; color:#92400e; border-left:4px solid #f59e0b; }
+    .contador-rag { font-size:12px; color:#6b7280; }
+    .obs { color:#6b7280; font-size:11px; margin-top:4px; }
+</style>
+{% endblock %}
 
-    <a href="{% url 'dashboard' %}" class="back">&larr; Dashboard</a>
+{% block content %}
+<div class="mov-top">
+    <div>
+        <h1>📋 Movimentações Projudi</h1>
+        <p>
+            Lista direta da fila de movimentações. As sugestões de certidão
+            são calculadas pela RAG do despacho.
+        </p>
+    </div>
+    <div class="mov-actions-top">
+        <button type="button" id="btn-so-rag" class="filtro-btn">
+            🔎 Só com RAG
+        </button>
+        <button type="button" id="btn-so-certidao" class="filtro-btn">
+            📄 Só com certidão
+        </button>
+        <span id="contador-certidao" class="contador-rag"></span>
+        <a href="{% url 'projudi:movimentacao_fila' %}" class="btn btn-outline">📥 Fila interna</a>
+        <a href="{% url 'projudi:certidao_peticoes' %}" class="btn btn-outline">📥 Fila de Petições</a>
+        <a href="{% url 'projudi:certidao_dashboard' %}" class="btn btn-outline">📄 Certidões</a>
+    </div>
 </div>
-</body>
-</html>
+
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</div>
+    {% endfor %}
+{% endif %}
+
+{% if not session_active %}
+<div class="alert alert-error">
+    Nenhuma sessão ativa do Projudi.
+    <a href="{% url 'projudi:sync_session' %}">Sincronize primeiro</a>.
+</div>
+{% endif %}
+
+{% if movimentacoes %}
+<div style="overflow-x:auto;">
+    <table class="tabela">
+        <thead>
+            <tr>
+                <th>Processo</th>
+                <th>Tipo</th>
+                <th>Data</th>
+                <th>Certidão sugerida (RAG)</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for m in movimentacoes %}
+            <tr class="mov-row" data-tem-rag="0" data-tem-certidao="0">
+                <td>
+                    <div class="processo">{{ m.processo }}</div>
+                </td>
+                <td>
+                    <div class="tipo">{{ m.tipo|default:"—" }}</div>
+                    {% if m.movimentar %}
+                    <div class="obs">Fila de análise do Projudi</div>
+                    {% endif %}
+                </td>
+                <td class="data">{{ m.data|default:"—" }}</td>
+                <td>
+                    <span class="sugestao sugestao-certidao"
+                          data-processo="{{ m.processo }}"
+                          data-documento="{{ m.link_documento|default:'' }}"
+                          data-url="{{ m.link_processo|default:'' }}">
+                        analisando…
+                    </span>
+                </td>
+                <td>
+                    <div class="acoes">
+                        <a class="btn btn-sm btn-outline btn-gerar"
+                           href="#" target="_blank" style="display:none;">
+                            📄 Gerar certidão
+                        </a>
+                        {% if m.link_processo %}
+                        <a class="btn btn-sm btn-outline"
+                           href="{{ m.link_processo }}" target="_blank">
+                            🔗 Processo
+                        </a>
+                        {% endif %}
+                        {% if m.link_documento %}
+                        <a class="btn btn-sm btn-outline"
+                           href="{{ m.link_documento }}" target="_blank">
+                            📎 Documento
+                        </a>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+<div id="sem-certidao" class="empty-state" style="display:none; margin-top:14px;">
+    Nenhuma movimentação encontrada com os filtros selecionados.
+</div>
+{% else %}
+<div class="empty-state">
+    Nenhuma movimentação encontrada.
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    const botao = document.getElementById('btn-so-certidao');
+    const botaoRag = document.getElementById('btn-so-rag');
+    const contador = document.getElementById('contador-certidao');
+    const vazio = document.getElementById('sem-certidao');
+    let somenteComCertidao = false;
+    let somenteComRag = false;
+
+    function aplicarFiltro() {
+        const linhas = document.querySelectorAll('tr.mov-row');
+        let comCertidao = 0;
+        let comRag = 0;
+        let visiveis = 0;
+        linhas.forEach(function (linha) {
+            const temCertidao = linha.dataset.temCertidao === '1';
+            const temRag = linha.dataset.temRag === '1';
+            if (temCertidao) comCertidao += 1;
+            if (temRag) comRag += 1;
+            const mostrar = (
+                (!somenteComCertidao || temCertidao)
+                && (!somenteComRag || temRag)
+            );
+            linha.style.display = mostrar ? '' : 'none';
+            if (mostrar) visiveis += 1;
+        });
+        if (contador) {
+            contador.textContent = (
+                comCertidao + ' com certidão · ' +
+                comRag + ' com RAG de ' + linhas.length
+            );
+        }
+        if (vazio) {
+            vazio.style.display = (
+                (somenteComCertidao || somenteComRag) && visiveis === 0
+            ) ? 'block' : 'none';
+        }
+        if (botao) {
+            botao.classList.toggle('active', somenteComCertidao);
+            botao.textContent = somenteComCertidao
+                ? 'Mostrar todas' : '📄 Só com certidão';
+        }
+        if (botaoRag) {
+            botaoRag.classList.toggle('active', somenteComRag);
+            botaoRag.textContent = somenteComRag
+                ? 'Mostrar todas' : '🔎 Só com RAG';
+        }
+    }
+
+    if (botao) {
+        botao.addEventListener('click', function () {
+            somenteComCertidao = !somenteComCertidao;
+            aplicarFiltro();
+        });
+    }
+    if (botaoRag) {
+        botaoRag.addEventListener('click', function () {
+            somenteComRag = !somenteComRag;
+            aplicarFiltro();
+        });
+    }
+    window.aplicarFiltroCertidao = aplicarFiltro;
+    aplicarFiltro();
+
+    async function analisar(el) {
+        const params = new URLSearchParams({
+            processo: el.dataset.processo || '',
+            documento: el.dataset.documento || '',
+            url: el.dataset.url || ''
+        });
+        const linha = el.closest('tr.mov-row');
+        try {
+            const resposta = await fetch(
+                "{% url 'projudi:certidao_sugestao_movimentacao' %}?" + params.toString()
+            );
+            const dados = await resposta.json();
+            if (!resposta.ok) {
+                el.textContent = dados.erro || 'Erro na sugestão';
+                return;
+            }
+
+            if (linha) {
+                linha.dataset.temRag = dados.rag_encontrada ? '1' : '0';
+                linha.dataset.temCertidao = dados.tipo_certidao ? '1' : '0';
+            }
+
+            el.textContent = '';
+            if (dados.tipo_label) {
+                const nome = document.createElement('strong');
+                nome.textContent = dados.tipo_label;
+                el.appendChild(nome);
+                if (dados.origem_sugestao === 'texto') {
+                    const nota = document.createElement('span');
+                    nota.className = 'sem-rag';
+                    nota.textContent = 'sugestão por texto (sem RAG)';
+                    el.appendChild(nota);
+                } else if (dados.origem_sugestao === 'texto_rag') {
+                    const nota = document.createElement('span');
+                    nota.className = 'sem-rag';
+                    nota.textContent = 'tipo sugerido por texto · RAG relacionada';
+                    el.appendChild(nota);
+                } else if (dados.origem_sugestao === 'rag_texto') {
+                    const nota = document.createElement('span');
+                    nota.className = 'sem-rag';
+                    nota.textContent = 'tipo inferido do texto da RAG';
+                    el.appendChild(nota);
+                }
+                if (dados.rag_id) {
+                    const rag = document.createElement('span');
+                    rag.className = 'rag';
+                    rag.textContent = 'RAG #' + dados.rag_id;
+                    el.appendChild(rag);
+                }
+            } else if (dados.rag_encontrada) {
+                const rag = document.createElement('span');
+                rag.className = 'aviso';
+                rag.textContent = 'RAG #' + dados.rag_id + ' encontrada, mas sem certidão configurada';
+                el.appendChild(rag);
+            } else {
+                const nada = document.createElement('span');
+                nada.className = 'obs';
+                nada.textContent = dados.mensagem || 'Sem sugestão';
+                el.appendChild(nada);
+            }
+
+            if (linha && dados.url_form) {
+                const botaoGerar = linha.querySelector('.btn-gerar');
+                if (botaoGerar) {
+                    botaoGerar.href = dados.url_form;
+                    botaoGerar.style.display = '';
+                }
+            }
+            if (window.aplicarFiltroCertidao) {
+                window.aplicarFiltroCertidao();
+            }
+        } catch (erro) {
+            el.textContent = 'Erro ao analisar a movimentação';
+        }
+    }
+
+    // Limita as requisições simultâneas para não sobrecarregar o Projudi.
+    const fila = Array.from(document.querySelectorAll('.sugestao-certidao'));
+    async function trabalhador() {
+        while (fila.length) {
+            const el = fila.shift();
+            await analisar(el);
+        }
+    }
+    Promise.all([trabalhador(), trabalhador(), trabalhador(), trabalhador()]);
+})();
+</script>
+{% endblock %}

@@ -547,6 +547,43 @@ A escolha vale para todas as certidões geradas naquela página. O template
 usa `{{ servidor }}` e `{{ servidor_cargo }}`; portanto não fica mais fixo
 como “Servidor Secretaria 2”.
 
+## Fila de movimentações Projudi com sugestão RAG
+
+A página:
+
+```text
+/projudi/movimentacoes/
+```
+
+lista as movimentações da fila diretamente do Projudi e consulta, para cada
+documento, a RAG mais próxima do despacho.
+
+A coluna **Certidão sugerida (RAG)** mostra:
+
+- o tipo de certidão sugerido;
+- o número da RAG encontrada;
+- se a sugestão veio da RAG, do texto da RAG ou de fallback por texto;
+- quando a RAG existe, mas ainda não tem `tipo_certidao` configurado.
+
+A tela tem dois filtros:
+
+- **🔎 Só com RAG** — mostra somente movimentações com RAG relacionada;
+- **📄 Só com certidão** — mostra somente movimentações com tipo de
+  certidão sugerido.
+
+As sugestões são carregadas em segundo plano, com limite de requisições
+simultâneas e cache de 15 minutos por processo/documento.
+
+Campos configuráveis no admin da RAG:
+
+```text
+tipo_certidao
+tipo_localizador
+localizador
+tipo_conclusao
+juiz_conclusao
+```
+
 ## Desempenho
 
 A primeira leitura consulta a fila e os processos no Projudi e pode levar

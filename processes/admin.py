@@ -144,9 +144,9 @@ class EhFluxoMovimentarFilter(admin.SimpleListFilter):
 
 @admin.register(RAGExample)
 class RAGExampleAdmin(admin.ModelAdmin):
-    list_display = ['process', 'evento_despacho', 'despacho_ato', 'active',
-                    'resumo_bloqueio', 'resumo_fluxo', 'resumo_sequencia']
-    list_filter = ['active', EhBloqueioFilter, EhFluxoMovimentarFilter]
+    list_display = ['process', 'evento_despacho', 'despacho_ato', 'tipo_certidao',
+                    'active', 'resumo_bloqueio', 'resumo_fluxo', 'resumo_sequencia']
+    list_filter = ['active', 'tipo_certidao', EhBloqueioFilter, EhFluxoMovimentarFilter]
     search_fields = ['process__number', 'despacho_ato']
     filter_horizontal = ['suggested_templates']
     fieldsets = [
@@ -154,6 +154,16 @@ class RAGExampleAdmin(admin.ModelAdmin):
         ('Decisão do Juiz', {'fields': ['despacho_ato', 'despacho_observacao',
                                          'despacho_data', 'despacho_autor']}),
         ('Cumprimentos', {'fields': ['cumprimentos', 'documentos']}),
+        ('Certidão sugerida (RAG)', {
+            'fields': [
+                'tipo_certidao', 'tipo_localizador', 'localizador',
+                'tipo_conclusao', 'juiz_conclusao',
+            ],
+            'description': (
+                'Usado pela fila de movimentações para sugerir a certidão '
+                'e os parâmetros de juntada/conclusão.'
+            ),
+        }),
         ('Sequência de Execução',
          {'fields': ['sequencia_cumprimento'],
           'classes': ['wide'],
@@ -193,6 +203,11 @@ class RAGExampleAdmin(admin.ModelAdmin):
                 cumprimentos=rag.cumprimentos,
                 documentos=rag.documentos,
                 sequencia_cumprimento=json.loads(json.dumps(rag.sequencia_cumprimento or [])),
+                tipo_certidao=rag.tipo_certidao,
+                tipo_localizador=rag.tipo_localizador,
+                localizador=rag.localizador,
+                tipo_conclusao=rag.tipo_conclusao,
+                juiz_conclusao=rag.juiz_conclusao,
                 active=rag.active,
             )
             nova.save()
