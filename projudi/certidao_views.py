@@ -982,6 +982,7 @@ class CertidaoTabelaView(LoginRequiredMixin, TemplateView):
         if origem not in ('peticao', 'movimentacao'):
             origem = ''
         status = (self.request.GET.get('status') or '').strip()
+        ocultar = self.request.GET.get('ocultar') == '1'
         busca = (self.request.GET.get('q') or '').strip().lower()
 
         total = len(rows)
@@ -997,6 +998,15 @@ class CertidaoTabelaView(LoginRequiredMixin, TemplateView):
             rows = [r for r in rows if r['origem'] == origem]
         if status:
             rows = [r for r in rows if r['status_classe'] == status]
+        if ocultar:
+            processadas = {
+                'gerada', 'cumprido', 'juntada', 'intimada',
+                'concluida', 'dispensado',
+            }
+            rows = [
+                r for r in rows
+                if r['status_classe'] not in processadas
+            ]
         if busca:
             rows = [
                 r for r in rows
@@ -1012,6 +1022,7 @@ class CertidaoTabelaView(LoginRequiredMixin, TemplateView):
             'busca': self.request.GET.get('q', ''),
             'origem_filtro': origem,
             'status_filtro': status,
+            'ocultar_processadas': ocultar,
             'total': total,
             'total_peticoes': total_peticoes,
             'total_movimentacoes': total_movimentacoes,

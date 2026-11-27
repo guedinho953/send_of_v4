@@ -94,6 +94,12 @@
             <option value="falha" {% if status_filtro == 'falha' %}selected{% endif %}>Falha</option>
             <option value="dispensado" {% if status_filtro == 'dispensado' %}selected{% endif %}>Dispensada</option>
         </select>
+        <label style="font-size:11px; color:#374151; display:flex; align-items:center; gap:4px; white-space:nowrap;">
+            <input type="checkbox" name="ocultar" value="1"
+                   {% if ocultar_processadas %}checked{% endif %}
+                   onchange="this.form.submit()">
+            Ocultar geradas/processadas
+        </label>
         <button type="submit" class="btn btn-sm btn-outline">Filtrar</button>
     </form>
 </div>
