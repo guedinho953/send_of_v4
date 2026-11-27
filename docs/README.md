@@ -18,6 +18,7 @@
 | 07 | [DEPOL_DILIGENCIAS](DEPOL_DILIGENCIAS.md) | Ofício à DEPOL com diligências do parecer do MP (com/sem cópia) | Expedir diligências |
 | 08 | [PRAZO_DJEN](PRAZO_DJEN.md) | Contagem DJEN, certidão de tempestividade/trânsito e fila JuntadaPeticao (recurso inominado) | Conferir prazos e preparo |
 | 09 | [MANUAL_RECORRENTE_PARTES](MANUAL_RECORRENTE_PARTES.md) | Atualização: intimação do recorrente, partes e manual para o outro PC | Implementar no outro PC |
+| 10 | [MANUAL_IMPLEMENTACAO_CERTIDOES_OUTRO_PC](MANUAL_IMPLEMENTACAO_CERTIDOES_OUTRO_PC.md) | Manual atualizado: puxar a branch, portar certidões e evitar conflito de migrations | Implementar no outro PC |
 
 ---
 
