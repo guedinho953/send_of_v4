@@ -192,10 +192,12 @@
             <div class="campo">
                 <label>Data do protocolo dos embargos</label>
                 <input name="data_protocolo" placeholder="dd/mm/aaaa" style="width:110px;">
+                <small>Opcional se informar o evento da impugnação/embargos.</small>
             </div>
             <div class="campo">
                 <label>Evento da impugnação/embargos</label>
                 <input name="evento_impugnacao" placeholder="ex.: 35" style="width:115px;">
+                <small>Informando o evento, a data do protocolo é buscada automaticamente.</small>
             </div>
             <div class="campo">
                 <label>Segurança do juízo</label>
@@ -212,7 +214,7 @@
             <div class="campo">
                 <label>Data da intimação</label>
                 <input name="data_inicio" placeholder="dd/mm/aaaa" style="width:105px;">
-                <small>Para DJEN, use a disponibilização. No decurso é automática.</small>
+                <small>Opcional se informar o evento do despacho/intimação; o sistema busca a data.</small>
             </div>
             <div class="campo">
                 <label>Meio</label>
@@ -225,7 +227,7 @@
             <div class="campo">
                 <label>Evento do despacho/decisão</label>
                 <input name="evento_origem" placeholder="ex.: 74" style="width:105px;">
-                <small>No decurso, é o despacho de pagamento.</small>
+                <small>Informando o evento, a data da intimação é buscada automaticamente.</small>
             </div>
             <div class="campo">
                 <label>Evento da intimação</label>
@@ -409,7 +411,8 @@ function atualizarAssinatura() {
         if (aviso) aviso.style.display = embargos ? 'block' : 'none';
         const data = form.querySelector('[name="data_protocolo"]');
         const seg = form.querySelector('[name="seguranca_juizo"]');
-        if (data) data.required = embargos;
+        // A data pode ser substituída pelo evento; o servidor valida.
+        if (data) data.required = false;
         if (seg) seg.required = embargos;
     }
 

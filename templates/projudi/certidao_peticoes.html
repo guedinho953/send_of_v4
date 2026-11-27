@@ -218,7 +218,7 @@
                 <div class="campos-intimacao">
                     <label style="font-size:12px; color:#374151;">Data da intimação:</label>
                     <input type="text" name="data_inicio" value="{{ item.data_inicio_fmt }}"
-                           placeholder="dd/mm/aaaa" required
+                           placeholder="dd/mm/aaaa"
                            style="width:105px; padding:5px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px;">
 
                     <label style="font-size:12px; color:#374151;">Meio:</label>
@@ -231,7 +231,8 @@
                         {% endfor %}
                     </select>
                     <span style="font-size:11px; color:#6b7280;">
-                        Confira a data e o meio; o prazo será recalculado ao gerar.
+                        Opcional se informar o evento do recurso/intimação;
+                        o sistema busca a data no processo.
                     </span>
                 </div>
 
@@ -319,7 +320,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 camposData.style.display = ehDecurso ? 'none' : 'flex';
             }
             if (dataInput) {
-                dataInput.required = !ehDecurso;
+                // Pode ser substituída pelo evento do recurso/intimação.
+                dataInput.required = false;
             }
             if (recurso) {
                 recurso.style.display = ehRecurso ? 'block' : 'none';

@@ -188,6 +188,9 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
             or request.POST.get('evento_despacho')
             or ''
         ).strip()
+        evento_intimacao = (
+            request.POST.get('evento_intimacao') or ''
+        ).strip()
         evento_requerimento = (
             request.POST.get('evento_requerimento') or ''
         ).strip()
@@ -216,6 +219,30 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
 
         data_envio = _parse_data_br(request.POST.get('data_envio'))
         data_inicio = _parse_data_br(request.POST.get('data_inicio'))
+        data_protocolo = data_envio
+        intimacao_evento = None
+
+        # Evento informado dispensa a data: busca no processo.
+        evento_busca = (
+            evento_intimacao
+            or evento_origem
+            or evento_impugnacao
+            or (request.POST.get('evento_recurso') or '').strip()
+        )
+        precisa_consultar = (
+            (not data_inicio and bool(evento_busca))
+            or (tipo == 'impugnacao_embargos_execucao'
+                and not data_protocolo and bool(evento_impugnacao))
+        )
+        if precisa_consultar and not processo_url:
+            try:
+                from .processo_lookup import localizar_processo
+                achado = localizar_processo(request.user, processo)
+                if achado:
+                    processo_url = achado['url']
+            except Exception:
+                pass
+
         if tipo == 'impugnacao_embargos_execucao':
             if seguranca_juizo not in ('integral', 'parcial', 'nenhuma'):
                 messages.error(
@@ -224,25 +251,66 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
                     'parcial ou não houve.',
                 )
                 return HttpResponseRedirect(reverse(self.url_voltar))
-            data_protocolo = (
-                _parse_data_br(request.POST.get('data_protocolo'))
-                or data_envio
+            data_protocolo = _parse_data_br(
+                request.POST.get('data_protocolo')
             )
+            if not data_protocolo and evento_impugnacao and processo_url:
+                from .evento_processo_service import data_evento_processo
+                data_protocolo = data_evento_processo(
+                    request.user, processo_url, evento_impugnacao,
+                )
+                if data_protocolo:
+                    messages.info(
+                        request,
+                        'Data do protocolo obtida pelo evento '
+                        f'{evento_impugnacao}: '
+                        f'{data_protocolo.strftime("%d/%m/%Y")}.',
+                    )
             if not data_protocolo:
                 messages.error(
                     request,
-                    'Informe a data do protocolo da impugnação/embargos.',
+                    'Informe a data do protocolo ou o evento da '
+                    'impugnação/embargos para o sistema buscar a data.',
                 )
                 return HttpResponseRedirect(reverse(self.url_voltar))
             data_envio = data_protocolo
+
+        if not data_inicio and evento_busca and processo_url:
+            from .evento_processo_service import (
+                localizar_intimacao_do_processo,
+            )
+            intimacao_evento = localizar_intimacao_do_processo(
+                request.user, processo_url, evento_busca,
+                parte=parte or executado or (
+                    request.POST.get('recorrente') or ''
+                ).strip(),
+            )
+            if intimacao_evento:
+                data_inicio = intimacao_evento['data']
+
+        if (not data_inicio
+                and tipo == 'impugnacao_embargos_execucao'):
+            messages.error(
+                request,
+                'Informe a data da intimação ou o evento do '
+                'despacho/decisão para o sistema localizar a data.',
+            )
+            return HttpResponseRedirect(reverse(self.url_voltar))
         if not data_inicio:
             data_inicio = data_envio
         if not data_inicio:
-            messages.error(request, 'Data de início da intimação não informada.')
+            messages.error(
+                request,
+                'Informe a data da intimação ou o evento do '
+                'despacho/decisão para o sistema localizar a data.',
+            )
             return HttpResponseRedirect(reverse(self.url_voltar))
 
         meio = (request.POST.get('meio_intimacao') or 'intimacao').strip()
         meio_label = (request.POST.get('meio_label') or '').strip()
+        if intimacao_evento and intimacao_evento.get('meio'):
+            meio = intimacao_evento['meio']
+            meio_label = ''
         origem_intimacao = (
             request.POST.get('origem_intimacao') or ''
         ).strip()
