@@ -27,22 +27,42 @@ TIPOS = {
     'decurso_pagamento': {
         'label': 'Decurso do Prazo de Pagamento Voluntário',
         'dias': 15,
+        'descricao': (
+            'Procura o despacho que determinou o pagamento em 15 dias e '
+            'localiza automaticamente a intimação do executado.'
+        ),
     },
     'recurso_inominado': {
         'label': 'Recurso Inominado',
         'dias': 10,
+        'descricao': (
+            'Certifica tempestividade, preparo/gratuidade e a intimação '
+            'da sentença ao recorrente.'
+        ),
     },
     'contrarrazoes': {
         'label': 'Contrarrazões ao Recurso Inominado',
         'dias': 10,
+        'descricao': (
+            'Certifica o prazo de 10 dias para apresentação de '
+            'contrarrazões.'
+        ),
     },
     'impugnacao_cumprimento': {
         'label': 'Impugnação/Cumprimento de Sentença',
         'dias': 15,
+        'descricao': (
+            'Certifica o prazo de 15 dias de impugnação/cumprimento de '
+            'sentença.'
+        ),
     },
     'impugnacao_penhora': {
         'label': 'Impugnação/Decurso do Prazo da Penhora',
         'dias': 15,
+        'descricao': (
+            'Certifica o prazo de 15 dias para impugnação ou decurso do '
+            'prazo da penhora.'
+        ),
     },
 }
 

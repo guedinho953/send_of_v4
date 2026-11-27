@@ -21,28 +21,34 @@ Rota no sistema:
 ## Escolha manual da ação/modelo
 
 A classificação pelo texto da petição é apenas uma sugestão. Em cada item
-da fila existe um seletor **Ação/modelo**, já preenchido com o tipo
-detectado, que pode ser trocado antes de gerar a certidão:
+da fila os modelos aparecem como **cards selecionáveis**, com o tipo
+detectado marcado como **Sugerido**. O usuário pode trocar antes de gerar:
 
 - Recurso Inominado;
 - Contrarrazões;
 - Impugnação/Cumprimento de Sentença;
-- Impugnação/Decurso do Prazo da Penhora.
+- Impugnação/Decurso do Prazo da Penhora;
+- Decurso do Prazo de Pagamento Voluntário.
+
+Ao escolher **Recurso Inominado**, aparecem os campos de situação,
+evento do recurso, evento da intimação e recorrente. Ao escolher
+**Decurso de Pagamento**, os campos de data/meio são ocultados e o
+sistema passa a localizar automaticamente o despacho e a intimação.
 
 Também é possível ajustar a **data da intimação** e o **meio** usados no
-cálculo. Petições que a classificação automática não reconheceu aparecem
-com `Não classificada — escolha a ação`; elas não têm prazo calculado até
-que o usuário escolha o modelo e gere a certidão.
+cálculo nos demais modelos. Petições que a classificação automática não
+reconheceu aparecem com `Não classificada — escolha a ação`; elas não têm
+prazo calculado até que o usuário escolha o modelo e gere a certidão.
 
 Exemplo: uma linha `Juntada de Petição de Solicitação de Execução de
 Sentença` não é classificada automaticamente, mas passa a aparecer na
 fila para que a ação seja escolhida manualmente.
 
-A certidão de decurso de pagamento também aparece no seletor de modelos
-como **Decurso do Prazo de Pagamento Voluntário — 15 dias**. Ao escolhê-la, o
-sistema localiza automaticamente o despacho que determinou o pagamento,
-sem depender do tipo da petição. Também há atalhos **📄 Decurso de
-pagamento** no topo da página e em cada card, já com o processo preenchido.
+O modelo **Decurso do Prazo de Pagamento Voluntário** também tem destaque
+visual na fila. Ao escolhê-lo, o sistema localiza automaticamente o
+despacho que determinou o pagamento, sem depender do tipo da petição.
+Também há atalhos **📄 Decurso do Prazo de Pagamento Voluntário** no topo
+da página e em cada card, já com o processo preenchido.
 
 ## Contagem — Lei 11.419/2006
 

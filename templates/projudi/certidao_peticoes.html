@@ -21,6 +21,19 @@
     .btn-sm { padding: 5px 12px; font-size: 12px; border-radius: 5px; }
     .empty-state { background:#fff; border-radius:8px; padding:30px; text-align:center; color:#6b7280; }
     .aviso { background:#fffbeb; border-left:4px solid #f59e0b; padding:12px 16px; border-radius:6px; margin-bottom:16px; font-size:13px; color:#92400e; }
+    .modelo-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:8px; width:100%; margin:4px 0 10px; }
+    .modelo-card { display:block; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; background:#fff; cursor:pointer; transition:border-color .12s, background .12s; }
+    .modelo-card:hover { border-color:#a78bfa; background:#faf5ff; }
+    .modelo-card:has(input:checked) { border-color:#7c3aed; box-shadow:0 0 0 2px #ddd6fe; background:#faf5ff; }
+    .modelo-card.sugerido { border-color:#8b5cf6; background:#f5f3ff; }
+    .modelo-card.destaque { border-color:#f59e0b; background:#fffbeb; }
+    .modelo-card input { margin-right:5px; vertical-align:top; }
+    .modelo-titulo { font-size:12px; font-weight:700; color:#1e3a5f; }
+    .modelo-dias { display:inline-block; margin-left:4px; padding:1px 6px; border-radius:9px; background:#ede9fe; color:#5b21b6; font-size:10px; font-weight:700; }
+    .modelo-desc { display:block; margin-top:4px; font-size:11px; line-height:1.35; color:#6b7280; }
+    .badge-sugerido { display:inline-block; margin-left:5px; padding:1px 6px; border-radius:9px; background:#dcfce7; color:#166534; font-size:9px; font-weight:700; text-transform:uppercase; }
+    .campos-intimacao { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:6px; width:100%; }
+    .aviso-decurso { display:none; background:#f5f3ff; border:1px solid #ddd6fe; border-radius:7px; padding:8px 10px; margin-bottom:6px; font-size:11px; color:#5b21b6; line-height:1.4; width:100%; }
 </style>
 {% endblock %}
 
@@ -153,18 +166,36 @@
                 <input type="hidden" name="origem_intimacao" value="{{ item.origem_intimacao }}">
                 <input type="hidden" name="documento_texto" value="{{ item.documento_texto }}">
 
-                <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:6px; width:100%;">
-                    <label style="font-size:12px; color:#374151;"><strong>Ação/modelo:</strong></label>
-                    <select name="tipo" class="tipo-select" required
-                            style="padding:5px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px;">
-                        <option value="">Selecione...</option>
-                        {% for chave, info in tipos.items %}
-                        <option value="{{ chave }}" {% if item.tipo == chave %}selected{% endif %}>
-                            {{ info.label }} — {{ info.dias }} dias
-                        </option>
-                        {% endfor %}
-                    </select>
+                <div style="font-size:11px; color:#6b7280; width:100%; margin-bottom:4px;">
+                    {% if item.tipo %}
+                    Sugestão automática: <strong>{{ item.tipo_label }}</strong>. Você pode trocar o modelo.
+                    {% else %}
+                    Escolha o modelo da certidão que será gerada.
+                    {% endif %}
+                </div>
 
+                <div class="modelo-grid">
+                    {% for chave, info in tipos.items %}
+                    <label class="modelo-card {% if item.tipo == chave %}sugerido{% endif %}{% if chave == 'decurso_pagamento' and item.tipo != chave %} destaque{% endif %}">
+                        <input type="radio" name="tipo" value="{{ chave }}"
+                               class="tipo-radio" required
+                               {% if item.tipo == chave %}checked{% endif %}>
+                        <span class="modelo-titulo">{{ info.label }}</span>
+                        <span class="modelo-dias">{{ info.dias }} dias</span>
+                        {% if item.tipo == chave %}<span class="badge-sugerido">Sugerido</span>{% endif %}
+                        <span class="modelo-desc">{{ info.descricao }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+
+                <div class="aviso-decurso">
+                    <strong>Decurso de pagamento:</strong> o sistema percorre os
+                    eventos, localiza o despacho que determinou o pagamento em
+                    15 dias e a intimação do executado. A data e o meio abaixo
+                    não são usados neste modelo.
+                </div>
+
+                <div class="campos-intimacao">
                     <label style="font-size:12px; color:#374151;">Data da intimação:</label>
                     <input type="text" name="data_inicio" value="{{ item.data_inicio_fmt }}"
                            placeholder="dd/mm/aaaa" required
@@ -179,6 +210,9 @@
                         </option>
                         {% endfor %}
                     </select>
+                    <span style="font-size:11px; color:#6b7280;">
+                        Confira a data e o meio; o prazo será recalculado ao gerar.
+                    </span>
                 </div>
 
                 <div class="recurso-campos" style="display:none; width:100%;">
@@ -198,10 +232,6 @@
                         <label style="font-size:12px; color:#374151;">Recorrente:</label>
                         <input type="text" name="recorrente" value="{{ item.recorrente }}" placeholder="nome do recorrente" style="flex:1; min-width:220px; padding:5px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px;">
                     </div>
-                </div>
-
-                <div style="font-size:11px; color:#6b7280; width:100%; margin-bottom:6px;">
-                    Se trocar a ação ou a data, o prazo será recalculado ao gerar a certidão.
                 </div>
 
                 <button type="submit" class="btn btn-sm" style="background:#7c3aed; color:white;">
@@ -252,16 +282,36 @@ document.addEventListener('DOMContentLoaded', function () {
     if (cargo) cargo.addEventListener('input', atualizarAssinatura);
     atualizarAssinatura();
 
-    document.querySelectorAll('.tipo-select').forEach(function (sel) {
-        const card = sel.closest('.pet-card');
-        const campos = card ? card.querySelector('.recurso-campos') : null;
+    document.querySelectorAll('.pet-card').forEach(function (card) {
+        const radios = card.querySelectorAll('.tipo-radio');
+        const camposData = card.querySelector('.campos-intimacao');
+        const dataInput = card.querySelector('[name="data_inicio"]');
+        const recurso = card.querySelector('.recurso-campos');
+        const aviso = card.querySelector('.aviso-decurso');
+
         function atualizarTipo() {
-            if (campos) {
-                campos.style.display = sel.value === 'recurso_inominado'
-                    ? 'block' : 'none';
+            const marcado = card.querySelector('.tipo-radio:checked');
+            const valor = marcado ? marcado.value : '';
+            const ehDecurso = valor === 'decurso_pagamento';
+            const ehRecurso = valor === 'recurso_inominado';
+
+            if (camposData) {
+                camposData.style.display = ehDecurso ? 'none' : 'flex';
+            }
+            if (dataInput) {
+                dataInput.required = !ehDecurso;
+            }
+            if (recurso) {
+                recurso.style.display = ehRecurso ? 'block' : 'none';
+            }
+            if (aviso) {
+                aviso.style.display = ehDecurso ? 'block' : 'none';
             }
         }
-        sel.addEventListener('change', atualizarTipo);
+
+        radios.forEach(function (radio) {
+            radio.addEventListener('change', atualizarTipo);
+        });
         atualizarTipo();
     });
 });
