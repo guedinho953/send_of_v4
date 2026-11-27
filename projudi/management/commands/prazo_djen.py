@@ -62,35 +62,35 @@ def _texto_publico_prazo(res, info, options, tempestivo=None):
         )
         evento_int = str(options.get('evento_intimacao') or '').strip()
         evento_int_txt = (
-            f', evento {evento_int}' if evento_int.isdigit()
-            else ', evento não informado'
+            f'(evento {evento_int})' if evento_int.isdigit()
+            else '(evento não informado)'
         )
         evento_origem = str(
             options.get('evento_origem') or '').strip()
-        origem_txt = (
-            f', do despacho de evento {evento_origem}'
-            if evento_origem.isdigit() else '')
+        despacho_txt = (
+            f'(evento {evento_origem})'
+            if evento_origem.isdigit() else '(evento não informado)')
         seguranca = options.get('seguranca_juizo') or 'nenhuma'
         seguranca_txt = {
-            'integral': 'o juízo está integralmente seguro',
+            'integral': 'o juízo está INTEGRALMENTE SEGURO',
             'parcial': (
-                'houve depósito parcial, não havendo segurança integral '
-                'do juízo'),
-            'nenhuma': 'não houve segurança do juízo',
-        }.get(seguranca, 'não houve segurança do juízo')
+                'houve depósito PARCIAL, NÃO HAVENDO SEGURANÇA '
+                'INTEGRAL DO JUÍZO'),
+            'nenhuma': 'NÃO HOUVE SEGURANÇA DO JUÍZO',
+        }.get(seguranca, 'NÃO HOUVE SEGURANÇA DO JUÍZO')
         conclusao = (
-            'TEMPESTIVA' if tempestivo else 'INTEMPESTIVA')
+            'TEMPESTIVIDADE' if tempestivo else 'INTEMPESTIVIDADE')
         return (
-            'Certifico, para os devidos fins, que a Impugnação/Embargos à '
-            f'Execução apresentada {evento_imp} é {conclusao}, referente à '
-            f'intimação eletrônica (DJEN){evento_int_txt}{origem_txt}, '
-            'que abriu o prazo de 15 (quinze) dias úteis para pagamento '
-            '(art. 525, '
-            'caput, do CPC). Publicação em '
+            'Certifico, para os devidos fins, a '
+            f'{conclusao} da Impugnação/Embargos à Execução apresentada '
+            f'{evento_imp} (prazo de 15 (quinze) dias), referente ao '
+            f'despacho {despacho_txt} e à intimação eletrônica (DJEN) '
+            f'{evento_int_txt}. Publicação em '
             f'{_fmt_curta(res.data_publicacao)}; início do prazo em '
             f'{_fmt_curta(res.data_inicio_contagem)}; termo final em '
             f'{_fmt_curta(res.ultimo_dia)}. Certifico ainda que '
-            f'{seguranca_txt}, observados o valor executado e o valor '
+            f'{seguranca_txt}, observados o valor executado '
+            '(considerando o valor da execução) e o valor '
             'depositado/penhorado (Enunciado n. 117 do FONAJE).'
         )
 

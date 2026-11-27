@@ -127,33 +127,33 @@ class PrazoDjenTest(unittest.TestCase):
             res, info, {**base, 'seguranca_juizo': 'parcial'},
             tempestivo=True,
         )
-        self.assertIn('TEMPESTIVA', parcial)
+        self.assertIn('TEMPESTIVIDADE', parcial)
         self.assertIn('apresentada no evento 88', parcial)
-        self.assertIn('evento 84', parcial)
-        self.assertIn('15 (quinze) dias úteis', parcial)
-        self.assertIn('art. 525', parcial)
-        self.assertIn('do despacho de evento 80', parcial)
+        self.assertIn('(evento 84)', parcial)
+        self.assertIn('(prazo de 15 (quinze) dias)', parcial)
+        self.assertIn('referente ao despacho (evento 80)', parcial)
         self.assertIn('Publicação em 03/11/2026', parcial)
         self.assertIn('início do prazo em 04/11/2026', parcial)
         self.assertIn('termo final em 25/11/2026', parcial)
         self.assertIn(
-            'houve depósito parcial, não havendo segurança integral do juízo',
-            parcial,
-        )
+            'houve depósito PARCIAL, NÃO HAVENDO SEGURANÇA INTEGRAL '
+            'DO JUÍZO', parcial)
+        self.assertIn(
+            'valor executado (considerando o valor da execução)', parcial)
         self.assertIn('Enunciado n. 117 do FONAJE', parcial)
 
         integral = _texto_publico_prazo(
             res, info, {**base, 'seguranca_juizo': 'integral'},
             tempestivo=False,
         )
-        self.assertIn('INTEMPESTIVA', integral)
-        self.assertIn('o juízo está integralmente seguro', integral)
+        self.assertIn('INTEMPESTIVIDADE', integral)
+        self.assertIn('o juízo está INTEGRALMENTE SEGURO', integral)
 
         nenhuma = _texto_publico_prazo(
             res, info, {**base, 'seguranca_juizo': 'nenhuma'},
             tempestivo=True,
         )
-        self.assertIn('não houve segurança do juízo', nenhuma)
+        self.assertIn('NÃO HOUVE SEGURANÇA DO JUÍZO', nenhuma)
 
         sem_evento = _texto_publico_prazo(
             res, info,
