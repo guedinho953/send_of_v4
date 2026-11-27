@@ -108,10 +108,20 @@ class DecursoPagamentoHelpersTest(TestCase):
         resultado = resultado_fake()
         texto = texto_certidao(resultado)
         self.assertIn('DECURSO DO PRAZO', texto)
+        self.assertIn(
+            'intimação eletrônica (DJEN), evento 11', texto)
         self.assertIn('Publicação em 03/12/2026', texto)
         self.assertIn('início do prazo em 04/12/2026', texto)
         self.assertIn('decurso em 24/12/2026', texto)
         self.assertIn('Despacho: evento 10', motivo(resultado))
+
+    def test_texto_sem_evento(self):
+        resultado = resultado_fake()
+        resultado['evento_intimacao'] = ''
+        self.assertIn(
+            'intimação eletrônica (DJEN), evento não informado',
+            texto_certidao(resultado),
+        )
 
     def test_gerar_preview_e_registrar(self):
         resultado = resultado_fake()

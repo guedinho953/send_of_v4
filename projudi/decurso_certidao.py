@@ -37,12 +37,17 @@ def texto_certidao(resultado) -> str:
         or info.get('data_inicio_contagem')
         or resultado.get('data_inicio'))
     decurso = resultado['ultimo_dia'].strftime('%d/%m/%Y')
+    evento = str(resultado.get('evento_intimacao') or '').strip()
+    evento_txt = (
+        f', evento {evento}' if evento.isdigit()
+        else ', evento não informado'
+    )
     return (
         'Certifico, para os devidos fins, o DECURSO DO PRAZO de 15 (quinze) '
         'dias úteis para cumprimento voluntário da sentença/impugnação '
         'pelo(a)(s) executado(a)(s), referente à intimação eletrônica '
-        f'(DJEN). Publicação em {publicacao or "?"}; início do prazo em '
-        f'{inicio or "?"}; decurso em {decurso}.'
+        f'(DJEN){evento_txt}. Publicação em {publicacao or "?"}; início do '
+        f'prazo em {inicio or "?"}; decurso em {decurso}.'
     )
 
 

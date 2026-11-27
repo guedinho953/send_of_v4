@@ -229,11 +229,28 @@ O texto público segue o modelo:
 
 > Certifico, para os devidos fins, o **DECURSO DO PRAZO** de 15 (quinze)
 > dias úteis para cumprimento voluntário da sentença/impugnação pelo(a)(s)
-> executado(a)(s), referente à **intimação eletrônica (DJEN)**. Publicação
-> em DD/MM/AAAA; início do prazo em DD/MM/AAAA; decurso em DD/MM/AAAA.
+> executado(a)(s), referente à **intimação eletrônica (DJEN), evento XX**.
+> Publicação em DD/MM/AAAA; início do prazo em DD/MM/AAAA; decurso em
+> DD/MM/AAAA.
+
+O **evento da intimação** é sempre incluído no texto público. Se não for
+localizado, o texto informa “evento não informado”. A memória interna guarda
+o protocolo da petição, a tempestividade e o evento como informações
+adicionais, sem repetir isso no corpo público.
 
 A assinatura padrão é **IVAN GUEDES DA SILVA / Servidor Secretaria 2**,
 com a opção de trocar o subscritor na tela.
+
+### Modelo base das demais certidões
+
+Este layout passa a ser o modelo para as próximas certidões:
+
+- cabeçalho do Juizado;
+- processo, executado(a) e evento da intimação;
+- publicação, início do prazo e decurso;
+- texto público enxuto, com o evento;
+- assinatura do subscritor escolhido;
+- memória interna separada (protocolo, tempestividade, evento, cálculo).
 
 ## Fila de petições com escolha manual
 
