@@ -40,6 +40,8 @@
     .campo input, .campo select { padding:6px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px; }
     .campo small { font-size:10px; color:#6b7280; max-width:230px; }
     .aviso-decurso { display:none; background:#f5f3ff; border:1px solid #ddd6fe; border-radius:7px; padding:8px 10px; margin:8px 0 4px; font-size:11px; color:#5b21b6; line-height:1.4; width:100%; }
+    .campos-embargos { display:none; background:#ecfdf5; border:1px solid #a7f3d0; border-radius:7px; padding:8px 10px; margin:8px 0 4px; gap:8px; flex-wrap:wrap; }
+    .campos-embargos .campo label { color:#065f46; }
     .acoes { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:10px; }
     .btn-sm { padding:5px 10px; font-size:11px; border-radius:5px; }
     .rag-acoes { margin-top:8px; }
@@ -176,6 +178,34 @@
             e a intimação do executado. A data/meio abaixo não são usados neste
             modelo; os campos de evento do despacho, executado e requerimento
             podem ser usados para conferência.
+        </div>
+
+        <div class="aviso-decurso aviso-embargos">
+            <strong>Impugnação/Embargos à Execução:</strong> informe a data do
+            protocolo, o evento da impugnação/embargos e a segurança do juízo.
+            O texto da certidão varia entre tempestivo/intempestivo e
+            integral/parcial/sem segurança, com a observação do Enunciado 117
+            do FONAJE.
+        </div>
+
+        <div class="campos-embargos">
+            <div class="campo">
+                <label>Data do protocolo dos embargos</label>
+                <input name="data_protocolo" placeholder="dd/mm/aaaa" style="width:110px;">
+            </div>
+            <div class="campo">
+                <label>Evento da impugnação/embargos</label>
+                <input name="evento_impugnacao" placeholder="ex.: 35" style="width:115px;">
+            </div>
+            <div class="campo">
+                <label>Segurança do juízo</label>
+                <select name="seguranca_juizo" style="min-width:170px;">
+                    <option value="">Selecione...</option>
+                    <option value="integral">Integral</option>
+                    <option value="parcial">Depósito parcial</option>
+                    <option value="nenhuma">Não houve</option>
+                </select>
+            </div>
         </div>
 
         <div class="campos">
@@ -368,14 +398,31 @@ function atualizarAssinatura() {
         if (aviso) aviso.style.display = decurso ? 'block' : 'none';
     }
 
+    function alternarModoEmbargos(form) {
+        const radio = form.querySelector('input[name="tipo"]:checked');
+        const embargos = radio && (
+            radio.value === 'impugnacao_embargos_execucao'
+        );
+        const bloco = form.querySelector('.campos-embargos');
+        const aviso = form.querySelector('.aviso-embargos');
+        if (bloco) bloco.style.display = embargos ? 'flex' : 'none';
+        if (aviso) aviso.style.display = embargos ? 'block' : 'none';
+        const data = form.querySelector('[name="data_protocolo"]');
+        const seg = form.querySelector('[name="seguranca_juizo"]');
+        if (data) data.required = embargos;
+        if (seg) seg.required = embargos;
+    }
+
     document.querySelectorAll('.mov-form').forEach(function (form) {
         const radios = form.querySelectorAll('input[name="tipo"]');
         radios.forEach(function (radio) {
             radio.addEventListener('change', function () {
                 alternarModoDecurso(form);
+                alternarModoEmbargos(form);
             });
         });
         alternarModoDecurso(form);
+        alternarModoEmbargos(form);
     });
 
     async function analisar(el) {
@@ -468,6 +515,7 @@ function atualizarAssinatura() {
                         }
                     }
                     alternarModoDecurso(form);
+                    alternarModoEmbargos(form);
                 }
             }
 
@@ -475,8 +523,14 @@ function atualizarAssinatura() {
                 const detalhesRag = card.querySelector('.fila-gerar-rag');
                 if (detalhesRag) {
                     const temTemplate = !!dados.tem_template;
+                    const fluxoProprio = (
+                        chaveLocal === 'decurso_pagamento'
+                        || chaveLocal === 'decurso_debito_remanescente'
+                        || chaveLocal === 'impugnacao_embargos_execucao'
+                    );
                     detalhesRag.style.display = (
-                        dados.rag_id && temTemplate ? 'block' : 'none'
+                        dados.rag_id && temTemplate && !fluxoProprio
+                            ? 'block' : 'none'
                     );
                     const campoRag = detalhesRag.querySelector('[name="rag_id"]');
                     if (campoRag) campoRag.value = dados.rag_id || '';

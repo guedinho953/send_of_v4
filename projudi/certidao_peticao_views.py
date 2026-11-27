@@ -56,6 +56,53 @@ def _evento_recurso_certidao(html):
     return m.group(1) if m else ''
 
 
+def _texto_impugnacao_embargos(
+        resultado, data_protocolo, evento_impugnacao='',
+        evento_despacho='', evento_intimacao='', meio_label='DJEN',
+        seguranca='nenhuma'):
+    """Certidão de tempestividade + segurança do juízo (FONAJE 117)."""
+    tempestivo = bool(
+        data_protocolo and data_protocolo <= resultado.ultimo_dia
+    )
+    conclusao = 'TEMPESTIVIDADE' if tempestivo else 'INTEMPESTIVIDADE'
+
+    def _evento(valor):
+        return f' (evento {valor})' if str(valor or '').isdigit() else ''
+
+    inicio = (
+        resultado.dias_contados[0]
+        if getattr(resultado, 'dias_contados', None)
+        else resultado.data_inicio
+    )
+    texto = (
+        'Certifico, para os devidos fins, a '
+        f'{conclusao} da Impugnação/Embargos à Execução apresentada'
+        f'{_evento(evento_impugnacao)} (prazo de 15 (quinze) dias), '
+        f'referente ao despacho{_evento(evento_despacho)} e à '
+        f'intimação {meio_label}{_evento(evento_intimacao)}. '
+        f'Publicação em {resultado.data_inicio.strftime("%d/%m/%Y")}; '
+        f'início do prazo em {inicio.strftime("%d/%m/%Y")}; '
+        f'termo final em {resultado.ultimo_dia.strftime("%d/%m/%Y")}.'
+    )
+    if not tempestivo:
+        return texto
+
+    seguranca_txt = {
+        'integral': 'a SEGURANÇA INTEGRAL DO JUÍZO',
+        'parcial': (
+            'que houve depósito PARCIAL, NÃO HAVENDO SEGURANÇA '
+            'INTEGRAL DO JUÍZO'
+        ),
+        'nenhuma': 'que NÃO HOUVE SEGURANÇA DO JUÍZO',
+    }.get(seguranca, 'que NÃO HOUVE SEGURANÇA DO JUÍZO')
+    return (
+        texto
+        + f' Certifico ainda {seguranca_txt}, observados o valor '
+        'executado (considerando o valor da execução) e o valor '
+        'depositado/penhorado (Enunciado n. 117 do FONAJE).'
+    )
+
+
 def _texto_intimacao_decurso(resultado, modelo='voluntario'):
     """Texto único da observação da movimentação e da intimação."""
     if modelo == 'remanescente':
@@ -144,6 +191,12 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
         evento_requerimento = (
             request.POST.get('evento_requerimento') or ''
         ).strip()
+        evento_impugnacao = (
+            request.POST.get('evento_impugnacao') or ''
+        ).strip()
+        seguranca_juizo = (
+            request.POST.get('seguranca_juizo') or ''
+        ).strip()
         executado = (request.POST.get('executado') or '').strip()
         parte = (request.POST.get('parte') or '').strip()
 
@@ -163,6 +216,25 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
 
         data_envio = _parse_data_br(request.POST.get('data_envio'))
         data_inicio = _parse_data_br(request.POST.get('data_inicio'))
+        if tipo == 'impugnacao_embargos_execucao':
+            if seguranca_juizo not in ('integral', 'parcial', 'nenhuma'):
+                messages.error(
+                    request,
+                    'Informe a segurança do juízo: integral, depósito '
+                    'parcial ou não houve.',
+                )
+                return HttpResponseRedirect(reverse(self.url_voltar))
+            data_protocolo = (
+                _parse_data_br(request.POST.get('data_protocolo'))
+                or data_envio
+            )
+            if not data_protocolo:
+                messages.error(
+                    request,
+                    'Informe a data do protocolo da impugnação/embargos.',
+                )
+                return HttpResponseRedirect(reverse(self.url_voltar))
+            data_envio = data_protocolo
         if not data_inicio:
             data_inicio = data_envio
         if not data_inicio:
@@ -222,6 +294,7 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
         ).strip() or 'não informado'
         evento_recurso = (
             request.POST.get('evento_recurso')
+            or evento_impugnacao
             or evento_origem
             or ''
         ).strip() or 'não informado'
@@ -261,6 +334,34 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
             template_name = 'Certidão de Recurso Inominado'
             from django.utils.safestring import mark_safe
             ctx_extra = {'texto_certidao': mark_safe(texto)}
+        elif tipo == 'impugnacao_embargos_execucao':
+            texto = _texto_impugnacao_embargos(
+                resultado,
+                data_protocolo,
+                evento_impugnacao=evento_impugnacao,
+                evento_despacho=evento_origem,
+                evento_intimacao=(
+                    request.POST.get('evento_intimacao') or ''
+                ).strip(),
+                meio_label=(
+                    'eletrônica (DJEN)' if meio == 'eletronico'
+                    else f'por {rotulo_meio}'
+                ),
+                seguranca=seguranca_juizo,
+            )
+            tempestivo_embargos = bool(
+                data_protocolo <= resultado.ultimo_dia
+            )
+            if tempestivo_embargos:
+                situacao_label = {
+                    'integral': 'Tempestivo — segurança integral',
+                    'parcial': 'Tempestivo — depósito parcial',
+                    'nenhuma': 'Tempestivo — sem segurança do juízo',
+                }.get(seguranca_juizo, 'Tempestivo')
+            else:
+                situacao_label = 'Intempestivo'
+            template_name = 'Certidão de Impugnação/Embargos à Execução'
+            ctx_extra = {'observacao_prazo': texto}
         else:
             situacao_label = ''
             if self.origem == 'movimentacao':
@@ -294,10 +395,17 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
             if not (eh_recurso and situacao_recurso == 'intempestivo')
             else False
         )
-        status_temp = (
-            'movimentação registrada' if self.origem == 'movimentacao'
-            else ('TEMPESTIVO' if tempestivo_calc else 'INTEMPESTIVO')
-        )
+        if tipo == 'impugnacao_embargos_execucao':
+            status_temp = (
+                'TEMPESTIVO'
+                if data_envio and data_envio <= resultado.ultimo_dia
+                else 'INTEMPESTIVO'
+            )
+        else:
+            status_temp = (
+                'movimentação registrada' if self.origem == 'movimentacao'
+                else ('TEMPESTIVO' if tempestivo_calc else 'INTEMPESTIVO')
+            )
         if self.origem == 'movimentacao':
             inicio_obs = (
                 f'Certidão de {info["label"]} — movimentação de '
@@ -317,6 +425,12 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
             + f'{resultado.data_decurso.strftime("%d/%m/%Y")}; intimação: '
             + f'{data_inicio.strftime("%d/%m/%Y")} ({rotulo_meio})'
         )
+        if tipo == 'impugnacao_embargos_execucao':
+            observacao_juntada += (
+                f'; segurança do juízo: {seguranca_juizo}; '
+                f'evento da impugnação/embargos: '
+                f'{evento_impugnacao or "não informado"}'
+            )
         if eh_recurso:
             origem_intimacao_label = (
                 'Embargos de declaração'
@@ -396,6 +510,11 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
                     status='gerada',
                     data_intimacao=data_inicio,
                     data_inicio=data_inicio,
+                    data_protocolo=data_envio,
+                    evento_despacho=evento_origem,
+                    evento_intimacao=(
+                        request.POST.get('evento_intimacao') or ''
+                    ).strip(),
                     ultimo_dia=resultado.ultimo_dia,
                     data_decurso=resultado.data_decurso,
                     prazo_info=resultado.to_dict(),
