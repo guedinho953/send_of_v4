@@ -7,6 +7,7 @@ from . import movimentacao_views
 from . import certidao_views
 from . import certidao_peticao_views
 from . import certidao_modelo_views
+from . import calendario_views
 from . import transito_julgado_views
 
 app_name = 'projudi'
@@ -76,6 +77,7 @@ urlpatterns = [
     path('cumprimentos/<int:pk>/logs/json/', cumprimento_views.CumprimentoLogsJsonView.as_view(), name='cumprimento_logs_json'),
 
     # Aba Certidões (separadas por origem: petição x movimentação)
+    path('calendario/', calendario_views.CalendarioForenseView.as_view(), name='calendario_forense'),
     path('certidoes/', certidao_views.CertidaoHubView.as_view(), name='certidao_hub'),
     path('certidoes/dashboard/', certidao_views.CertidaoDashboardView.as_view(), name='certidao_dashboard'),
     path('certidoes/rags/', certidao_views.RagCertidaoListView.as_view(), name='rag_certidoes'),

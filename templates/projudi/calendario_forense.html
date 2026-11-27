@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Calendário Forense — Send of v4{% endblock %}
+
+{% block extra_css %}
+<style>
+    .cal-top { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+    .cal-top h1 { margin:0; font-size:22px; color:#1e3a5f; }
+    .cal-top p { margin:4px 0 0; font-size:13px; color:#6b7280; }
+    .cal-nav { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+    .cal-nav a, .cal-nav span { padding:6px 11px; border:1px solid #e5e7eb; border-radius:6px; background:#fff; color:#374151; text-decoration:none; font-size:12px; }
+    .cal-nav a:hover { background:#f9fafb; }
+    .cal-nav .atual { background:#7c3aed; color:#fff; border-color:#7c3aed; }
+    .calendario { width:100%; border-collapse:collapse; table-layout:fixed; background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+    .calendario th { background:#f8fafc; color:#475569; padding:8px 4px; font-size:11px; text-transform:uppercase; border-bottom:1px solid #e5e7eb; text-align:center; }
+    .calendario td { height:105px; vertical-align:top; padding:5px; border:1px solid #f1f5f9; }
+    .calendario td.fora { background:#fafafa; color:#cbd5e1; }
+    .calendario td.fim-semana { background:#f8fafc; }
+    .calendario td.feriado { background:#fef3c7; }
+    .calendario td.suspensao { background:#fce7f3; }
+    .calendario td.hoje { box-shadow:inset 0 0 0 2px #7c3aed; }
+    .dia-num { font-weight:700; font-size:13px; color:#1e3a5f; }
+    .evento { margin-top:3px; padding:2px 4px; border-radius:4px; font-size:9px; line-height:1.25; background:#fef3c7; color:#92400e; }
+    .evento.suspensao { background:#fce7f3; color:#9d174d; }
+    .legenda { display:flex; gap:14px; flex-wrap:wrap; font-size:11px; color:#6b7280; margin:10px 0 18px; }
+    .legenda span::before { content:''; display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:4px; vertical-align:middle; }
+    .legenda .feriado::before { background:#fef3c7; border:1px solid #f59e0b; }
+    .legenda .suspensao::before { background:#fce7f3; border:1px solid #db2777; }
+    .lista-eventos { background:#fff; border-radius:10px; padding:14px 16px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+    .lista-eventos h3 { margin:0 0 8px; font-size:15px; color:#1e3a5f; }
+    .lista-eventos li { margin:4px 0; font-size:12px; color:#374151; }
+    .lista-eventos .data { font-family:monospace; font-weight:700; color:#1e3a5f; display:inline-block; min-width:75px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="cal-top">
+    <div>
+        <h1>📅 Calendário Forense</h1>
+        <p>Feriados e suspensões que não contam como dia útil.</p>
+    </div>
+    <div class="cal-nav">
+        <a href="?ano={{ ano_anterior }}&mes={{ mes_anterior }}">← Anterior</a>
+        <span class="atual">{{ mes_nome }} {{ ano }}</span>
+        <a href="?ano={{ ano_proximo }}&mes={{ mes_proximo }}">Próximo →</a>
+        <a href="{% url 'projudi:calendario_forense' %}">Hoje</a>
+    </div>
+</div>
+
+<div class="legenda">
+    <span class="feriado">Feriado / sem expediente</span>
+    <span class="suspensao">Suspensão de prazo</span>
+    <span>Dias úteis no mês: {{ dias_uteis }}</span>
+</div>
+
+<table class="calendario">
+    <thead>
+        <tr>
+            <th>Dom</th><th>Seg</th><th>Ter</th><th>Qua</th>
+            <th>Qui</th><th>Sex</th><th>Sáb</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for semana in semanas %}
+        <tr>
+            {% for dia in semana %}
+            <td class="{% if not dia.no_mes %}fora {% endif %}{% if dia.fim_semana %}fim-semana {% endif %}{% if dia.feriado %}feriado {% endif %}{% if dia.suspensao %}suspensao {% endif %}{% if dia.hoje %}hoje{% endif %}">
+                <div class="dia-num">{{ dia.numero }}</div>
+                {% for ev in dia.eventos %}
+                <div class="evento {% if ev.tipo == 'suspensao' %}suspensao{% endif %}"
+                     title="{{ ev.texto }}">
+                    {{ ev.texto|truncatechars:32 }}
+                </div>
+                {% endfor %}
+            </td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<div class="lista-eventos" style="margin-top:16px;">
+    <h3>Eventos de {{ mes_nome }} de {{ ano }}</h3>
+    {% if eventos_mes %}
+    <ul style="margin:0; padding-left:18px;">
+        {% for ev in eventos_mes %}
+        <li>
+            <span class="data">{{ ev.data|date:"d/m/Y" }}</span>
+            {{ ev.texto }}
+            {% if ev.tipo == 'suspensao' %}<span style="color:#9d174d;">(suspensão)</span>{% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <div style="font-size:12px; color:#6b7280;">Nenhum feriado ou suspensão cadastrado neste mês.</div>
+    {% endif %}
+</div>
+{% endblock %}
