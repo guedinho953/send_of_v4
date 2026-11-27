@@ -44,6 +44,7 @@ Opções:
 | `--processo` | Número CNJ (para a certidão) |
 | `--parte` | Nome da parte (para a certidão) |
 | `--servidor` | Nome do servidor que assina |
+| `--servidor-cargo` | Cargo do servidor (default `Servidor Secretaria 2`) |
 | `--saida` | Caminho do HTML (default `var/certidao_prazo_<data>.html`) |
 | `--sem-html` | Só calcula e mostra a memória de contagem |
 | `--origem` | `peticao` ou `movimentacao` (default: petição para recurso/contrarrazões) |
@@ -243,14 +244,26 @@ com a opção de trocar o subscritor na tela.
 
 ### Modelo base das demais certidões
 
-Este layout passa a ser o modelo para as próximas certidões:
+O **recurso inominado** continua no modelo COJE (Ofício Circular
+034/2015), que já está validado. O modelo base vale para as demais
+certidões de prazo:
 
-- cabeçalho do Juizado;
-- processo, executado(a) e evento da intimação;
-- publicação, início do prazo e decurso;
-- texto público enxuto, com o evento;
-- assinatura do subscritor escolhido;
-- memória interna separada (protocolo, tempestividade, evento, cálculo).
+- contrarrazões ao recurso inominado;
+- impugnação/cumprimento de sentença;
+- impugnação/decurso do prazo da penhora.
+
+O template é `Certidão de Prazo — Modelo Base` (migração `processes/0028`).
+O texto público fica no formato:
+
+> Certifico, para os devidos fins, o prazo de 15 (quinze) dias úteis para
+> impugnação/cumprimento de sentença, referente à **intimação eletrônica
+> (DJEN), evento 84**. Publicação em 03/11/2026; início do prazo em
+> 04/11/2026; termo final em 25/11/2026.
+
+O **evento da intimação** é sempre incluído. O protocolo da petição, a
+tempestividade e o cálculo completo ficam na **memória interna**, sem
+repetir no corpo público. O template usa o subscritor escolhido
+(`IVAN GUEDES DA SILVA / Servidor Secretaria 2` por padrão).
 
 ## Fila de petições com escolha manual
 

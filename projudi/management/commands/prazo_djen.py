@@ -47,6 +47,37 @@ def _fmt_curta(data):
     return data.strftime('%d/%m/%Y') if data else ''
 
 
+def _texto_publico_prazo(res, info, options):
+    """Texto público do modelo base para contrarrazões/impugnação."""
+    atos = {
+        'contrarrazoes_inominado': 'contrarrazões ao recurso inominado',
+        'cumprimento_sentenca': 'impugnação/cumprimento de sentença',
+        'pagamento_impugnacao_penhora': (
+            'impugnação ao decurso do prazo da penhora'),
+        'decurso_pagamento': (
+            'cumprimento voluntário da sentença/impugnação'),
+    }
+    ato = atos.get(
+        options.get('tipo'),
+        str(info.get('ato') or 'manifestação'),
+    )
+    dias = int(res.prazo_dias)
+    palavra = {10: 'dez', 15: 'quinze'}.get(dias, '')
+    dias_txt = f'{dias} ({palavra})' if palavra else str(dias)
+    evento = str(options.get('evento_intimacao') or '').strip()
+    evento_txt = (
+        f', evento {evento}' if evento.isdigit()
+        else ', evento não informado'
+    )
+    return (
+        f'Certifico, para os devidos fins, o prazo de {dias_txt} dias '
+        f'úteis para {ato}, referente à intimação eletrônica (DJEN)'
+        f'{evento_txt}. Publicação em {_fmt_curta(res.data_publicacao)}; '
+        f'início do prazo em {_fmt_curta(res.data_inicio_contagem)}; '
+        f'termo final em {_fmt_curta(res.ultimo_dia)}.'
+    )
+
+
 class Command(BaseCommand):
     help = 'Calcula prazo DJEN e gera preview de certidão (não expede)'
 
@@ -90,6 +121,9 @@ class Command(BaseCommand):
         parser.add_argument(
             '--peticao-url', help='URL do PDF/documento da petição')
         parser.add_argument('--servidor', default='IVAN GUEDES DA SILVA')
+        parser.add_argument(
+            '--servidor-cargo', default='Servidor Secretaria 2',
+            help='Cargo do servidor que assina')
         parser.add_argument('--tenant', type=int, help='ID do tenant (opcional)')
         parser.add_argument('--saida', help='Arquivo HTML de saída')
         parser.add_argument('--sem-html', action='store_true',
@@ -138,6 +172,7 @@ class Command(BaseCommand):
         preparo_status = 'nao_verificado'
         habilitacao_regular = options['habilitacao'] == 'regular'
         texto_certidao = ''
+        template_nome = None
 
         if options['tipo'] == 'inominado' and protocolo:
             if tempestivo and not options['preparo']:
@@ -158,6 +193,10 @@ class Command(BaseCommand):
                 preparo_status=preparo_status,
                 habilitacao_regular=habilitacao_regular,
             )
+            template_nome = 'Certidão de Recurso Inominado (COJE)'
+        elif options['tipo'] != 'inominado':
+            texto_certidao = _texto_publico_prazo(res, info, options)
+            template_nome = 'Certidão de Prazo — Modelo Base'
 
         self.stdout.write('=' * 70)
         self.stdout.write('CONTAGEM DJEN — ' + str(info['label']).upper())
@@ -224,6 +263,7 @@ class Command(BaseCommand):
                 texto_certidao=texto_certidao,
                 preparo_status=preparo_status,
                 habilitacao_regular=habilitacao_regular,
+                template_nome=template_nome,
             )
         if not options.get('nao_registrar'):
             self._registrar_log(
@@ -408,11 +448,11 @@ class Command(BaseCommand):
 
     def _gerar_html(self, res, protocolo, options, info,
                     texto_certidao='', preparo_status='',
-                    habilitacao_regular=None):
+                    habilitacao_regular=None, template_nome=None):
         from html import escape as html_escape
         from processes.models import DocumentTemplate
 
-        nome_tpl = (
+        nome_tpl = template_nome or (
             'Certidão de Recurso Inominado (COJE)'
             if texto_certidao
             else 'Certidão de Tempestividade / Trânsito (DJEN)'
@@ -427,6 +467,12 @@ class Command(BaseCommand):
             'texto_certidao': texto_certidao,
             'data': date.today().strftime('%d/%m/%Y'),
             'servidor': options['servidor'],
+            'servidor_cargo': (
+                options.get('servidor_cargo') or 'Servidor Secretaria 2'),
+            'evento_intimacao': options.get('evento_intimacao') or '',
+            'data_publicacao': _fmt_curta(res.data_publicacao),
+            'data_inicio_contagem': _fmt_curta(res.data_inicio_contagem),
+            'ultimo_dia': _fmt_curta(res.ultimo_dia),
         }
         parte_html = (
             f'<p>Para: {html_escape(ctx["parte"])}</p>'

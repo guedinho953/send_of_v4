@@ -4,6 +4,7 @@ import unittest
 from datetime import date
 
 from projudi.certidao_inominado import texto_certidao_inominado
+from projudi.management.commands.prazo_djen import _texto_publico_prazo
 from projudi.prazo_service import PrazoService, TIPOS_PRAZO
 
 
@@ -67,6 +68,35 @@ class PrazoDjenTest(unittest.TestCase):
             date(2026, 11, 27), 'cumprimento_sentenca')
         self.assertEqual(r15.prazo_dias, 15)
         self.assertGreater(r15.ultimo_dia, r10.ultimo_dia)
+
+    def test_texto_publico_modelo_base(self):
+        res = self.svc.contar_prazo_djen(date(2026, 11, 2), 15)
+        texto = _texto_publico_prazo(
+            res,
+            TIPOS_PRAZO['cumprimento_sentenca'],
+            {
+                'tipo': 'cumprimento_sentenca',
+                'evento_intimacao': '84',
+            },
+        )
+        self.assertIn('15 (quinze) dias úteis', texto)
+        self.assertIn('impugnação/cumprimento de sentença', texto)
+        self.assertIn('evento 84', texto)
+        self.assertIn('Publicação em 03/11/2026', texto)
+        self.assertIn('início do prazo em 04/11/2026', texto)
+        self.assertIn('termo final em 25/11/2026', texto)
+
+        res10 = self.svc.contar_prazo_djen(date(2026, 11, 2), 10)
+        texto10 = _texto_publico_prazo(
+            res10,
+            TIPOS_PRAZO['contrarrazoes_inominado'],
+            {
+                'tipo': 'contrarrazoes_inominado',
+                'evento_intimacao': '84',
+            },
+        )
+        self.assertIn('10 (dez) dias úteis', texto10)
+        self.assertIn('contrarrazões ao recurso inominado', texto10)
 
     def test_texto_certidao_inominado(self):
         grat = texto_certidao_inominado(
