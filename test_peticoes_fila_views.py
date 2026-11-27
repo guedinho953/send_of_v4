@@ -263,6 +263,78 @@ class PeticaoFilaViewsTest(TestCase):
         self.assertEqual(registro.parte, 'FULANO DE TAL')
         analisar.assert_called_once()
 
+    @patch('projudi.views.ProjudiService.list_movimentacoes')
+    def test_fila_movimentacoes_mostra_formulario_de_geracao(self, listar):
+        listar.return_value = [{
+            'processo': '0000001-11.2026.8.05.0191',
+            'tipo': 'Juntada de Petição',
+            'data': '27/11/2026',
+            'link_processo': 'https://projudi/processo',
+            'link_documento': 'https://projudi/despacho.pdf',
+        }]
+        resposta = self.client.get(reverse('projudi:movimentacoes'))
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(
+            resposta,
+            reverse('projudi:certidao_movimentacao_fila_gerar'),
+        )
+        self.assertContains(resposta, 'Gerar certidão daqui')
+        self.assertContains(resposta, 'Impugnação/Embargos à Execução')
+        self.assertContains(resposta, 'Decurso de Pagamento Voluntário')
+        self.assertContains(
+            resposta, '0000001-11.2026.8.05.0191')
+
+    @patch('projudi.peticoes_views.localizar_intimacao_do_processo')
+    @patch('projudi.peticoes_views.call_command')
+    def test_movimentacao_impugnacao_gera_com_origem_movimentacao(
+            self, comando, localizar):
+        localizar.return_value = {
+            'evento': '31',
+            'data': date(2026, 11, 2),
+            'meio': 'eletronico',
+        }
+        registro = PrazoDjenRecord.objects.create(
+            processo='0002156-47.2026.8.05.0191',
+            origem='movimentacao',
+            tipo_prazo='impugnacao_embargos_execucao',
+            prazo_dias=15,
+        )
+        resposta = self.client.post(
+            reverse('projudi:certidao_movimentacao_fila_gerar'),
+            {
+                'processo': '0002156-47.2026.8.05.0191',
+                'processo_url': 'https://projudi/processo',
+                'data_envio': '19/11/2026',
+                'tipo_prazo': 'impugnacao_embargos_execucao',
+                'evento_origem': '28',
+                'evento_impugnacao': '32',
+                'seguranca_juizo': 'parcial',
+                'parte': 'BANCO MERCANTIL DO BRASIL SA',
+                'tipo_localizador': '15286',
+                'localizador': '1',
+                'tipo_conclusao': '18',
+                'juiz_conclusao': '41201',
+                'acao': 'gerar',
+            },
+        )
+        self.assertEqual(resposta.status_code, 302)
+        self.assertRedirects(
+            resposta,
+            reverse('projudi:certidao_detail', args=[registro.id]),
+            fetch_redirect_response=False,
+        )
+        comando.assert_called_once()
+        args, kwargs = comando.call_args
+        self.assertEqual(args[0], 'prazo_djen')
+        self.assertEqual(kwargs['origem'], 'movimentacao')
+        self.assertEqual(kwargs['disponibilizacao'], '02/11/2026')
+        self.assertEqual(kwargs['protocolo'], '19/11/2026')
+        self.assertEqual(kwargs['evento_recurso'], '32')
+        self.assertEqual(kwargs['evento_origem'], '28')
+        self.assertEqual(kwargs['seguranca_juizo'], 'parcial')
+        self.assertEqual(kwargs['tipo_localizador'], '15286')
+        self.assertEqual(kwargs['localizador'], '1')
+
     @patch('projudi.peticoes_views.DecursoPagamentoService.analisar')
     def test_decurso_nao_gera_antes_do_prazo(self, analisar):
         resultado = resultado_decurso()

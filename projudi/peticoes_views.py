@@ -70,6 +70,14 @@ class CertidaoPeticaoFilaView(LoginRequiredMixin, TemplateView):
 
 
 class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
+    origem = 'peticao'
+    origem_label = 'Petições'
+    url_voltar = 'projudi:certidao_peticoes_fila'
+    url_lista = 'projudi:certidao_peticoes'
+
+    def _voltar(self):
+        return redirect(self.url_voltar)
+
     def post(self, request):
         processo = (request.POST.get('processo') or '').strip()
         tipo_prazo = (request.POST.get('tipo_prazo') or '').strip()
@@ -103,8 +111,15 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
             request.POST.get('assinante_nome') or '').strip()
         assinante_cargo = (
             request.POST.get('assinante_cargo') or '').strip()
+        tipo_localizador = (
+            request.POST.get('tipo_localizador') or '').strip()
+        localizador = (request.POST.get('localizador') or '').strip()
+        tipo_conclusao = (
+            request.POST.get('tipo_conclusao') or '18').strip()
+        juiz_conclusao = (
+            request.POST.get('juiz_conclusao') or '41201').strip()
 
-        voltar = redirect('projudi:certidao_peticoes_fila')
+        voltar = self._voltar()
 
         if not processo:
             messages.error(request, 'Processo não informado.')
@@ -142,20 +157,32 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
                 request,
                 processo=processo,
                 processo_url=processo_url,
-                evento=evento_despacho,
+                evento=evento_despacho or evento_origem,
                 executado=executado,
-                data_intimacao_manual=data_intimacao_manual,
-                evento_intimacao_manual=evento_intimacao_manual,
+                data_intimacao_manual=(
+                    data_intimacao_manual or data_intimacao),
+                evento_intimacao_manual=(
+                    evento_intimacao_manual or evento_intimacao),
                 assinante=assinante,
                 assinante_nome=assinante_nome,
                 assinante_cargo=assinante_cargo,
             )
 
         data_protocolo = self._data(data_envio)
+        if (not data_protocolo
+                and tipo_prazo == 'impugnacao_embargos_execucao'
+                and evento_impugnacao and processo_url):
+            try:
+                from projudi.intimacao_service import data_evento_processo
+                data_protocolo = data_evento_processo(
+                    request.user, processo_url, evento_impugnacao)
+            except Exception:
+                data_protocolo = None
         if not data_protocolo:
             messages.error(
                 request,
-                'A fila não informou a data de envio da petição.',
+                'Informe a data do protocolo ou o evento da petição '
+                'para que o sistema busque a data.',
             )
             return voltar
 
@@ -243,7 +270,7 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
                     processo=processo,
                     processo_url=processo_url or None,
                     parte=parte,
-                    origem='peticao',
+                    origem=self.origem,
                     peticao_documento=peticao_documento,
                     peticao_url=peticao_url,
                     evento_recurso=(
@@ -254,6 +281,10 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
                     evento_origem=evento_origem or '',
                     evento_intimacao=evento_intimacao_final,
                     seguranca_juizo=seguranca_juizo or None,
+                    tipo_localizador=tipo_localizador,
+                    localizador=localizador,
+                    tipo_conclusao=tipo_conclusao,
+                    juiz_conclusao=juiz_conclusao,
                 )
         except CommandError as exc:
             messages.error(request, str(exc))
@@ -264,29 +295,30 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
 
         registro = (
             PrazoDjenRecord.objects
-            .filter(processo=processo, origem='peticao')
+            .filter(processo=processo, origem=self.origem)
             .order_by('-created_at')
             .first()
         )
         if registro:
             messages.success(
                 request,
-                f'Certidão gerada e registrada em Petições (#{registro.id}).',
+                f'Certidão gerada e registrada em '
+                f'{self.origem_label} (#{registro.id}).',
             )
             return redirect('projudi:certidao_detail', pk=registro.id)
 
         messages.warning(
             request,
             'O comando foi executado, mas o registro não foi localizado. '
-            'Confira a aba Petições.',
+            f'Confira a aba {self.origem_label}.',
         )
-        return redirect('projudi:certidao_peticoes')
+        return redirect(self.url_lista)
 
     def _gerar_decurso(self, request, *, processo, processo_url, evento,
                        executado, data_intimacao_manual,
                        evento_intimacao_manual, assinante, assinante_nome,
                        assinante_cargo):
-        voltar = redirect('projudi:certidao_peticoes_fila')
+        voltar = self._voltar()
         if evento and not evento.isdigit():
             messages.error(
                 request,
@@ -353,3 +385,12 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
             except (TypeError, ValueError):
                 continue
         return None
+
+
+class CertidaoMovimentacaoFilaGerarView(CertidaoPeticaoFilaGerarView):
+    """Gera certidão a partir da fila de movimentações do Projudi."""
+
+    origem = 'movimentacao'
+    origem_label = 'Movimentações'
+    url_voltar = 'projudi:movimentacoes'
+    url_lista = 'projudi:certidao_movimentacoes'

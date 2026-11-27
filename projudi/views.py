@@ -106,6 +106,24 @@ class MovimentacoesListView(LoginRequiredMixin, ListView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        from .assinantes_certidao import ASSINANTE_PADRAO, ASSINANTES
+        from .peticoes_inominado import TIPOS_CERTIDAO
+
+        tipos_movimentacao = {
+            'cumprimento_sentenca',
+            'pagamento_impugnacao_penhora',
+            'decurso_pagamento',
+            'impugnacao_embargos_execucao',
+        }
+        context['tipos_certidao'] = [
+            tipo for tipo in TIPOS_CERTIDAO
+            if tipo['valor'] in tipos_movimentacao
+        ]
+        context['assinantes'] = [
+            {'chave': chave, 'nome': dados[0], 'cargo': dados[1]}
+            for chave, dados in ASSINANTES.items()
+        ]
+        context['assinante_padrao'] = ASSINANTE_PADRAO
         context['session_active'] = ProjudiSession.objects.filter(
             user=self.request.user, 
             status='active'

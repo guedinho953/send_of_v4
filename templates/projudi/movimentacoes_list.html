@@ -17,6 +17,20 @@
         .topbar { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
         .btn { display:inline-block; background:#0891b2; color:#fff; padding:8px 12px; border-radius:6px; text-decoration:none; font-size:13px; }
         .btn-sm { padding:5px 9px; font-size:12px; }
+        .alert-success { background:#dcfce7; color:#166534; border-left:4px solid #22c55e; }
+        .alert-info { background:#dbeafe; color:#1e40af; border-left:4px solid #3b82f6; }
+        .alert-warning { background:#fef3c7; color:#92400e; border-left:4px solid #f59e0b; }
+        .form-row td { background:#f8fafc; padding-top:0; }
+        .parametros-certidao summary { cursor:pointer; color:#0f766e; font-size:12px; font-weight:600; padding:8px 0; }
+        .params-grid { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-start; margin-top:8px; }
+        .parametros-certidao .campo { display:flex; flex-direction:column; gap:3px; }
+        .parametros-certidao label { font-size:11px; font-weight:600; color:#374151; }
+        .parametros-certidao input,
+        .parametros-certidao select { padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px; }
+        .parametros-certidao small { font-size:10px; color:#6b7280; max-width:230px; }
+        .parametros-certidao .bloco-impugnacao { background:#ecfdf5; border:1px solid #a7f3d0; border-radius:8px; padding:10px; }
+        .parametros-certidao .bloco-decurso { background:#f5f3ff; border:1px solid #ddd6fe; border-radius:8px; padding:10px; }
+        .parametros-certidao .btn { cursor:pointer; border:0; }
     </style>
 </head>
 <body>
@@ -27,6 +41,12 @@
             📄 Certidão de impugnação/embargos
         </a>
     </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
 
     {% if not session_active %}
         <div class="alert alert-error">
@@ -59,6 +79,7 @@
                     </td>
                     <td>
                         <span class="sugestao-certidao"
+                              data-form-id="form-mov-{{ forloop.counter }}"
                               data-processo="{{ m.processo }}"
                               data-documento="{{ m.link_documento|default:'' }}"
                               data-url="{{ m.link_processo|default:'' }}">analisando…</span>
@@ -66,8 +87,114 @@
                     <td>
                         <a class="btn btn-sm"
                            href="{% url 'projudi:certidao_impugnacao_embargos' %}?processo={{ m.processo|urlencode }}&url={{ m.link_processo|urlencode }}">
-                            Gerar certidão
+                            Formulário completo
                         </a>
+                    </td>
+                </tr>
+                <tr class="form-row">
+                    <td colspan="6">
+                        <details class="parametros-certidao">
+                            <summary>⚙️ Gerar certidão daqui (parâmetros)</summary>
+                            <form method="post"
+                                  action="{% url 'projudi:certidao_movimentacao_fila_gerar' %}"
+                                  class="fila-mov-form"
+                                  id="form-mov-{{ forloop.counter }}">
+                                {% csrf_token %}
+                                <input type="hidden" name="processo" value="{{ m.processo }}">
+                                <input type="hidden" name="processo_url" value="{{ m.link_processo|default:'' }}">
+                                <input type="hidden" name="peticao_url" value="{{ m.link_documento|default:'' }}">
+                                <input type="hidden" name="peticao_documento" value="">
+                                <input type="hidden" name="acao" value="gerar">
+                                <input type="hidden" name="tipo_localizador" value="">
+                                <input type="hidden" name="localizador" value="">
+                                <input type="hidden" name="tipo_conclusao" value="18">
+                                <input type="hidden" name="juiz_conclusao" value="41201">
+
+                                <div class="params-grid">
+                                    <div class="campo">
+                                        <label>Certidão</label>
+                                        <select name="tipo_prazo" class="tipo-prazo" required>
+                                            <option value="">Selecione...</option>
+                                            {% for t in tipos_certidao %}
+                                            <option value="{{ t.valor }}">{{ t.label }} ({{ t.dias }} dias)</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="campo campo-protocolo">
+                                        <label>Data do protocolo</label>
+                                        <input name="data_envio" placeholder="DD/MM/AAAA">
+                                        <small>Obrigatória se não informar o evento da petição.</small>
+                                    </div>
+                                    <div class="campo">
+                                        <label>Evento do despacho/decisão</label>
+                                        <input name="evento_origem" placeholder="ex.: 28">
+                                        <small>Origem da intimação; no decurso, o despacho de pagamento.</small>
+                                    </div>
+                                    <div class="campo">
+                                        <label>Parte a intimar (opcional)</label>
+                                        <input name="parte" placeholder="nome da parte">
+                                    </div>
+                                    <div class="campo">
+                                        <label>Evento da intimação (opcional)</label>
+                                        <input name="evento_intimacao" placeholder="ex.: 31">
+                                    </div>
+                                    <div class="campo">
+                                        <label>Data da intimação (fallback)</label>
+                                        <input name="data_intimacao" placeholder="DD/MM/AAAA">
+                                        <small>Só use se não localizar pelo evento.</small>
+                                    </div>
+                                </div>
+
+                                <div class="params-grid bloco-impugnacao" style="display:none;">
+                                    <div class="campo">
+                                        <label>Evento da impugnação/embargos (opcional)</label>
+                                        <input name="evento_impugnacao" placeholder="ex.: 32">
+                                        <small>Se informar, o sistema busca a data do protocolo.</small>
+                                    </div>
+                                    <div class="campo">
+                                        <label>Segurança do juízo</label>
+                                        <select name="seguranca_juizo">
+                                            <option value="">Selecione...</option>
+                                            <option value="integral">Integral</option>
+                                            <option value="parcial">Depósito parcial</option>
+                                            <option value="nenhuma">Não houve</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="params-grid bloco-decurso" style="display:none;">
+                                    <div class="campo">
+                                        <label>Executado(a) (opcional)</label>
+                                        <input name="executado" placeholder="deixe vazio para usar o promovido">
+                                        <small>Usado para localizar a intimação do decurso.</small>
+                                    </div>
+                                </div>
+
+                                <div class="params-grid">
+                                    <div class="campo">
+                                        <label>Assinatura da certidão</label>
+                                        <select name="assinante" class="assinante-select">
+                                            {% for a in assinantes %}
+                                            <option value="{{ a.chave }}" {% if a.chave == assinante_padrao %}selected{% endif %}>{{ a.nome }} — {{ a.cargo }}</option>
+                                            {% endfor %}
+                                            <option value="outro">Outro (digitar)</option>
+                                        </select>
+                                    </div>
+                                    <div class="campo campo-assinante-outro" style="display:none;">
+                                        <label>Nome do assinante</label>
+                                        <input name="assinante_nome" placeholder="Nome">
+                                        <label>Cargo</label>
+                                        <input name="assinante_cargo" placeholder="Cargo">
+                                    </div>
+                                    <div class="campo" style="align-self:flex-end;">
+                                        <button type="submit" class="btn"
+                                                style="background:#0f766e; color:#fff;">
+                                            📄 Gerar certidão
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                        </details>
                     </td>
                 </tr>
                 {% endfor %}
@@ -82,6 +209,40 @@
     <a href="{% url 'dashboard' %}" class="back">&larr; Dashboard</a>
 </div>
 <script>
+document.querySelectorAll('form.fila-mov-form').forEach(function (form) {
+    const tipo = form.querySelector('.tipo-prazo');
+    const impugnacao = form.querySelector('.bloco-impugnacao');
+    const decurso = form.querySelector('.bloco-decurso');
+    const protocolo = form.querySelector('.campo-protocolo');
+    const assinante = form.querySelector('.assinante-select');
+    const outro = form.querySelector('.campo-assinante-outro');
+
+    function atualizarTipo() {
+        const valor = tipo ? tipo.value : '';
+        const ehImpugnacao = valor === 'impugnacao_embargos_execucao';
+        const ehDecurso = valor === 'decurso_pagamento';
+        if (impugnacao) {
+            impugnacao.style.display = ehImpugnacao ? 'flex' : 'none';
+        }
+        if (decurso) {
+            decurso.style.display = ehDecurso ? 'flex' : 'none';
+        }
+        if (protocolo) {
+            protocolo.style.display = ehDecurso ? 'none' : 'flex';
+        }
+    }
+
+    function atualizarAssinante() {
+        if (!assinante || !outro) return;
+        outro.style.display = assinante.value === 'outro' ? 'flex' : 'none';
+    }
+
+    if (tipo) tipo.addEventListener('change', atualizarTipo);
+    if (assinante) assinante.addEventListener('change', atualizarAssinante);
+    atualizarTipo();
+    atualizarAssinante();
+});
+
 document.querySelectorAll('.sugestao-certidao').forEach(async function (el) {
     const params = new URLSearchParams({
         processo: el.dataset.processo || '',
@@ -94,6 +255,23 @@ document.querySelectorAll('.sugestao-certidao').forEach(async function (el) {
             params.toString()
         );
         const dados = await resposta.json();
+        const form = document.getElementById(el.dataset.formId || '');
+        if (form) {
+            const select = form.querySelector('.tipo-prazo');
+            if (select && !select.value && dados.tipo_certidao) {
+                select.value = dados.tipo_certidao;
+                select.dispatchEvent(new Event('change'));
+            }
+            [
+                ['tipo_localizador', dados.tipo_localizador],
+                ['localizador', dados.localizador],
+                ['tipo_conclusao', dados.tipo_conclusao],
+                ['juiz_conclusao', dados.juiz_conclusao],
+            ].forEach(function (par) {
+                const campo = form.querySelector('[name="' + par[0] + '"]');
+                if (campo && par[1]) campo.value = par[1];
+            });
+        }
         el.textContent = '';
         if (!dados.tipo_label) {
             el.textContent = dados.mensagem || '—';

@@ -17,6 +17,11 @@ urlpatterns = [
     path('sessao/status/', views.SessionStatusView.as_view(), name='session_status'),
     path('sessao/', views.SyncSessionTemplateView.as_view(), name='sync_session'),
     path('movimentacoes/', views.MovimentacoesListView.as_view(), name='movimentacoes'),
+    path(
+        'movimentacoes/certidao/gerar/',
+        peticoes_views.CertidaoMovimentacaoFilaGerarView.as_view(),
+        name='certidao_movimentacao_fila_gerar',
+    ),
     path('oficios/', views.OficiosListView.as_view(), name='oficios'),
 
     # Aba Oficios (ENVIO)
