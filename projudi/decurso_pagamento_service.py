@@ -261,7 +261,10 @@ class DecursoPagamentoService:
         else:
             intima = self._intimacao(
                 movs, evento, _nome_compacto(parte['nome']),
-                _descricao_evento(texto_despacho),
+                _descricao_evento(
+                    despacho.get('ato')
+                    or despacho.get('ato_normalizado')
+                    or ''),
             )
             if not intima:
                 return {

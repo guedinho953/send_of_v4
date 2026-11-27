@@ -104,6 +104,63 @@ class DecursoPagamentoHelpersTest(TestCase):
         self.assertEqual(resultado['data_intimacao'], date(2026, 12, 2))
         self.assertGreater(resultado['data_decurso'], resultado['ultimo_dia'])
 
+    @patch.object(DecursoPagamentoService, '_carregar')
+    def test_analisar_prefere_djen_publicado_a_intimacao_pendente(self, carregar):
+        partes = [{
+            'nome': 'BANCO MERCANTIL DO BRASIL SA',
+            'papel': 'PROMOVIDO',
+            'tipo': 'EXECUTADO',
+        }]
+        movs = [
+            {
+                'evento': '28',
+                'ato': 'Proferido despacho de mero expediente',
+                'ato_normalizado': 'proferido despacho de mero expediente',
+                'observacao': (
+                    'Intime-se a parte executada para pagar em 15 dias, '
+                    'nos termos do art. 523 do CPC.'),
+                'data_obj': date(2026, 10, 26),
+                'data_texto': '26/10/26',
+            },
+            {
+                'evento': '30',
+                'ato': (
+                    'Intimação expedido(a) (P/ Advgs. de BANCO MERCANTIL '
+                    'DO BRASIL SA) Prazo: 15 dias; Aguardando '
+                    'disponibilização no Diário da Justiça Eletrônico '
+                    'Nacional - DJEN (CNJ)'),
+                'data_obj': date(2026, 10, 26),
+                'data_texto': '26/10/26',
+            },
+            {
+                'evento': '31',
+                'ato': (
+                    'Disponibilização no Diário da Justiça Eletrônico - '
+                    'DJEN Disponibilização no Diário da Justiça Eletrônico '
+                    'em (02/11/26) para BANCO MERCANTIL DO BRASIL SA '
+                    '*Referente ao evento Proferido despacho de mero '
+                    'expediente'),
+                'data_obj': date(2026, 11, 2),
+                'data_texto': '02/11/26',
+                'data_djen': date(2026, 11, 2),
+            },
+        ]
+        carregar.return_value = (None, 'https://exemplo/processo', partes, movs)
+
+        resultado = DecursoPagamentoService(self.user).analisar(
+            '0002156-47.2026.8.05.0191',
+            evento='28',
+            parte_nome='BANCO MERCANTIL DO BRASIL SA',
+            hoje=date(2026, 11, 27),
+        )
+
+        self.assertNotIn('erro', resultado, resultado)
+        self.assertEqual(resultado['evento_intimacao'], '31')
+        self.assertEqual(resultado['data_intimacao'], date(2026, 11, 2))
+        self.assertEqual(resultado['meio'], 'eletronico')
+        self.assertEqual(resultado['ultimo_dia'], date(2026, 11, 25))
+        self.assertEqual(resultado['data_decurso'], date(2026, 11, 26))
+
     def test_texto_e_motivo(self):
         resultado = resultado_fake()
         texto = texto_certidao(resultado)
