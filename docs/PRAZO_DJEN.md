@@ -315,10 +315,10 @@ Exemplo de texto público:
 > Impugnação/Embargos à Execução apresentada no evento 88 (prazo de 15
 > (quinze) dias), referente ao despacho (evento 80) e à intimação eletrônica
 > (DJEN) (evento 84). publicação em 03/11/2026; início do prazo em
-> 04/11/2026; termo final em 25/11/2026. Certifico ainda que houve depósito
-> **PARCIAL, NÃO HAVENDO SEGURANÇA INTEGRAL DO JUÍZO**, observados o valor
-> executado (considerando o valor da execução) e o valor depositado/penhorado
-> (Enunciado n. 117 do FONAJE).
+> 04/11/2026; termo final em 25/11/2026.
+
+Na **intempestividade**, o texto termina no termo final e **não** inclui a
+segurança do juízo. A segurança só é certificada na tempestividade.
 
 O evento da petição é opcional (se ainda não juntada, o texto usa “nos
 autos”). O evento da intimação é incluído sempre que localizado. O campo

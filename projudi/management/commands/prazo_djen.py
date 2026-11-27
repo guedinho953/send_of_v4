@@ -81,7 +81,7 @@ def _texto_publico_prazo(res, info, options, tempestivo=None):
         seguranca_prefixo = '' if seguranca == 'integral' else 'que '
         conclusao = (
             'TEMPESTIVIDADE' if tempestivo else 'INTEMPESTIVIDADE')
-        return (
+        texto = (
             'Certifico, para os devidos fins, a '
             f'{conclusao} da Impugnação/Embargos à Execução apresentada '
             f'{evento_imp} (prazo de 15 (quinze) dias), referente ao '
@@ -89,10 +89,16 @@ def _texto_publico_prazo(res, info, options, tempestivo=None):
             f'{evento_int_txt}. publicação em '
             f'{_fmt_curta(res.data_publicacao)}; início do prazo em '
             f'{_fmt_curta(res.data_inicio_contagem)}; termo final em '
-            f'{_fmt_curta(res.ultimo_dia)}. Certifico ainda '
-            f'{seguranca_prefixo}{seguranca_txt}, observados o valor executado '
-            '(considerando o valor da execução) e o valor '
-            'depositado/penhorado (Enunciado n. 117 do FONAJE).'
+            f'{_fmt_curta(res.ultimo_dia)}.'
+        )
+        if not tempestivo:
+            return texto
+        return (
+            texto
+            + f' Certifico ainda {seguranca_prefixo}{seguranca_txt}, '
+            'observados o valor executado (considerando o valor da '
+            'execução) e o valor depositado/penhorado '
+            '(Enunciado n. 117 do FONAJE).'
         )
 
     if tipo == 'contrarrazoes_inominado' and tempestivo is not None:

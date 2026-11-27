@@ -142,11 +142,20 @@ class PrazoDjenTest(unittest.TestCase):
             'valor executado (considerando o valor da execução)', parcial)
         self.assertIn('Enunciado n. 117 do FONAJE', parcial)
 
-        integral = _texto_publico_prazo(
+        intemp = _texto_publico_prazo(
             res, info, {**base, 'seguranca_juizo': 'integral'},
             tempestivo=False,
         )
-        self.assertIn('INTEMPESTIVIDADE', integral)
+        self.assertIn('INTEMPESTIVIDADE', intemp)
+        self.assertIn('termo final em 25/11/2026.', intemp)
+        self.assertNotIn('Certifico ainda', intemp)
+        self.assertNotIn('SEGURANÇA INTEGRAL', intemp)
+
+        integral = _texto_publico_prazo(
+            res, info, {**base, 'seguranca_juizo': 'integral'},
+            tempestivo=True,
+        )
+        self.assertIn('TEMPESTIVIDADE', integral)
         self.assertIn('Certifico ainda a SEGURANÇA INTEGRAL DO JUÍZO',
                       integral)
 
