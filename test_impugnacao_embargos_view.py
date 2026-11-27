@@ -39,6 +39,26 @@ class ImpugnacaoEmbargosViewTest(TestCase):
         self.assertContains(resposta, 'Data do protocolo')
         self.assertContains(resposta, 'Evento do despacho/pagamento')
 
+    def test_fila_de_movimentacoes_tem_acao_para_certidao(self):
+        from django.template.loader import render_to_string
+
+        html = render_to_string(
+            'projudi/movimentacoes_list.html',
+            {
+                'session_active': True,
+                'movimentacoes': [{
+                    'processo': '0000001-11.2026.8.05.0191',
+                    'tipo': 'Juntada de Petição de Embargos à Execução',
+                    'data': '25/11/2026',
+                    'link': 'https://projudi/processo',
+                }],
+            },
+        )
+        self.assertIn(
+            reverse('projudi:certidao_impugnacao_embargos'), html)
+        self.assertIn('Gerar certidão', html)
+        self.assertIn('0000001-11.2026.8.05.0191', html)
+
     def test_aba_movimentacoes_tem_atalho_para_o_formulario(self):
         resposta = self.client.get(reverse('projudi:certidao_movimentacoes'))
         self.assertEqual(resposta.status_code, 200)

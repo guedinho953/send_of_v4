@@ -14,11 +14,19 @@
         th { background: #f9fafb; font-weight: 600; }
         .empty { text-align: center; color: #6b7280; padding: 40px; }
         .back { display: inline-block; margin-top: 20px; color: #2563eb; text-decoration: none; }
+        .topbar { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+        .btn { display:inline-block; background:#0891b2; color:#fff; padding:8px 12px; border-radius:6px; text-decoration:none; font-size:13px; }
+        .btn-sm { padding:5px 9px; font-size:12px; }
     </style>
 </head>
 <body>
 <div class="container">
-    <h1>Movimentações Projudi</h1>
+    <div class="topbar">
+        <h1>Movimentações Projudi</h1>
+        <a class="btn" href="{% url 'projudi:certidao_impugnacao_embargos' %}">
+            📄 Certidão de impugnação/embargos
+        </a>
+    </div>
 
     {% if not session_active %}
         <div class="alert alert-error">
@@ -34,6 +42,7 @@
                     <th>Tipo</th>
                     <th>Data</th>
                     <th>Link</th>
+                    <th>Certidão</th>
                 </tr>
             </thead>
             <tbody>
@@ -43,6 +52,12 @@
                     <td>{{ m.tipo }}</td>
                     <td>{{ m.data }}</td>
                     <td><a href="{{ m.link }}" target="_blank">Abrir</a></td>
+                    <td>
+                        <a class="btn btn-sm"
+                           href="{% url 'projudi:certidao_impugnacao_embargos' %}?processo={{ m.processo|urlencode }}&url={{ m.link|urlencode }}">
+                            Gerar certidão
+                        </a>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
