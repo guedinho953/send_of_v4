@@ -784,29 +784,53 @@ class ProcessoParser:
                     "img",src=lambda x: x and "favicon-domicilio-judicial-eletronico.png" in x)
                     )
                 
-                # Advogados: coluna tds[4] — nomes (cada um em linha própria no
-                # HTML). 'Nenhum advogado' → lista vazia. Usa stripped_strings
-                # pra captar cada nome mesmo separado por <br>.
+                # Advogados: a coluna tds[4] só traz "Mostrar/Ocultar".
+                # Os nomes ficam no spanAdv<idParteProcesso>, copiado pelo
+                # JavaScript para a tabela quando o usuário abre a parte.
                 advogados = []
                 tem_advogado = False
-                if len(tds) > 4:
+                id_linha = linha.get("id")
+                if id_linha:
+                    span_adv = soup.find(
+                        "span", id=f"spanAdv{id_linha.replace('tr','')}"
+                    )
+                    if span_adv:
+                        for tr_adv in span_adv.find_all("tr"):
+                            tds_adv = tr_adv.find_all("td")
+                            if len(tds_adv) < 2:
+                                continue
+                            nome_adv = tds_adv[0].get_text(" ", strip=True)
+                            oab_adv = tds_adv[1].get_text(" ", strip=True)
+                            if (not nome_adv
+                                    or 'Histórico de Advogados' in nome_adv):
+                                continue
+                            nome_adv = re.sub(
+                                r'\s*\(CPF:[^)]+\)', '', nome_adv
+                            )
+                            nome_adv = re.sub(
+                                r'\s*Processo\(s\)\s*Vinculado\(s\).*$',
+                                '', nome_adv, flags=re.I,
+                            ).strip()
+                            if nome_adv and nome_adv not in advogados:
+                                advogados.append(nome_adv)
+                if not advogados and len(tds) > 4:
+                    # Fallback para layouts antigos que já trazem os nomes.
                     for bloco_cru in tds[4].stripped_strings:
                         for sub in re.split(r'[,;]+', bloco_cru):
                             sub = sub.strip()
-                            if not sub or sub.lower().startswith('nenhum'):
+                            if (not sub
+                                    or sub.lower().startswith(('nenhum', 'mostrar'))):
                                 continue
-                            # Remove o nº OAB do final (e hífen solto), mantém o nome
-                            nome_adv = re.sub(r'\s*OAB[^,;]*$', '', sub, flags=re.I)
-                            nome_adv = nome_adv.rstrip('-').strip()
+                            nome_adv = re.sub(
+                                r'\s*OAB[^,;]*$', '', sub, flags=re.I
+                            ).rstrip('-').strip()
                             if nome_adv and nome_adv not in advogados:
                                 advogados.append(nome_adv)
-                    tem_advogado = bool(advogados)
+                tem_advogado = bool(advogados)
 
                 email = None
                 telefone = None
                 endereco_dict = {}
-
-                id_linha = linha.get("id")
 
                 if id_linha:
                     span_end = soup.find("span", id=f"spanEnd{id_linha.replace('tr','')}")

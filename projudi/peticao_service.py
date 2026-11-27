@@ -183,6 +183,81 @@ def _nome_documento(texto):
     return ''
 
 
+def _limpar_nome_parte(nome):
+    """Remove o sufixo de processos distribuídos do cabeçalho."""
+    return re.split(
+        r'Processo\(s\)\s*Distribu', nome or '', flags=re.I
+    )[0].strip(' .,-')
+
+
+def _extrair_recorrente_texto(texto):
+    """Extrai o recorrente do cabeçalho da petição de recurso.
+
+    Aceita as formas mais comuns:
+      - "FULANO, já qualificado nos autos...";
+      - "FULANO, inscrito no CNPJ..., qualificado no polo passivo...";
+      - "FULANO, por seu advogado..., vem interpor recurso";
+      - "RECORRENTE: FULANO".
+    """
+    if not texto:
+        return ''
+    trecho = texto[:8000]
+    corte = re.search(r'RAZ[ÕO]ES\s+DO\s+RECURSO', trecho, re.I)
+    if corte:
+        trecho = trecho[:corte.start()]
+
+    padroes = (
+        # Nome no início da linha seguido de qualificação/inscrição.
+        r'^\s*([A-ZÀ-Ú0-9][A-ZÀ-Ú0-9\.\-&/ \t]{3,120}?),'
+        r'\s*(?:(?:já\s+)?(?:devidamente\s+)?qualificad[oa]'
+        r'|inscrit[oa]|nos\s+autos'
+        r'|por\s+(?:seu|sua)\s+advogad[oa])',
+        # Nome seguido de "por seu/sua advogado".
+        r'^\s*([A-ZÀ-Ú0-9][A-ZÀ-Ú0-9\.\-&/ \t]{3,120}?)'
+        r'\s+por\s+(?:seu|sua)\s+advogad[oa]',
+        # Cabeçalho das razões.
+        r'RECORRENTE\s*:?\s*'
+        r'([A-ZÀ-Ú0-9][A-ZÀ-Ú0-9\.\-&/ \t]{3,100}?)'
+        r'(?:\n|,|\.\s)',
+    )
+    for padrao in padroes:
+        m = re.search(padrao, trecho, re.M)
+        if not m:
+            continue
+        nome = re.sub(r'\s+', ' ', m.group(1)).strip(' .,-')
+        if (len(nome) >= 5
+                and not any(k in _norm(nome) for k in (
+                    'RECURSO', 'PETICAO', 'EXCELENT', 'PROCESSO',
+                    'RAZOES', 'CERTIDAO', 'TURMA', 'EGREGIA', 'COLENDA',
+                    'RECORRENTE', 'RECORRIDO',
+                ))):
+            return nome
+    return ''
+
+
+def _extrair_advogados_texto(texto):
+    """Nomes de advogados assinantes/OAB no texto da petição."""
+    if not texto:
+        return []
+    nomes = []
+    padroes = (
+        r'Assinado\s+eletronicamente\s+por:\s*'
+        r'([A-ZÀ-Ú][A-ZÀ-Ú\.\s]{5,90}?);',
+        r'(?m)^\s*([A-ZÀ-Ú][A-ZÀ-Ú\.\s]{5,90}?)\s*\n\s*OAB[/\s]',
+    )
+    for padrao in padroes:
+        for m in re.finditer(padrao, texto):
+            nome = re.sub(r'\s+', ' ', m.group(1)).strip(' .,-')
+            if (len(nome) >= 5
+                    and not any(k in _norm(nome) for k in (
+                        'ASSINADO', 'ELETRONICAMENTE', 'OAB',
+                        'RECURSO', 'PROCESSO',
+                    ))
+                    and nome not in nomes):
+                nomes.append(nome)
+    return nomes
+
+
 MEIO_LABEL = {
     'eletronico': 'DJEN / domicílio eletrônico',
     'advogado': 'Advogado constituído',
@@ -273,10 +348,42 @@ class PeticaoQueueService:
         })
         return sessao
 
-    def _recorrente_do_documento(self, session, documento_url, documento_texto):
-        """Nome do recorrente a partir do texto da petição de recurso."""
+    def _partes_do_processo(self, session, processo_url):
+        """Partes e advogados do cabeçalho do processo (com cache curto)."""
+        if not processo_url:
+            return []
+        chave = f'partes_processo:{processo_url}'
+        em_cache = cache.get(chave)
+        if em_cache is not None:
+            return em_cache
+        partes = []
+        try:
+            resposta = session.get(processo_url, timeout=15)
+            if resposta.status_code == 200:
+                from projudiProcessNavigator import ProcessoParser
+                parser = ProcessoParser(resposta.text)
+                partes = parser.extrair_partes(parser.soup)
+                for parte in partes:
+                    parte['nome'] = _limpar_nome_parte(
+                        parte.get('nome') or ''
+                    )
+        except Exception:
+            partes = []
+        cache.set(chave, partes, 300)
+        return partes
+
+    def _recorrente_do_documento(
+            self, session, documento_url, documento_texto,
+            processo_url=''):
+        """Nome do recorrente pelo cabeçalho da petição e do processo.
+
+        Primeiro tenta o próprio texto da petição. Se o cabeçalho não
+        permitir uma leitura segura, usa os advogados que assinam a
+        petição e o cabeçalho do processo (partes + advogados) para
+        descobrir qual parte está recorrendo.
+        """
         chave_cache = (
-            f'recorrente_doc_v1:{documento_url}'
+            f'recorrente_doc_v2:{documento_url}:{processo_url}'
             if documento_url else ''
         )
         if chave_cache:
@@ -284,67 +391,76 @@ class PeticaoQueueService:
             if em_cache:
                 return em_cache
 
-        # 1) Tenta pelo texto do PDF da petição.
+        texto = ''
+        # 1) Texto do PDF da petição.
         if documento_url:
             try:
-                resposta = session.get(documento_url, timeout=10)
+                resposta = session.get(documento_url, timeout=15)
                 if resposta.status_code == 200:
-                    texto = ''
                     try:
                         import fitz
                         pdf = fitz.open(
                             stream=resposta.content, filetype='pdf'
                         )
-                        # O nome do recorrente fica no cabeçalho; não é
-                        # necessário extrair o PDF inteiro.
                         limite = min(5, pdf.page_count)
                         texto = '\n'.join(
                             pdf[i].get_text() for i in range(limite)
                         )
+                        pdf.close()
                     except Exception:
                         texto = ''
-
-                    if texto:
-                        # Olha só o cabeçalho da petição, antes das razões.
-                        trecho = texto[:6000]
-                        corte = re.search(
-                            r'RAZ[ÕO]ES\s+DO\s+RECURSO', trecho, re.I
-                        )
-                        if corte:
-                            trecho = trecho[:corte.start()]
-
-                        padroes = (
-                            # "BANCO X S/A., nos autos da Ação que lhe move
-                            # JOSEFA..." — o primeiro nome é o recorrente.
-                            r'^[ \t]*([A-ZÀ-Ú0-9][A-ZÀ-Ú0-9\.\-&/ \t]{3,120}?),'
-                            r'[ \t]*nos\s+autos\s+d[ae]\b',
-                            r'^[ \t]*([A-ZÀ-Ú0-9][A-ZÀ-Ú0-9\.\-&/ \t]{3,120}?),'
-                            r'[ \t]*(?i:j[áa]\s+devidamente\s+qualificad[oa])',
-                            r'([A-ZÀ-Ú0-9][A-ZÀ-Ú0-9\.\-&/ \t]{3,120}?),'
-                            r'[ \t]+por\s+interm[ée]dio\s+dos\s+seus\s+procuradores',
-                            r'RECORRENTE\s*:?\s*'
-                            r'([A-ZÀ-Ú0-9][A-ZÀ-Ú0-9\.\-&/ \t]{3,100}?)'
-                            r'(?:\n|,|\.\s)',
-                        )
-                        for padrao in padroes:
-                            m = re.search(padrao, trecho, re.M)
-                            if not m:
-                                continue
-                            nome = re.sub(r'\s+', ' ', m.group(1)).strip(
-                                ' .,-'
-                            )
-                            if (len(nome) >= 5
-                                    and not any(k in _norm(nome) for k in (
-                                        'RECURSO', 'PETICAO', 'EXCELENT',
-                                        'PROCESSO', 'RAZOES', 'CERTIDAO',
-                                        'TURMA', 'EGREGIA', 'COLENDA'))):
-                                if chave_cache:
-                                    cache.set(chave_cache, nome, 43200)
-                                return nome
             except Exception:
-                pass
+                texto = ''
 
-        # 2) Fallback: nome no arquivo da petição.
+        partes = self._partes_do_processo(session, processo_url)
+        candidato = _extrair_recorrente_texto(texto)
+
+        # 2) O nome do cabeçalho da petição deve ser uma das partes do
+        # processo. Se for, usa o nome limpo do cadastro do processo.
+        if candidato:
+            alvo = _nome_compacto(candidato)
+            parte = next(
+                (p for p in partes
+                 if alvo and (
+                     alvo in _nome_compacto(p.get('nome') or '')
+                     or _nome_compacto(p.get('nome') or '') in alvo
+                 )),
+                None,
+            )
+            if parte:
+                nome = _limpar_nome_parte(parte.get('nome') or '')
+                if chave_cache:
+                    cache.set(chave_cache, nome, 43200)
+                return nome
+
+        # 3) Fallback pelo advogado: o advogado que assina a petição
+        # aparece no cabeçalho do processo vinculado a uma das partes.
+        advogados_peticao = _extrair_advogados_texto(texto)
+        if advogados_peticao and partes:
+            alvos_adv = [_nome_compacto(a) for a in advogados_peticao]
+            for parte in partes:
+                nomes_adv = [
+                    _nome_compacto(a)
+                    for a in (parte.get('advogados') or [])
+                ]
+                if any(
+                    alvo and any(alvo in nome or nome in alvo
+                                 for nome in nomes_adv)
+                    for alvo in alvos_adv
+                ):
+                    nome = _limpar_nome_parte(parte.get('nome') or '')
+                    if chave_cache:
+                        cache.set(chave_cache, nome, 43200)
+                    return nome
+
+        # 4) Se o cabeçalho trouxe um nome que não bateu com o cadastro
+        # (pontuação/razão social), ainda é melhor que vazio.
+        if candidato:
+            if chave_cache:
+                cache.set(chave_cache, candidato, 43200)
+            return candidato
+
+        # 5) Fallback: nome no arquivo da petição.
         nome = _nome_documento(documento_texto)
         if chave_cache and nome:
             cache.set(chave_cache, nome, 43200)
@@ -628,7 +744,7 @@ class PeticaoQueueService:
 
     def listar(self, forcar=False):
         """Lê a fila e devolve tipos conhecidos e petições não classificadas."""
-        chave_cache = f'peticao_queue_v3:{self.user.pk}'
+        chave_cache = f'peticao_queue_v4:{self.user.pk}'
         if not forcar:
             em_cache = cache.get(chave_cache)
             if em_cache is not None:
@@ -872,6 +988,7 @@ class PeticaoQueueService:
                 session,
                 base['documento_url'],
                 base['documento_texto'],
+                processo_url=base.get('processo_url') or '',
             )
         intimacao = self._intimacao_do_processo(
             session,
