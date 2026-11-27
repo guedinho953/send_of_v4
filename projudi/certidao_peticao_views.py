@@ -890,6 +890,189 @@ class CertidaoMovimentacaoCustasView(LoginRequiredMixin, View):
         })
 
 
+class CertidaoAcoesView(LoginRequiredMixin, View):
+    """Ações adicionais para um documento gerado: juntar + localizador,
+    conclusão ou contadoria."""
+
+    @staticmethod
+    def _preview_redirect(doc):
+        return HttpResponseRedirect(
+            reverse('projudi:certidao_peticao_preview', args=[doc.id])
+        )
+
+    def post(self, request):
+        from processes.models import GeneratedDocument
+        from .movimentacao_service import MovimentacaoService
+
+        documento_id = (request.POST.get('documento_id') or '').strip()
+        if not documento_id.isdigit():
+            messages.error(request, 'Documento da certidão não informado.')
+            return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
+
+        doc = get_object_or_404(GeneratedDocument, pk=int(documento_id))
+        user_tenant_id = getattr(request.user, 'tenant_id', None)
+        if doc.tenant_id and user_tenant_id and doc.tenant_id != user_tenant_id:
+            messages.error(request, 'Certidão não pertence ao seu órgão.')
+            return self._preview_redirect(doc)
+        if not doc.process:
+            messages.error(request, 'A certidão não está vinculada a um processo.')
+            return self._preview_redirect(doc)
+        if not (doc.html_content or '').strip():
+            messages.error(request, 'A certidão não possui conteúdo.')
+            return self._preview_redirect(doc)
+
+        acao = (request.POST.get('acao') or 'so_gerar').strip().lower()
+        if acao not in (
+            'so_gerar', 'juntar', 'juntar_localizador',
+            'juntar_conclusao', 'juntar_contadoria',
+        ):
+            messages.error(request, 'Ação inválida.')
+            return self._preview_redirect(doc)
+
+        if acao == 'so_gerar':
+            messages.info(
+                request,
+                'Certidão mantida apenas no sistema, sem juntada no Projudi.',
+            )
+            return self._preview_redirect(doc)
+
+        rotulo = doc.template.name if doc.template else 'Certidão'
+        origem = (
+            'peticao'
+            if (doc.recipient_name or '').startswith('Petição:')
+            else 'movimentacao'
+        )
+        processo = doc.process.number
+        url_processo = doc.process.projudi_url
+        if not url_processo:
+            messages.error(
+                request,
+                'A URL do processo no Projudi não está cadastrada.',
+            )
+            return self._preview_redirect(doc)
+
+        tipo_localizador = (
+            request.POST.get('tipo_localizador') or '').strip()
+        localizador = (request.POST.get('localizador') or '').strip()
+        tipo_conclusao = (
+            request.POST.get('tipo_conclusao') or '18').strip()
+        juiz_conclusao = (
+            request.POST.get('juiz_conclusao') or '41201').strip()
+
+        if acao == 'juntar_localizador' and not (
+                tipo_localizador or localizador):
+            messages.warning(
+                request,
+                'Informe o tipo/código do localizador para juntar com localizador.',
+            )
+            return self._preview_redirect(doc)
+
+        service = MovimentacaoService(request.user)
+        try:
+            record = service.importar(
+                processo_numero=processo,
+                act_verb='certifique-se',
+                observacao=f'Juntada da {rotulo}.',
+                categoria='certidao',
+                origem=origem,
+                processo_cnj=processo,
+                parte_nome=(
+                    request.POST.get('parte_nome') or ''),
+                url_processo=url_processo,
+                codigo_movimentacao='581',
+                descricao_movimentacao=rotulo,
+                tipo_localizador=tipo_localizador,
+                localizador=localizador,
+            )
+            juntou = service.executar_requests(
+                record,
+                certidao_html=doc.html_content,
+                certidao_titulo=rotulo,
+            )
+            if not juntou:
+                messages.error(
+                    request,
+                    'A juntada não foi confirmada. Confira os logs da '
+                    f'movimentação #{record.id}.',
+                )
+                return self._preview_redirect(doc)
+
+            doc.exported_to_projudi = True
+            doc.save(update_fields=['exported_to_projudi'])
+
+            if acao == 'juntar_localizador':
+                messages.success(
+                    request,
+                    'Certidão juntada com localizador no Projudi '
+                    f'(movimentação #{record.id}).',
+                )
+            elif acao == 'juntar_conclusao':
+                extra = service.importar(
+                    processo_numero=processo,
+                    act_verb='conclusao',
+                    observacao='Conclusão',
+                    categoria='outro',
+                    origem='movimentacao',
+                    processo_cnj=processo,
+                    url_processo=url_processo,
+                    codigo_movimentacao='11383',
+                    descricao_movimentacao='Conclusão',
+                )
+                extra_ok = service.executar_requests(
+                    extra,
+                    conclusao=tipo_conclusao,
+                    login_conclusao_pessoal=juiz_conclusao,
+                )
+                if extra_ok:
+                    messages.success(
+                        request,
+                        'Certidão juntada e conclusão ao Juiz registrada '
+                        f'(movimentação #{extra.id}).',
+                    )
+                else:
+                    messages.warning(
+                        request,
+                        'Certidão juntada, mas a conclusão não foi '
+                        f'confirmada (movimentação #{extra.id}).',
+                    )
+            elif acao == 'juntar_contadoria':
+                extra = service.importar(
+                    processo_numero=processo,
+                    act_verb='contadoria',
+                    observacao='Remessa à contadoria.',
+                    categoria='outro',
+                    origem='movimentacao',
+                    processo_cnj=processo,
+                    url_processo=url_processo,
+                    codigo_movimentacao='11383',
+                    descricao_movimentacao='Remessa à Contadoria',
+                )
+                extra_ok = service.executar_requests(
+                    extra, enviar_contador=True,
+                )
+                if extra_ok:
+                    messages.success(
+                        request,
+                        'Certidão juntada e autos remetidos à contadoria '
+                        f'(movimentação #{extra.id}).',
+                    )
+                else:
+                    messages.warning(
+                        request,
+                        'Certidão juntada, mas a remessa à contadoria não '
+                        f'foi confirmada (movimentação #{extra.id}).',
+                    )
+            else:
+                messages.success(
+                    request,
+                    f'Certidão juntada no Projudi (movimentação #{record.id}).',
+                )
+        except Exception as exc:
+            messages.error(
+                request, f'Erro ao executar a ação da certidão: {exc}')
+        return self._preview_redirect(doc)
+
+
 class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
     """Gera a certidão de decurso do prazo de pagamento voluntário."""
 

@@ -32,6 +32,10 @@
     .st-falha { background:#fee2e2; color:#991b1b; }
     .st-dispensado { background:#f3e8ff; color:#6b21a8; }
     .acoes { display:flex; gap:5px; flex-wrap:wrap; }
+    .acoes-inline { font-size:11px; color:#374151; min-width:210px; }
+    .acoes-inline summary { cursor:pointer; color:#0f766e; font-weight:600; }
+    .acoes-inline form { display:flex; gap:4px; flex-wrap:wrap; margin-top:6px; }
+    .acoes-inline select, .acoes-inline input { padding:4px 6px; border:1px solid #cbd5e1; border-radius:5px; font-size:11px; }
     .btn-sm { padding:5px 10px; font-size:11px; border-radius:5px; }
     .empty-state { text-align:center; padding:44px 20px; color:#6b7280; background:#fff; border-radius:10px; }
     .busca-form { display:flex; gap:6px; align-items:center; margin-left:auto; }
@@ -133,6 +137,36 @@
                            {% if r.preview_url %}target="_blank"{% endif %}>
                             {% if r.preview_url %}👁 Preview{% else %}🔍 Detalhe{% endif %}
                         </a>
+                        {% endif %}
+                        {% if r.doc_id %}
+                        <details class="acoes-inline">
+                            <summary>⚙️ Ações</summary>
+                            <form method="post"
+                                  action="{% url 'projudi:certidao_acoes' %}"
+                                  onsubmit="return confirm('Executar a ação selecionada no Projudi?');">
+                                {% csrf_token %}
+                                <input type="hidden" name="documento_id" value="{{ r.doc_id }}">
+                                <select name="acao" required>
+                                    <option value="so_gerar">Só gerar</option>
+                                    <option value="juntar">Juntar</option>
+                                    <option value="juntar_localizador">Juntar + localizador</option>
+                                    <option value="juntar_conclusao">Juntar + conclusão</option>
+                                    <option value="juntar_contadoria">Juntar + contadoria</option>
+                                </select>
+                                <input name="tipo_localizador" placeholder="tipo local." style="width:80px;">
+                                <input name="localizador" placeholder="local." style="width:65px;">
+                                <select name="tipo_conclusao">
+                                    <option value="1">Despacho</option>
+                                    <option value="2">Decisão</option>
+                                    <option value="3">Sentença</option>
+                                    <option value="18" selected>Embargos</option>
+                                    <option value="19">Sentença ext.</option>
+                                    <option value="22">Exceção</option>
+                                </select>
+                                <input name="juiz_conclusao" value="41201" style="width:70px;">
+                                <button type="submit" class="btn btn-sm btn-outline">Executar</button>
+                            </form>
+                        </details>
                         {% endif %}
                     </div>
                 </td>

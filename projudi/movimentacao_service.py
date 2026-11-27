@@ -701,7 +701,10 @@ class MovimentacaoService:
                            promotor_mp: str = None,
                            cod_analise: str = None,
                            certidao_html: str = None,
-                           certidao_titulo: str = 'Certidão Criminal - art. 76 Lei 9.099/95') -> bool:
+                           certidao_titulo: str = 'Certidão Criminal - art. 76 Lei 9.099/95',
+                           conclusao: str = '',
+                           login_conclusao_pessoal: str = '',
+                           enviar_contador: bool = False) -> bool:
         """Executa movimentação via Playwright headless + submit via JavaScript.
 
         Args:
@@ -1652,6 +1655,12 @@ class MovimentacaoService:
         if record.observacao:
             payload['observacao'] = _texto_latin1(record.observacao[:500])
 
+        # Conclusão (código 11383): radio `conclusao` + juiz.
+        if conclusao:
+            payload['conclusao'] = str(conclusao)
+        if login_conclusao_pessoal:
+            payload['loginConclusaoPessoal'] = login_conclusao_pessoal
+
         # Concluir.x e Concluir.y (obrigatório para input type=image)
         payload['Concluir.x'] = '10'
         payload['Concluir.y'] = '10'
@@ -1661,7 +1670,11 @@ class MovimentacaoService:
                         'enviaDelegacia', 'enviaMP', 'enviaTurmaRecursal',
                         'enviaCartorioExtrajudicial', 'arquivar',
                         'psicossocial', 'contador']:
+            if campo == 'contador' and enviar_contador:
+                continue
             payload.pop(campo, None)
+        if enviar_contador:
+            payload['contador'] = 'contador'
 
         # Localizador
         if record.tipo_localizador:

@@ -793,6 +793,7 @@ class CertidaoTabelaView(LoginRequiredMixin, TemplateView):
                     'projudi:certidao_peticao_preview', args=[doc.id]),
                 'preview_url': reverse(
                     'projudi:certidao_peticao_preview', args=[doc.id]),
+                'doc_id': doc.id,
                 'fonte': 'Documento gerado',
                 'fonte_classe': 'doc',
             })

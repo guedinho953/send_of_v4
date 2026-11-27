@@ -97,6 +97,7 @@ urlpatterns = [
     path('certidoes/movimentacoes/decurso-pagamento/', certidao_peticao_views.CertidaoDecursoPagamentoView.as_view(), name='certidao_decurso_pagamento'),
     path('certidoes/movimentacoes/sugerir/', certidao_views.CertidaoSugestaoMovimentacaoView.as_view(), name='certidao_sugestao_movimentacao'),
     path('certidoes/peticoes/<int:pk>/preview/', certidao_peticao_views.CertidaoPeticaoPreviewView.as_view(), name='certidao_peticao_preview'),
+    path('certidoes/peticoes/acoes/', certidao_peticao_views.CertidaoAcoesView.as_view(), name='certidao_acoes'),
     path('certidoes/peticoes/juntar-intimar/', certidao_peticao_views.CertidaoPeticaoJuntarIntimarView.as_view(), name='certidao_peticao_juntar_intimar'),
 
     # Aba Movimentações (NOVO — atos internos via Mov581)
