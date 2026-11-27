@@ -1783,8 +1783,12 @@ class MovimentacaoService:
             if rec.status not in ('pendente', 'falha'):
                 continue
             try:
-                # 11383 = requests direto (sem Playwright)
-                if rec.codigo_movimentacao == '11383':
+                # 11383 + intimação (decurso) usa o painel Autoras/Rés.
+                if (rec.codigo_movimentacao == '11383'
+                        and rec.categoria == 'intimacao'):
+                    ok = self.executar_intimacao_record(rec)
+                # 11383 simples = requests direto (sem Playwright)
+                elif rec.codigo_movimentacao == '11383':
                     ok = self.executar_requests(rec)
                 else:
                     ok = self.executar(rec)
@@ -1846,6 +1850,9 @@ class MovimentacaoService:
         # Polo no painel de intimação: 'todos' (default, Autoras+Rés) |
         # 'autores' (só aba Autoras, não clica Réus) | 'res' (só aba Rés).
         polo_intimacao: str = 'todos',
+        # Quando True, o chamador já verificou que há canal eletrônico e
+        # quer pular o pre-check de canal do histórico (AR/mandado).
+        forcar_eletronica: bool = False,
         # ── Localizador aplicado na MESMA movimentação da intimação ──
         tipo_localizador: str = '',
         localizador: str = '',
@@ -2050,7 +2057,13 @@ class MovimentacaoService:
                     ints.sort(key=lambda m: m.get('data_obj') or date.min)
                     ultimo = ints[-1]
                     ultimo_meio = ultimo.get('meio_comunicacao')
-                    if ultimo_meio == 'ar':
+                    if ultimo_meio == 'ar' and forcar_eletronica:
+                        # O chamador já confirmou advogado/e-mail/DJEN para a
+                        # parte que será intimada. O histórico AR de outra
+                        # parte não deve bloquear a intimação eletrônica.
+                        print('   ✅ Canal eletrônico confirmado — '
+                              'ignorando histórico AR no pre-check')
+                    elif ultimo_meio == 'ar':
                         if fallback_ar:
                             # fallback_ar: a parte não tem domicílio eletrônico
                             # (última comunicação por AR) → em vez de pular,
@@ -2068,14 +2081,14 @@ class MovimentacaoService:
                     # histórico: parte com envelope (intimação eletrônica) ou
                     # Domicílio CNJ (favicon) intima eletronicamente — NUNCA
                     # cai no fallback de mandado. ──
-                    tem_eletronico = False
+                    tem_eletronico = forcar_eletronica
                     try:
-                        tem_eletronico = any(
+                        tem_eletronico = tem_eletronico or any(
                             (p.get('domicilio_cnj') or p.get('recebe_intimacao_email'))
                             for p in parser.extrair_partes(parser.soup)
                         )
                     except Exception:
-                        tem_eletronico = False
+                        pass
                     if tem_eletronico:
                         print('   ✅ Parte(s) com Domicílio CNJ/eletrônico — intimando eletronicamente (sem fallback de mandado)')
                     elif ultimo_meio in ('mandado', 'precatoria'):
@@ -2256,105 +2269,115 @@ class MovimentacaoService:
                 }}''')
                 time.sleep(1)
 
-                # ─── PASSO 2: Clicar btnBuscaMovimentacao (abre a grade p/ escolher tipo) ───
-                clicou_busca = False
-                for sel in ['#btnBuscaMovimentacao', '#btnBuscaMovimentacao ',
-                            'input[value*="Buscar Movimentação"]',
-                            'button:has-text("Buscar Movimentação")']:
-                    try:
-                        el = page.query_selector(sel)
-                        if el:
-                            el.click()
+                if str(codigo_mov) == '11383':
+                    # 11383 (Cumprimento de Ofício) não usa a grade de
+                    # tipo documental; preenche a descrição direto.
+                    page.evaluate(f'''() => {{
+                        var desc = document.getElementById('descCategoriaMovimentacao');
+                        if (desc) {{ desc.value = '{descricao_mov}'; desc.dispatchEvent(new Event('change', {{bubbles:true}})); }}
+                    }}''')
+                    time.sleep(1)
+                    print(f'   ✅ Código 11383 + descrição: {descricao_mov}')
+                else:
+                    # ─── PASSO 2: Clicar btnBuscaMovimentacao (abre a grade p/ escolher tipo) ───
+                    clicou_busca = False
+                    for sel in ['#btnBuscaMovimentacao', '#btnBuscaMovimentacao ',
+                                'input[value*="Buscar Movimentação"]',
+                                'button:has-text("Buscar Movimentação")']:
+                        try:
+                            el = page.query_selector(sel)
+                            if el:
+                                el.click()
+                                clicou_busca = True
+                                print(f'   ✅ Busca movimentação clicado ({sel})')
+                                break
+                        except Exception:
+                            continue
+                    if not clicou_busca:
+                        # Fallback JS: dispara a busca via clique JS
+                        try:
+                            page.evaluate('''() => {
+                                const b = document.getElementById('btnBuscaMovimentacao');
+                                if (b) { b.click(); return true; }
+                                const inps = document.querySelectorAll('input,button,a');
+                                for (const el of inps) {
+                                    if ((el.value||el.textContent||'').toLowerCase().includes('buscar') &&
+                                        (el.value||el.textContent||'').toLowerCase().includes('movimenta')) {
+                                        el.click(); return true;
+                                    }
+                                }
+                                return false;
+                            }''')
                             clicou_busca = True
-                            print(f'   ✅ Busca movimentação clicado ({sel})')
-                            break
+                            print('   ✅ Busca movimentação (fallback JS)')
+                        except Exception as e:
+                            print(f'   ⚠️ Busca movimentação não encontrada: {e}')
+                    time.sleep(2)
+
+                    # Tratar alerta
+                    try:
+                        alert = page.wait_for_event('dialog', timeout=5000)
+                        print(f'   ⚠️ Alerta: {alert.message}')
+                        alert.accept()
+                        time.sleep(2)
                     except Exception:
-                        continue
-                if not clicou_busca:
-                    # Fallback JS: dispara a busca via clique JS
+                        pass
+
+                    # ─── PASSO 3: Selecionar Tipo de Documento = Intimação ───
+                    # Jeito dos fluxos que FUNCIONAM (executar_requests — certidão
+                    # 37, CUMPRIMENTO 55, etc.): desoculta a linha #trTipoDocumento,
+                    # espera o select codTipoDocumento popular e seleciona a opção
+                    # pelo LABEL (não por valor fixo — '5' hardcoded era o bug).
+                    # Clique em link a:has-text("Intimação") NÃO funciona: casa com
+                    # link de menu e não seleciona nada (falso "✅" no log).
+                    selecionou_grid = False
                     try:
                         page.evaluate('''() => {
-                            const b = document.getElementById('btnBuscaMovimentacao');
-                            if (b) { b.click(); return true; }
-                            const inps = document.querySelectorAll('input,button,a');
-                            for (const el of inps) {
-                                if ((el.value||el.textContent||'').toLowerCase().includes('buscar') &&
-                                    (el.value||el.textContent||'').toLowerCase().includes('movimenta')) {
-                                    el.click(); return true;
-                                }
-                            }
-                            return false;
+                            var tr = document.getElementById('trTipoDocumento');
+                            if (tr) tr.style.display = 'table-row';
                         }''')
-                        clicou_busca = True
-                        print('   ✅ Busca movimentação (fallback JS)')
+                    except Exception:
+                        pass
+                    try:
+                        sel_tp = page.wait_for_selector(
+                            'select[name="codTipoDocumento"]', timeout=8000)
+                        if sel_tp:
+                            # Match por label 'Intimação' (exclui
+                            # Videoconferência/Telefônica) — label mais curto.
+                            candidatos = []
+                            for opt in sel_tp.query_selector_all('option'):
+                                v = (opt.get_attribute('value') or '').strip()
+                                t = (opt.inner_text() or '').strip()
+                                tl = t.lower()
+                                if v and 'intima' in tl and 'videoconf' not in tl \
+                                        and 'telef' not in tl:
+                                    candidatos.append((len(t), v, t))
+                            if candidatos:
+                                candidatos.sort()
+                                sel_tp.select_option(candidatos[0][1])
+                                time.sleep(0.3)
+                                confirmado = page.locator(
+                                    'select[name="codTipoDocumento"]').input_value()
+                                selecionou_grid = True
+                                print(f'   ✅ Tipo doc: "{candidatos[0][2]}" '
+                                      f'→ valor {candidatos[0][1]} (confirmado={confirmado})')
+                            else:
+                                # Debug: mostra opções disponíveis p/ diagnosticar
+                                opts = [f'{o.get_attribute("value")}={o.inner_text().strip()}'
+                                        for o in sel_tp.query_selector_all('option')]
+                                print('   ⚠️ "Intimação" não achada no codTipoDocumento.'
+                                      f' Opções: {opts[:30]}')
                     except Exception as e:
-                        print(f'   ⚠️ Busca movimentação não encontrada: {e}')
-                time.sleep(2)
-
-                # Tratar alerta
-                try:
-                    alert = page.wait_for_event('dialog', timeout=5000)
-                    print(f'   ⚠️ Alerta: {alert.message}')
-                    alert.accept()
-                    time.sleep(2)
-                except Exception:
-                    pass
-
-                # ─── PASSO 3: Selecionar Tipo de Documento = Intimação ───
-                # Jeito dos fluxos que FUNCIONAM (executar_requests — certidão
-                # 37, CUMPRIMENTO 55, etc.): desoculta a linha #trTipoDocumento,
-                # espera o select codTipoDocumento popular e seleciona a opção
-                # pelo LABEL (não por valor fixo — '5' hardcoded era o bug).
-                # Clique em link a:has-text("Intimação") NÃO funciona: casa com
-                # link de menu e não seleciona nada (falso "✅" no log).
-                selecionou_grid = False
-                try:
-                    page.evaluate('''() => {
-                        var tr = document.getElementById('trTipoDocumento');
-                        if (tr) tr.style.display = 'table-row';
-                    }''')
-                except Exception:
-                    pass
-                try:
-                    sel_tp = page.wait_for_selector(
-                        'select[name="codTipoDocumento"]', timeout=8000)
-                    if sel_tp:
-                        # Match por label 'Intimação' (exclui
-                        # Videoconferência/Telefônica) — label mais curto.
-                        candidatos = []
-                        for opt in sel_tp.query_selector_all('option'):
-                            v = (opt.get_attribute('value') or '').strip()
-                            t = (opt.inner_text() or '').strip()
-                            tl = t.lower()
-                            if v and 'intima' in tl and 'videoconf' not in tl \
-                                    and 'telef' not in tl:
-                                candidatos.append((len(t), v, t))
-                        if candidatos:
-                            candidatos.sort()
-                            sel_tp.select_option(candidatos[0][1])
-                            time.sleep(0.3)
-                            confirmado = page.locator(
-                                'select[name="codTipoDocumento"]').input_value()
-                            selecionou_grid = True
-                            print(f'   ✅ Tipo doc: "{candidatos[0][2]}" '
-                                  f'→ valor {candidatos[0][1]} (confirmado={confirmado})')
-                        else:
-                            # Debug: mostra opções disponíveis p/ diagnosticar
-                            opts = [f'{o.get_attribute("value")}={o.inner_text().strip()}'
-                                    for o in sel_tp.query_selector_all('option')]
-                            print('   ⚠️ "Intimação" não achada no codTipoDocumento.'
-                                  f' Opções: {opts[:30]}')
-                except Exception as e:
-                    print(f'   ⚠️ codTipoDocumento: {e}')
-                time.sleep(0.5)
-                # Alerta opcional após selecionar tipo doc
-                try:
-                    alert = page.wait_for_event('dialog', timeout=3000)
-                    print(f'   ⚠️ Alerta: {alert.message}')
-                    alert.accept()
-                    time.sleep(1)
-                except Exception:
-                    pass
+                        print(f'   ⚠️ codTipoDocumento: {e}')
+                    time.sleep(0.5)
+                    # Alerta opcional após selecionar tipo doc
+                    try:
+                        alert = page.wait_for_event('dialog', timeout=3000)
+                        print(f'   ⚠️ Alerta: {alert.message}')
+                        alert.accept()
+                        time.sleep(1)
+                    except Exception:
+                        pass
 
                 # ─── PASSO 4: Preencher observação ───
                 try:
@@ -2655,6 +2678,50 @@ class MovimentacaoService:
             print(f'   ⚠️ Erro ao registrar cumprimento: {e}')
 
         return sucesso
+
+    def executar_intimacao_record(self, record: MovimentacaoRecord) -> bool:
+        """Executa 11383 + intimação eletrônica da parte autora.
+
+        Usado pelo decurso de pagamento quando o prazo ainda não venceu.
+        Não passa por AR, mandado ou precatória: o chamador só cria este
+        registro quando a parte autora tem advogado/e-mail/DJEN.
+        """
+        proc_projudi = self._extrair_numero_projudi(record)
+        if not proc_projudi:
+            record.status = 'falha'
+            record.save(update_fields=['status'])
+            self._log(record, 'erro', 'Número Projudi não encontrado.')
+            return False
+        record.status = 'processando'
+        record.save(update_fields=['status'])
+        try:
+            ok = self.executar_com_intimacao(
+                processo_numero=record.numero_processo_cnj or record.processo,
+                observacao=record.observacao,
+                codigo_mov=record.codigo_movimentacao or '11383',
+                descricao_mov=(
+                    record.descricao_movimentacao or 'Cumprimento de Ofício'
+                ),
+                proc_projudi=proc_projudi,
+                prazo_intimacao='2',   # 5 dias (ciência)
+                motivo_intimacao='3',  # Ciência
+                polo_intimacao='autores',
+                forcar_eletronica=True,
+                natureza_override='civel',
+                tipo_intimacao='geral',
+            )
+        except Exception as exc:
+            ok = False
+            self._log(record, 'erro', f'Erro na intimação: {str(exc)[:200]}')
+        record.status = 'cumprido' if ok else 'falha'
+        record.save(update_fields=['status'])
+        self._log(
+            record,
+            'execucao' if ok else 'erro',
+            ('11383 + intimação eletrônica da parte autora executadas.'
+             if ok else 'Falha ao executar 11383 + intimação da parte autora.'),
+        )
+        return ok
 
     # =================================================================
     # FALLBACK DE MANDADO — EXPEDIR o mandado COMPLETO (tipoCumprimento=4

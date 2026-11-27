@@ -54,6 +54,32 @@ def _evento_recurso_certidao(html):
     return m.group(1) if m else ''
 
 
+def _texto_intimacao_decurso(resultado, modelo='voluntario'):
+    """Texto único da observação da 11383 e da intimação da parte autora."""
+    if modelo == 'remanescente':
+        objeto = (
+            'pagamento do débito remanescente pelo(a)(s) executado(a)(s)'
+        )
+    else:
+        objeto = 'pagamento voluntário do débito'
+    data_intimacao = resultado['data_intimacao'].strftime('%d/%m/%Y')
+    ultimo_dia = resultado['ultimo_dia'].strftime('%d/%m/%Y')
+    data_decurso = resultado['data_decurso'].strftime('%d/%m/%Y')
+    canal = (
+        'DJEN' if resultado.get('meio') == 'eletronico'
+        else (resultado.get('meio_label') or 'intimação')
+    )
+    return (
+        f'Intime-se a parte autora para ciência de que o prazo de 15 '
+        f'(quinze) dias para {objeto}, referente ao Despacho (evento n.º '
+        f'{resultado["evento_despacho"]}), cuja intimação ocorreu em '
+        f'{data_intimacao} (evento {resultado["evento_intimacao"]} — '
+        f'{canal}), ainda não decorreu.\n\n'
+        f'Último dia do prazo: {ultimo_dia}.\n'
+        f'O decurso do prazo ocorrerá em {data_decurso}.'
+    )
+
+
 class CertidaoPeticaoQueueView(LoginRequiredMixin, TemplateView):
     template_name = 'projudi/certidao_peticoes.html'
 
@@ -1258,65 +1284,114 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
                 modelo=modelo,
             ))
 
-        # Enquanto o prazo não decorrer, não há certidão de decurso:
-        # registra apenas uma observação na movimentação 11383 informando
-        # a data em que o prazo vencerá.
-        origem_despacho = (
-            ', localizado automaticamente'
-            if resultado.get('despacho_auto') else ''
-        )
+        # Enquanto o prazo não decorrer, não há certidão de decurso.
+        # Mostra uma prévia do texto e só executa depois da confirmação:
+        # 11383 (Cumprimento de Ofício) + intimação eletrônica da parte
+        # autora. Nunca usa AR, mandado ou precatória.
         if date.today() < resultado['data_decurso']:
             from .movimentacao_service import MovimentacaoService
 
-            if modelo == 'remanescente':
-                inicio_obs = (
-                    'Certifico que o prazo de 15 (quinze) dias para '
-                    'pagamento do débito remanescente pelo(a)(s) '
-                    'executado(a)(s), referente ao Despacho (evento n.º '
+            observacao_decurso = _texto_intimacao_decurso(resultado, modelo)
+            canais_autora = resultado.get('parte_autora_canais') or []
+            pode_intimar = bool(
+                resultado.get('parte_autora_canal_eletronico')
+            )
+            confirmar = (request.POST.get('confirmar') or '').strip()
+
+            if confirmar == 'intimar' and not pode_intimar:
+                messages.warning(
+                    request,
+                    'A parte autora não possui advogado, e-mail ou DJEN. '
+                    'A intimação eletrônica não será feita e nenhum AR, '
+                    'mandado ou precatória será gerado.'
                 )
-            else:
-                inicio_obs = (
-                    'Certifico que o prazo de 15 (quinze) dias para o '
-                    'pagamento voluntário do débito ref. ao Cumprimento de '
-                    'Sentença/Impugnação, Despacho (evento n.º '
+                previa = {
+                    'texto': observacao_decurso,
+                    'parte_autora': (
+                        resultado.get('parte_autora') or 'parte autora'
+                    ),
+                    'canais': ', '.join(canais_autora),
+                    'pode_intimar': pode_intimar,
+                }
+                return render(request, self.template_name, self._contexto(
+                    processo=processo, evento=evento, executado=executado,
+                    evento_requerimento=evento_requerimento,
+                    modelo=modelo, previa=previa,
+                ))
+
+            if confirmar in ('intimar', 'so_11383'):
+                service = MovimentacaoService(request.user)
+                record = service.importar(
+                    processo_numero=resultado['processo'],
+                    act_verb=(
+                        'intimar' if confirmar == 'intimar'
+                        else 'certifique-se'
+                    ),
+                    observacao=observacao_decurso,
+                    categoria=(
+                        'intimacao' if confirmar == 'intimar'
+                        else 'registro'
+                    ),
+                    origem='movimentacao',
+                    processo_cnj=resultado['processo'],
+                    parte_nome=resultado.get('parte_autora') or '',
+                    parte_papel=resultado.get('parte_autora_papel') or '',
+                    url_processo=resultado['url'],
+                    codigo_movimentacao='11383',
+                    descricao_movimentacao='Cumprimento de Ofício',
                 )
-            observacao_decurso = (
-                inicio_obs
-                + f'{resultado["evento_despacho"]}), ainda não decorreu. '
-                'Data da intimação: '
-                f'{resultado["data_intimacao"].strftime("%d/%m/%Y")} '
-                f'(evento {resultado["evento_intimacao"]}); '
-                'último dia do prazo: '
-                f'{resultado["ultimo_dia"].strftime("%d/%m/%Y")}; '
-                'o decurso do prazo ocorrerá em '
-                f'{resultado["data_decurso"].strftime("%d/%m/%Y")}.'
-            )
-            record = MovimentacaoService(request.user).importar(
-                processo_numero=resultado['processo'],
-                act_verb='certifique-se',
-                observacao=observacao_decurso,
-                categoria='registro',
-                origem='movimentacao',
-                processo_cnj=resultado['processo'],
-                parte_nome=resultado['executado'],
-                parte_papel=resultado.get('parte_papel') or '',
-                url_processo=resultado['url'],
-                codigo_movimentacao='11383',
-                descricao_movimentacao='Cumprimento de Ofício',
-            )
-            logging.getLogger('projudi.certidoes').info(
-                'Decurso de pagamento ainda não ocorrido | processo=%s | %s',
-                resultado['processo'], observacao_decurso,
-            )
-            messages.info(
-                request,
-                '⏳ O prazo de 15 dias ainda não decorreu. Foi criada a '
-                f'movimentação #{record.id} (código 11383) informando que o '
-                'decurso ocorrerá em '
-                f'{resultado["data_decurso"].strftime("%d/%m/%Y")}. '
-                'Confira e execute na Fila de Movimentações.'
-            )
-            return HttpResponseRedirect(reverse('projudi:movimentacao_fila'))
+                logger = logging.getLogger('projudi.certidoes')
+                logger.info(
+                    'Decurso de pagamento ainda não ocorrido | '
+                    'processo=%s | confirmar=%s | %s',
+                    resultado['processo'], confirmar, observacao_decurso,
+                )
+                if confirmar == 'so_11383':
+                    messages.info(
+                        request,
+                        '📝 Movimentação 11383 criada somente com a '
+                        f'observação. O texto está no registro #{record.id}; '
+                        'execute pela Fila de Movimentações.'
+                    )
+                    return HttpResponseRedirect(reverse(
+                        'projudi:movimentacao_detail',
+                        args=[record.pk],
+                    ))
+
+                sucesso = service.executar_intimacao_record(record)
+                if sucesso:
+                    messages.success(
+                        request,
+                        '✅ Movimentação 11383 e intimação eletrônica da '
+                        'parte autora executadas. O decurso está previsto '
+                        'para '
+                        f'{resultado["data_decurso"].strftime("%d/%m/%Y")}.'
+                    )
+                else:
+                    messages.error(
+                        request,
+                        '❌ A movimentação 11383 + intimação não foi '
+                        'confirmada. Confira o registro e os logs; nenhum '
+                        'AR, mandado ou precatória foi gerado.'
+                    )
+                return HttpResponseRedirect(reverse(
+                    'projudi:movimentacao_detail',
+                    args=[record.pk],
+                ))
+
+            previa = {
+                'texto': observacao_decurso,
+                'parte_autora': (
+                    resultado.get('parte_autora') or 'parte autora'
+                ),
+                'canais': ', '.join(canais_autora),
+                'pode_intimar': pode_intimar,
+            }
+            return render(request, self.template_name, self._contexto(
+                processo=processo, evento=evento, executado=executado,
+                evento_requerimento=evento_requerimento, modelo=modelo,
+                previa=previa,
+            ))
 
         try:
             template = DocumentTemplate.objects.get(

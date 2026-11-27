@@ -142,6 +142,26 @@ class DecursoPagamentoService:
                 )
             }
 
+        parte_autora = next(
+            (
+                p for p in partes
+                if (p.get('tipo') or '').upper() in (
+                    'EXEQUENTE', 'PROMOVENTE',
+                )
+                or 'PROMOVENTE' in (p.get('papel') or '').upper()
+            ),
+            None,
+        )
+        canais_autora = []
+        if parte_autora:
+            if parte_autora.get('domicilio_cnj'):
+                canais_autora.append('DJEN')
+            if parte_autora.get('recebe_intimacao_email'):
+                canais_autora.append('e-mail')
+            if parte_autora.get('tem_advogado'):
+                canais_autora.append('advogado')
+        canal_autora_eletronico = bool(canais_autora)
+
         try:
             prazo = CumprimentoService(self.user).contar_prazo_por_fluxo(
                 intima['meio'], intima['data'], dias,
@@ -167,6 +187,14 @@ class DecursoPagamentoService:
             ),
             'executado': parte['nome'],
             'parte_papel': parte.get('papel') or '',
+            'parte_autora': (
+                parte_autora['nome'] if parte_autora else 'parte autora'
+            ),
+            'parte_autora_papel': (
+                parte_autora.get('papel') if parte_autora else ''
+            ) or 'PROMOVENTE',
+            'parte_autora_canais': canais_autora,
+            'parte_autora_canal_eletronico': canal_autora_eletronico,
             'evento_intimacao': intima['evento'],
             'data_intimacao': intima['data'],
             'meio': intima['meio'],

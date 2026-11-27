@@ -24,11 +24,60 @@
     o despacho que determinou o pagamento em 15 dias. Se não conseguir
     identificar, pede para informar o evento manualmente. Depois confere se
     o prazo já decorreu: se decorreu, gera a certidão; se ainda não decorreu,
-    <strong>não gera certidão</strong> e cria uma observação na movimentação
-    <strong>tipo 11383</strong> informando a data do decurso. Confirme que o
-    executado não efetuou o pagamento.
+    <strong>não gera certidão</strong>. Mostra uma prévia do texto e permite
+    criar a movimentação <strong>11383</strong> com intimação eletrônica da
+    parte autora (advogado, e-mail ou DJEN), sem AR, mandado ou precatória.
+    Confirme que o executado não efetuou o pagamento.
 </div>
 
+{% if previa %}
+<div style="background:#fff; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,.08); padding:20px; max-width:820px;">
+    <h2 style="margin:0 0 6px; font-size:18px; color:#1e3a5f;">⏳ Prazo ainda não decorreu</h2>
+    <p style="font-size:13px; color:#6b7280; margin:0 0 14px;">
+        Confira o texto e o destinatário antes de enviar ao Projudi.
+    </p>
+
+    <div style="font-size:13px; color:#374151; margin-bottom:12px;">
+        <div><strong>Destinatário:</strong> {{ previa.parte_autora }}</div>
+        <div>
+            <strong>Canal eletrônico:</strong>
+            {% if previa.canais %}{{ previa.canais }}{% else %}não identificado{% endif %}
+        </div>
+    </div>
+
+    {% if not previa.pode_intimar %}
+    <div style="background:#fef3c7; border-left:4px solid #f59e0b; border-radius:6px; padding:10px 12px; margin-bottom:12px; font-size:12px; color:#92400e; line-height:1.5;">
+        A parte autora não possui advogado, e-mail ou DJEN cadastrado.
+        A intimação eletrônica está bloqueada e nenhum AR, mandado ou
+        precatória será gerado.
+    </div>
+    {% endif %}
+
+    <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px; margin-bottom:14px;">
+        <div style="font-size:12px; font-weight:700; color:#475569; margin-bottom:6px; text-transform:uppercase; letter-spacing:.03em;">Texto da movimentação / intimação</div>
+        <pre style="white-space:pre-wrap; margin:0; font-family:inherit; font-size:13px; color:#1f2937; line-height:1.55;">{{ previa.texto }}</pre>
+    </div>
+
+    <form method="post" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        {% csrf_token %}
+        <input type="hidden" name="processo" value="{{ processo }}">
+        <input type="hidden" name="evento" value="{{ evento }}">
+        <input type="hidden" name="executado" value="{{ executado }}">
+        <input type="hidden" name="modelo" value="{{ modelo }}">
+        <input type="hidden" name="evento_requerimento" value="{{ evento_requerimento }}">
+
+        {% if previa.pode_intimar %}
+        <button type="submit" name="confirmar" value="intimar" class="btn" style="background:#059669; color:white;">
+            ✅ Criar 11383 + intimar parte autora
+        </button>
+        {% endif %}
+        <button type="submit" name="confirmar" value="so_11383" class="btn btn-orange">
+            📝 Apenas criar 11383
+        </button>
+        <a href="{% url 'projudi:certidao_decurso_pagamento' %}" class="btn btn-outline">Cancelar</a>
+    </form>
+</div>
+{% else %}
 <div style="background:#fff; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,.08); padding:20px; max-width:820px;">
     <form method="post">
         {% csrf_token %}
@@ -98,6 +147,7 @@
         </button>
     </form>
 </div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
