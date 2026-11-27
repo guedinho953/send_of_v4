@@ -339,10 +339,11 @@ petição e os fallbacks da intimação. O sistema usa o
 e a intimação correspondente. A certidão é registrada com
 `origem='movimentacao'` e aparece na aba **Movimentações**.
 
-A fila de movimentações (`/projudi/movimentacoes/`) também tem o botão
-**Gerar certidão** em cada linha. Ele abre o formulário com o processo e a
-URL da movimentação já preenchidos; basta completar protocolo, segurança e
-eventos.
+A aba **Movimentações** do módulo de certidões também tem o atalho
+**📥 Fila de movimentações**, que abre `/projudi/movimentacoes/`. Nessa
+fila, cada linha tem o botão **Gerar certidão**: ele abre o formulário com
+o processo e a URL da movimentação já preenchidos; basta completar
+protocolo, segurança e eventos.
 
 ## Fila de petições com escolha manual
 

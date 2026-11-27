@@ -67,6 +67,12 @@ class ImpugnacaoEmbargosViewTest(TestCase):
         self.assertContains(
             resposta, 'Nova certidão de impugnação/embargos (15 dias)')
 
+    def test_aba_movimentacoes_tem_link_para_a_fila_de_movimentacoes(self):
+        resposta = self.client.get(reverse('projudi:certidao_movimentacoes'))
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, reverse('projudi:movimentacoes'))
+        self.assertContains(resposta, 'Fila de movimentações')
+
     @patch('projudi.impugnacao_embargos_views.call_command')
     @patch('projudi.impugnacao_embargos_views.DecursoPagamentoService.analisar')
     def test_gera_certidao_na_aba_movimentacoes(self, analisar, comando):
