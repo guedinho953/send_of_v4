@@ -1586,12 +1586,9 @@ class MovimentacaoService:
         _time.sleep(1)
         multipart = {}
         for k, v in payload.items():
-            # A observação carrega acentos (ç, ã, é...). Envia em UTF-8 para
-            # o Projudi renderizar corretamente; demais campos seguem latin-1.
-            if k == 'observacao':
-                val_bytes = str(v).encode('utf-8', errors='replace')
-            else:
-                val_bytes = str(v).encode('latin-1', errors='replace')
+            # O Projudi recebe os campos do Mov581 em latin-1 (ISO-8859-1).
+            # A observação também segue latin-1 para não gerar mojibake.
+            val_bytes = str(v).encode('latin-1', errors='replace')
             multipart[k] = (None, val_bytes)
 
         resp = session.post(post_url, files=multipart, timeout=15)
