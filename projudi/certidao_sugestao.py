@@ -105,6 +105,8 @@ def sugerir_certidao(user, processo, documento_url, processo_url=''):
         'processo': processo,
         'tipo_certidao': '',
         'tipo_label': '',
+        'rag_encontrada': False,
+        'origem_sugestao': '',
         'rag_id': None,
         'rag_ato': '',
         'tipo_localizador': '',
@@ -138,6 +140,7 @@ def sugerir_certidao(user, processo, documento_url, processo_url=''):
     similares = buscar_cumprimentos_similares(texto, top_k=10)
     tipo = ''
     rag = None
+    origem = ''
     for similar in similares:
         candidata = RAGExample.objects.filter(id=similar['id']).first()
         if not candidata:
@@ -145,11 +148,12 @@ def sugerir_certidao(user, processo, documento_url, processo_url=''):
         if candidata.tipo_certidao:
             tipo = candidata.tipo_certidao
             rag = candidata
+            origem = 'rag'
             break
     if not tipo:
         tipo = _tipo_por_texto(texto)
-        if tipo and similares:
-            rag = RAGExample.objects.filter(id=similares[0]['id']).first()
+        if tipo:
+            origem = 'texto'
 
     if not tipo:
         resultado['mensagem'] = 'Nenhuma RAG com certidão configurada.'
@@ -165,6 +169,8 @@ def sugerir_certidao(user, processo, documento_url, processo_url=''):
     resultado.update({
         'tipo_certidao': tipo,
         'tipo_label': label,
+        'rag_encontrada': origem == 'rag',
+        'origem_sugestao': origem,
         'rag_id': rag.id if rag else None,
         'rag_ato': (rag.despacho_ato[:160] if rag else ''),
         'tipo_localizador': tipo_localizador,

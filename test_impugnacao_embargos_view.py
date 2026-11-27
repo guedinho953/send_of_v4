@@ -147,12 +147,34 @@ class ImpugnacaoEmbargosViewTest(TestCase):
             self.user, proc.number, 'https://projudi/documento')
         self.assertEqual(
             dados['tipo_certidao'], 'impugnacao_embargos_execucao')
+        self.assertTrue(dados['rag_encontrada'])
+        self.assertEqual(dados['origem_sugestao'], 'rag')
         self.assertEqual(dados['tipo_localizador'], '15286')
         self.assertEqual(dados['localizador'], '1')
         self.assertEqual(dados['tipo_conclusao'], '18')
         self.assertEqual(dados['juiz_conclusao'], '41201')
         self.assertIn('impugnacao-embargos', dados['url_form'])
         self.assertIn('tipo_conclusao=18', dados['url_form'])
+
+    @patch('projudi.services.ProjudiService._get_session_from_cookies',
+           return_value=(object(), {}))
+    @patch('processes.movimentacoes_service.buscar_cumprimentos_similares',
+           return_value=[])
+    @patch('projudi.certidao_sugestao._texto_documento', return_value=(
+        'Certifique-se a tempestividade dos embargos à execução e a '
+        'segurança do Juízo. Intime-se o embargado para manifestação.'))
+    def test_sugestao_sem_rag_marca_fallback_de_texto(
+            self, _texto, _buscar, _sessao):
+        from projudi.certidao_sugestao import sugerir_certidao
+
+        dados = sugerir_certidao(
+            self.user, '0000001-11.2026.8.05.0191',
+            'https://projudi/documento')
+
+        self.assertEqual(
+            dados['tipo_certidao'], 'impugnacao_embargos_execucao')
+        self.assertFalse(dados['rag_encontrada'])
+        self.assertEqual(dados['origem_sugestao'], 'texto')
 
     def test_fallback_de_tipo_por_texto(self):
         from projudi.certidao_sugestao import _tipo_por_texto

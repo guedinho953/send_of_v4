@@ -306,6 +306,16 @@ document.querySelectorAll('form.fila-mov-form').forEach(function (form) {
         tipo.dispatchEvent(new Event('change'));
     }
 
+    function aplicarTipoFallback(valor) {
+        if (!tipo || tipo.value) return;
+        const encontrada = opcoesOriginais.find(function (opcao) {
+            return opcao.valor === valor;
+        });
+        if (!encontrada) return;
+        tipo.value = encontrada.valor;
+        tipo.dispatchEvent(new Event('change'));
+    }
+
     if (mostrarTodas) {
         mostrarTodas.addEventListener('click', function (evento) {
             evento.preventDefault();
@@ -334,6 +344,7 @@ document.querySelectorAll('form.fila-mov-form').forEach(function (form) {
     }
 
     form.aplicarRag = aplicarRag;
+    form.aplicarTipoFallback = aplicarTipoFallback;
     if (tipo) tipo.addEventListener('change', atualizarTipo);
     if (assinante) assinante.addEventListener('change', atualizarAssinante);
     atualizarTipo();
@@ -354,15 +365,18 @@ document.querySelectorAll('.sugestao-certidao').forEach(async function (el) {
         const dados = await resposta.json();
         const linha = el.closest('tr.mov-row');
         if (linha) {
-            linha.dataset.temRag = dados.tipo_certidao ? '1' : '0';
+            linha.dataset.temRag = dados.rag_encontrada ? '1' : '0';
             if (typeof window.aplicarFiltroRag === 'function') {
                 window.aplicarFiltroRag();
             }
         }
         const form = document.getElementById(el.dataset.formId || '');
         if (form) {
-            if (typeof form.aplicarRag === 'function') {
+            if (dados.rag_encontrada
+                    && typeof form.aplicarRag === 'function') {
                 form.aplicarRag(dados.tipo_certidao);
+            } else if (typeof form.aplicarTipoFallback === 'function') {
+                form.aplicarTipoFallback(dados.tipo_certidao);
             }
             [
                 ['tipo_localizador', dados.tipo_localizador],
@@ -382,6 +396,13 @@ document.querySelectorAll('.sugestao-certidao').forEach(async function (el) {
         const nome = document.createElement('strong');
         nome.textContent = dados.tipo_label;
         el.appendChild(nome);
+        if (!dados.rag_encontrada) {
+            const semRag = document.createElement('small');
+            semRag.style.display = 'block';
+            semRag.style.color = '#a16207';
+            semRag.textContent = 'sugestão por texto (sem RAG)';
+            el.appendChild(semRag);
+        }
         if (dados.rag_id) {
             const rag = document.createElement('small');
             rag.style.display = 'block';
