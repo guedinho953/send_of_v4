@@ -32,6 +32,14 @@ TIPOS = {
             'localiza automaticamente a intimação do executado.'
         ),
     },
+    'decurso_debito_remanescente': {
+        'label': 'Decurso do Prazo para Pagamento de Débito Remanescente',
+        'dias': 15,
+        'descricao': (
+            'Certifica o decurso do prazo de 15 dias para pagamento do '
+            'débito remanescente, com despacho, intimação e publicação.'
+        ),
+    },
     'recurso_inominado': {
         'label': 'Recurso Inominado',
         'dias': 10,

@@ -110,6 +110,10 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
             return CertidaoDecursoPagamentoView().processar(
                 request, processo,
             )
+        if tipo == 'decurso_debito_remanescente':
+            return CertidaoDecursoPagamentoView().processar(
+                request, processo, modelo='remanescente',
+            )
 
         data_envio = _parse_data_br(request.POST.get('data_envio'))
         data_inicio = _parse_data_br(request.POST.get('data_inicio'))
@@ -1264,11 +1268,21 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
         if date.today() < resultado['data_decurso']:
             from .movimentacao_service import MovimentacaoService
 
+            if modelo == 'remanescente':
+                inicio_obs = (
+                    'Certifico que o prazo de 15 (quinze) dias para '
+                    'pagamento do débito remanescente pelo(a)(s) '
+                    'executado(a)(s), referente ao Despacho (evento n.º '
+                )
+            else:
+                inicio_obs = (
+                    'Certifico que o prazo de 15 (quinze) dias para o '
+                    'pagamento voluntário do débito ref. ao Cumprimento de '
+                    'Sentença/Impugnação, Despacho (evento n.º '
+                )
             observacao_decurso = (
-                'Certifico que o prazo de 15 (quinze) dias para o pagamento '
-                'voluntário do débito ref. ao Cumprimento de '
-                'Sentença/Impugnação, Despacho (evento n.º '
-                f'{resultado["evento_despacho"]}), ainda não decorreu. '
+                inicio_obs
+                + f'{resultado["evento_despacho"]}), ainda não decorreu. '
                 'Data da intimação: '
                 f'{resultado["data_intimacao"].strftime("%d/%m/%Y")} '
                 f'(evento {resultado["evento_intimacao"]}); '

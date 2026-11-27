@@ -47,6 +47,7 @@
     <h1 class="section-title" style="font-size:22px; margin-bottom:6px;">📥 Fila de Petições</h1>
     <div style="display:flex; gap:8px;">
         <a href="{% url 'projudi:certidao_decurso_pagamento' %}" class="btn btn-outline">📄 Decurso do Prazo de Pagamento Voluntário</a>
+        <a href="{% url 'projudi:certidao_decurso_pagamento' %}?modelo=remanescente" class="btn btn-outline">📄 Decurso — Débito Remanescente</a>
         <a href="?atualizar=1" class="btn btn-outline">🔄 Atualizar fila</a>
         <a href="{% url 'projudi:certidao_dashboard' %}" class="btn btn-outline">← Certidões</a>
     </div>
