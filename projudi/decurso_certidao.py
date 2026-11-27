@@ -13,20 +13,36 @@ from projudi.models import PrazoDjenRecord
 NOME_TEMPLATE = 'Certidão de Decurso de Prazo para Pagamento Voluntário'
 
 
+def _fmt_data(valor):
+    if isinstance(valor, date):
+        return valor.strftime('%d/%m/%Y')
+    if isinstance(valor, str) and valor.strip():
+        for formato in ('%Y-%m-%d', '%d/%m/%Y', '%d/%m/%y'):
+            try:
+                return datetime.strptime(
+                    valor.strip()[:10], formato).strftime('%d/%m/%Y')
+            except ValueError:
+                continue
+    return ''
+
+
 def texto_certidao(resultado) -> str:
     """Texto público da certidão (sem a memória de cálculo)."""
-    evento_int = (
-        f' (evento {resultado["evento_intimacao"]})'
-        if resultado.get('evento_intimacao') else ''
-    )
+    info = resultado.get('prazo_info') or {}
+    publicacao = _fmt_data(
+        resultado.get('data_publicacao')
+        or info.get('data_publicacao'))
+    inicio = _fmt_data(
+        resultado.get('data_inicio_contagem')
+        or info.get('data_inicio_contagem')
+        or resultado.get('data_inicio'))
+    decurso = resultado['ultimo_dia'].strftime('%d/%m/%Y')
     return (
-        'Certifico, para os devidos fins, o decurso do prazo de 15 (quinze) '
-        'dias para o pagamento voluntário do débito referente ao Cumprimento '
-        'de Sentença/Impugnação. '
-        f'Despacho (evento n.º {resultado["evento_despacho"]}), data da '
-        f'intimação: {resultado["data_intimacao"].strftime("%d/%m/%Y")}'
-        f'{evento_int}, tendo decorrido o prazo em '
-        f'{resultado["data_decurso"].strftime("%d/%m/%Y")}.'
+        'Certifico, para os devidos fins, o DECURSO DO PRAZO de 15 (quinze) '
+        'dias úteis para cumprimento voluntário da sentença/impugnação '
+        'pelo(a)(s) executado(a)(s), referente à intimação eletrônica '
+        f'(DJEN). Publicação em {publicacao or "?"}; início do prazo em '
+        f'{inicio or "?"}; decurso em {decurso}.'
     )
 
 
@@ -46,7 +62,7 @@ def motivo(resultado) -> str:
         f'{resultado["data_intimacao"].strftime("%d/%m/%Y")} '
         f'({resultado.get("meio_label") or resultado.get("meio")})',
         f'Início do prazo: '
-        f'{resultado["data_inicio"].strftime("%d/%m/%Y")}',
+        f'{(resultado.get("data_inicio_contagem") or resultado["data_inicio"]).strftime("%d/%m/%Y")}',
         f'Último dia: {resultado["ultimo_dia"].strftime("%d/%m/%Y")}',
         f'Decurso: {resultado["data_decurso"].strftime("%d/%m/%Y")}',
     ])
@@ -54,12 +70,20 @@ def motivo(resultado) -> str:
 
 
 def _contexto(resultado, servidor, servidor_cargo):
+    info = resultado.get('prazo_info') or {}
     return {
         'processo': resultado['processo'],
         'executado': resultado['executado'],
         'evento_despacho': resultado['evento_despacho'],
         'evento_intimacao': resultado.get('evento_intimacao') or '',
         'data_intimacao': resultado['data_intimacao'].strftime('%d/%m/%Y'),
+        'data_publicacao': _fmt_data(
+            resultado.get('data_publicacao')
+            or info.get('data_publicacao')),
+        'data_inicio_contagem': _fmt_data(
+            resultado.get('data_inicio_contagem')
+            or info.get('data_inicio_contagem')
+            or resultado.get('data_inicio')),
         'ultimo_dia': resultado['ultimo_dia'].strftime('%d/%m/%Y'),
         'data_decurso': resultado['data_decurso'].strftime('%d/%m/%Y'),
         'data': date.today().strftime('%d/%m/%Y'),
@@ -128,7 +152,10 @@ def registrar(resultado, certidao_path='', servidor='',
         data_disponibilizacao=resultado['data_intimacao'],
         data_disponibilizacao_efetiva=resultado['data_intimacao'],
         data_publicacao=info.get('data_publicacao'),
-        data_inicio_contagem=resultado['data_inicio'],
+        data_inicio_contagem=(
+            resultado.get('data_inicio_contagem')
+            or info.get('data_inicio_contagem')
+            or resultado['data_inicio']),
         ultimo_dia=resultado['ultimo_dia'],
         data_decurso=resultado['data_decurso'],
         evento_origem=resultado['evento_despacho'],

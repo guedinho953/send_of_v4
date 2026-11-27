@@ -2,20 +2,20 @@
 
 ASSINANTES = {
     'ivan': (
-        'Ivan Guedes da Silva',
+        'IVAN GUEDES DA SILVA',
         'Secretário em Substituição',
     ),
     'ivan_servidor': (
-        'Ivan Guedes da Silva',
-        'Servidor de Secretaria 2',
+        'IVAN GUEDES DA SILVA',
+        'Servidor Secretaria 2',
     ),
     'mauro': (
-        'Mauro Emílio Viana da Silva Moreira',
+        'MAURO EMÍLIO VIANA DA SILVA MOREIRA',
         'Secretário',
     ),
 }
 
-ASSINANTE_PADRAO = 'ivan'
+ASSINANTE_PADRAO = 'ivan_servidor'
 
 
 def resolver_assinante(chave=None, nome='', cargo=''):

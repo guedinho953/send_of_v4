@@ -223,7 +223,17 @@ Opções úteis:
 A certidão é registrada na aba **Movimentações**, com status **DECURSO** e
 o evento do despacho em `evento_origem`. O template é
 `Certidão de Decurso de Prazo para Pagamento Voluntário`, criado pela
-migração `processes/0024`.
+migração `processes/0024` e revisado pela `processes/0025`.
+
+O texto público segue o modelo:
+
+> Certifico, para os devidos fins, o **DECURSO DO PRAZO** de 15 (quinze)
+> dias úteis para cumprimento voluntário da sentença/impugnação pelo(a)(s)
+> executado(a)(s), referente à **intimação eletrônica (DJEN)**. Publicação
+> em DD/MM/AAAA; início do prazo em DD/MM/AAAA; decurso em DD/MM/AAAA.
+
+A assinatura padrão é **IVAN GUEDES DA SILVA / Servidor Secretaria 2**,
+com a opção de trocar o subscritor na tela.
 
 ## Fila de petições com escolha manual
 

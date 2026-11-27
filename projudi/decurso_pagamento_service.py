@@ -298,6 +298,8 @@ class DecursoPagamentoService:
                 intima['meio'], intima['meio']),
             'dias': dias,
             'data_inicio': prazo.data_inicio,
+            'data_publicacao': prazo.data_publicacao,
+            'data_inicio_contagem': prazo.data_inicio_contagem,
             'ultimo_dia': prazo.ultimo_dia,
             'data_decurso': prazo.data_decurso,
             'prazo_info': prazo.to_dict(),

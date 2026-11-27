@@ -106,8 +106,11 @@ class DecursoPagamentoHelpersTest(TestCase):
 
     def test_texto_e_motivo(self):
         resultado = resultado_fake()
-        self.assertIn('15 (quinze) dias', texto_certidao(resultado))
-        self.assertIn('evento n.º 10', texto_certidao(resultado))
+        texto = texto_certidao(resultado)
+        self.assertIn('DECURSO DO PRAZO', texto)
+        self.assertIn('Publicação em 03/12/2026', texto)
+        self.assertIn('início do prazo em 04/12/2026', texto)
+        self.assertIn('decurso em 24/12/2026', texto)
         self.assertIn('Despacho: evento 10', motivo(resultado))
 
     def test_gerar_preview_e_registrar(self):
