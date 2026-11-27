@@ -99,9 +99,11 @@ Se o recurso for **INTEMPESTIVO**, o preparo não é verificado/mencionado.
 
 A tempestividade é apurada pela intimação **do recorrente**. O comando tenta
 identificar quem recorreu no PDF da petição (ou use `--recorrente`), filtra o
-DJEN pelo nome e usa a comunicação dirigida a essa parte. A linha `PARA` da
-certidão mostra `Promovente: ... / Promovido: ...`; se as partes não forem
-localizadas, a linha é omitida.
+DJEN pelo nome e usa a comunicação dirigida a essa parte. A linha `PARA` do
+recurso inominado mostra o **recorrente** (`Recorrente: ...`). A identificação
+prioriza rótulos explícitos e trechos do cabeçalho como “já devidamente
+qualificado”, “nos autos da Ação” e “vem interpor”. Se não for possível,
+use `--recorrente`; sem identificação, a linha cai no promovente/promovido.
 
 | Opção | Efeito |
 |-------|--------|
@@ -255,13 +257,29 @@ certidões de prazo:
 O template é `Certidão de Prazo — Modelo Base` (migração `processes/0028`).
 O texto público fica no formato:
 
+### Contrarrazões
+
+Para contrarrazões, a conclusão é pela **tempestividade** ou
+**intempestividade**, com o evento do recurso:
+
+> Certifico, para os devidos fins, a **TEMPESTIVIDADE** das contrarrazões ao
+> recurso inominado, evento 55. Publicação em 03/11/2026; início do prazo em
+> 04/11/2026; termo final em 18/11/2026.
+
+Se as contrarrazões forem protocoladas depois do termo final, o texto diz
+**INTEMPESTIVIDADE**. O evento 55 é o evento do recurso inominado informado
+na fila (campo “Evento da decisão/recurso”).
+
+### Impugnação/Cumprimento e Penhora
+
 > Certifico, para os devidos fins, o prazo de 15 (quinze) dias úteis para
 > impugnação/cumprimento de sentença, referente à **intimação eletrônica
 > (DJEN), evento 84**. Publicação em 03/11/2026; início do prazo em
 > 04/11/2026; termo final em 25/11/2026.
 
-O **evento da intimação** é sempre incluído. O protocolo da petição, a
-tempestividade e o cálculo completo ficam na **memória interna**, sem
+O **evento da intimação** é sempre incluído. Para contrarrazões, o protocolo
+e a memória de cálculo ficam no controle interno; para impugnação/penhora,
+o protocolo e a tempestividade também ficam na **memória interna** sem
 repetir no corpo público. O template usa o subscritor escolhido
 (`IVAN GUEDES DA SILVA / Servidor Secretaria 2` por padrão).
 

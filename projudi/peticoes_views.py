@@ -225,7 +225,7 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
                     origem='peticao',
                     peticao_documento=peticao_documento,
                     peticao_url=peticao_url,
-                    evento_recurso='infra',
+                    evento_recurso=evento_origem or 'infra',
                     evento_intimacao=evento_intimacao_final,
                 )
         except CommandError as exc:

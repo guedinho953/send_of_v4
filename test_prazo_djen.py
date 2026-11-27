@@ -92,11 +92,24 @@ class PrazoDjenTest(unittest.TestCase):
             TIPOS_PRAZO['contrarrazoes_inominado'],
             {
                 'tipo': 'contrarrazoes_inominado',
-                'evento_intimacao': '84',
+                'evento_recurso': '55',
             },
+            tempestivo=True,
         )
-        self.assertIn('10 (dez) dias úteis', texto10)
-        self.assertIn('contrarrazões ao recurso inominado', texto10)
+        self.assertIn(
+            'TEMPESTIVIDADE das contrarrazões ao recurso inominado, '
+            'evento 55', texto10)
+
+        texto10_int = _texto_publico_prazo(
+            res10,
+            TIPOS_PRAZO['contrarrazoes_inominado'],
+            {
+                'tipo': 'contrarrazoes_inominado',
+                'evento_recurso': '55',
+            },
+            tempestivo=False,
+        )
+        self.assertIn('INTEMPESTIVIDADE', texto10_int)
 
     def test_texto_certidao_inominado(self):
         grat = texto_certidao_inominado(

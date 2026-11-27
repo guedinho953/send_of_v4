@@ -37,6 +37,19 @@ MARIA DE FATIMA DE JESUS, já devidamente qualificada nos autos da Ação
 Indenizatória que move contra BANCO BRADESCO S.A., vem interpor recurso.
 """
 
+TEXTO_CAPTION_ADVERSARIO_PRIMEIRO = """
+Processo n. 0002888-28.2026.8.05.0191
+BANCO BRADESCO S.A.
+MARIA DE FATIMA DE JESUS, já devidamente qualificada nos autos da Ação,
+vem, tempestivamente, interpor recurso inominado.
+"""
+
+TEXTO_ROTULO_RECORRENTE = """
+RECURSO INOMINADO
+MARIA DE FATIMA DE JESUS figura como recorrida.
+RECORRENTE: BANCO BRADESCO S.A.
+"""
+
 
 class PartesInominadoTest(unittest.TestCase):
     def test_limpa_rotulo_colado_ao_nome(self):
@@ -62,6 +75,19 @@ class PartesInominadoTest(unittest.TestCase):
         self.assertEqual(
             achar_recorrente(TEXTO_PETICAO_MARIA, PARTES),
             'MARIA DE FATIMA DE JESUS',
+        )
+
+    def test_identifica_recorrente_mesmo_com_adversario_no_cabecalho(self):
+        self.assertEqual(
+            achar_recorrente(
+                TEXTO_CAPTION_ADVERSARIO_PRIMEIRO, PARTES),
+            'MARIA DE FATIMA DE JESUS',
+        )
+
+    def test_identifica_recorrente_por_rotulo(self):
+        self.assertEqual(
+            achar_recorrente(TEXTO_ROTULO_RECORRENTE, PARTES),
+            'BANCO BRADESCO S A',
         )
 
     def test_movimento_menciona_parte(self):

@@ -87,9 +87,14 @@ def achar_recorrente(texto_pdf, partes) -> str:
     """Identifica o recorrente a partir do texto da petição e das partes.
 
     Estratégia:
-    1. procura rótulos explícitos (RECORRENTE, AGRAVANTE, APELANTE...);
-    2. se não houver, usa a primeira parte citada no início da petição,
-       que normalmente é quem recorre (``FULANO, ... vem interpor``).
+    1. rótulos explícitos (RECORRENTE, AGRAVANTE, APELANTE...);
+    2. trechos típicos do cabeçalho: "já devidamente qualificado",
+       "nos autos da Ação", "por intermédio dos seus procuradores",
+       "inconformado" e "vem interpor";
+    3. primeira parte citada no início da petição, como fallback.
+
+    A pontuação evita confundir o recorrido com o recorrente quando o
+    cabeçalho cita o adversário primeiro.
     """
     texto = _normalizar_parte(texto_pdf)
     if not texto or not partes:
@@ -102,22 +107,50 @@ def achar_recorrente(texto_pdf, partes) -> str:
     if not nomes:
         return ''
 
-    # 1) Rótulos explícitos.
-    for rotulo in (
-            'RECORRENTE', 'AGRAVANTE', 'APELANTE', 'EMBARGANTE',
-            'IMPETRANTE', 'REQUERENTE'):
-        for match in re.finditer(rf'\b{rotulo}\b', texto):
-            janela = texto[match.end():match.end() + 450]
-            candidatos = [
-                (janela.find(p['nome_normalizado']), p)
-                for p in nomes
-                if p['nome_normalizado'] in janela
-            ]
-            candidatos = [c for c in candidatos if c[0] >= 0]
-            if candidatos:
-                return min(candidatos, key=lambda c: c[0])[1]['nome']
+    rotulos = (
+        'RECORRENTE', 'AGRAVANTE', 'APELANTE', 'EMBARGANTE',
+        'IMPETRANTE', 'REQUERENTE',
+    )
 
-    # 2) Primeira parte citada no começo da petição.
+    def pontuar(parte):
+        nome = parte['nome_normalizado']
+        score = 0
+        # Rótulo explícito perto do nome.
+        for rotulo in rotulos:
+            for match in re.finditer(rf'\b{rotulo}\b', texto):
+                janela = texto[match.end():match.end() + 450]
+                if nome in janela:
+                    score += 100
+                    break
+
+        # Marcadores imediatamente após o nome.
+        if re.search(
+            rf'{re.escape(nome)}\s+'
+            rf'(?:JA DEVIDAMENTE|NOS AUTOS|POR INTERMEDIO|INCONFORMAD)',
+            texto,
+        ):
+            score += 80
+
+        indice = texto.find(nome)
+        if indice >= 0:
+            score += 10
+            janela = texto[indice:indice + 500]
+            if 'VEM' in janela and 'INTERPOR' in janela:
+                score += 60
+        else:
+            indice = 10 ** 9
+        return score, indice
+
+    candidatos = [
+        (*pontuar(parte), parte['nome'])
+        for parte in nomes
+    ]
+    score, indice, nome = max(
+        candidatos, key=lambda c: (c[0], -c[1]))
+    if score > 0:
+        return nome
+
+    # Fallback: primeira parte citada no começo da petição.
     cabeca = texto[:3000]
     ocorrencias = []
     for parte in nomes:

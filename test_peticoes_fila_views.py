@@ -140,6 +140,7 @@ class PeticaoFilaViewsTest(TestCase):
         self.assertEqual(args[0], 'prazo_djen')
         self.assertEqual(kwargs['disponibilizacao'], '05/12/2026')
         self.assertEqual(kwargs['evento_intimacao'], '56')
+        self.assertEqual(kwargs['evento_recurso'], '55')
         localizar.assert_called_once()
 
     @patch('projudi.peticoes_views.localizar_intimacao_do_processo',

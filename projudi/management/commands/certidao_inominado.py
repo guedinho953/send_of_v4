@@ -62,7 +62,9 @@ class Command(BaseCommand):
                             help='Sobrescreve a data de disponibilização')
         parser.add_argument('--data-protocolo',
                             help='Sobrescreve a data do protocolo')
-        parser.add_argument('--parte', help='Nome da parte')
+        parser.add_argument(
+            '--parte',
+            help='Sobrescreve a linha PARA (default: Recorrente: ...)')
         parser.add_argument('--servidor', default='IVAN GUEDES DA SILVA')
         parser.add_argument('--habilitacao', choices=['regular', 'omitir'],
                             default='regular')
@@ -169,6 +171,13 @@ class Command(BaseCommand):
                 'Recorrente não identificado; a intimação considerada será a '
                 'mais recente. Use --recorrente para especificar.'))
 
+        parte_para = (
+            options.get('parte')
+            or (f'Recorrente: {recorrente}' if recorrente else partes_texto)
+        )
+        if parte_para:
+            self.stdout.write(f'PARA.....: {parte_para}')
+
         if options.get('data_disponibilizacao'):
             from projudi.management.commands.prazo_djen import _parse_data
             data_dispo = _parse_data(options['data_disponibilizacao'])
@@ -220,7 +229,7 @@ class Command(BaseCommand):
             evento_recurso=(str(evento_recurso) if evento_recurso else 'infra'),
             evento_intimacao=str(evento_intimacao),
             processo=processo,
-            parte=partes_texto or '',
+            parte=parte_para or '',
             origem='peticao',
             peticao_documento=options.get('peticao_documento') or '',
             peticao_url=peticao_url or '',

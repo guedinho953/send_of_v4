@@ -64,7 +64,7 @@ class Command(BaseCommand):
                             help='Nº do evento da intimação/DJEN')
         parser.add_argument('--data-disponibilizacao',
                             help='Sobrescreve a data de disponibilização')
-        parser.add_argument('--parte', help='Nome da parte (linha "PARA")')
+        parser.add_argument('--parte', help='Texto da linha PARA (default: recorrente)')
         parser.add_argument(
             '--recorrente',
             help='Nome do recorrente (se não for possível ler no PDF)')

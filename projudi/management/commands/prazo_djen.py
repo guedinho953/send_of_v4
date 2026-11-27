@@ -47,10 +47,27 @@ def _fmt_curta(data):
     return data.strftime('%d/%m/%Y') if data else ''
 
 
-def _texto_publico_prazo(res, info, options):
+def _texto_publico_prazo(res, info, options, tempestivo=None):
     """Texto público do modelo base para contrarrazões/impugnação."""
+    tipo = options.get('tipo')
+    evento_recurso = str(options.get('evento_recurso') or '').strip()
+    evento_txt = (
+        evento_recurso if evento_recurso.isdigit() else 'não informado'
+    )
+
+    if tipo == 'contrarrazoes_inominado' and tempestivo is not None:
+        conclusao = (
+            'TEMPESTIVIDADE' if tempestivo else 'INTEMPESTIVIDADE')
+        return (
+            'Certifico, para os devidos fins, a '
+            f'{conclusao} das contrarrazões ao recurso inominado, evento '
+            f'{evento_txt}. Publicação em '
+            f'{_fmt_curta(res.data_publicacao)}; início do prazo em '
+            f'{_fmt_curta(res.data_inicio_contagem)}; termo final em '
+            f'{_fmt_curta(res.ultimo_dia)}.'
+        )
+
     atos = {
-        'contrarrazoes_inominado': 'contrarrazões ao recurso inominado',
         'cumprimento_sentenca': 'impugnação/cumprimento de sentença',
         'pagamento_impugnacao_penhora': (
             'impugnação ao decurso do prazo da penhora'),
@@ -58,21 +75,21 @@ def _texto_publico_prazo(res, info, options):
             'cumprimento voluntário da sentença/impugnação'),
     }
     ato = atos.get(
-        options.get('tipo'),
+        tipo,
         str(info.get('ato') or 'manifestação'),
     )
     dias = int(res.prazo_dias)
     palavra = {10: 'dez', 15: 'quinze'}.get(dias, '')
     dias_txt = f'{dias} ({palavra})' if palavra else str(dias)
     evento = str(options.get('evento_intimacao') or '').strip()
-    evento_txt = (
+    evento_int_txt = (
         f', evento {evento}' if evento.isdigit()
         else ', evento não informado'
     )
     return (
         f'Certifico, para os devidos fins, o prazo de {dias_txt} dias '
         f'úteis para {ato}, referente à intimação eletrônica (DJEN)'
-        f'{evento_txt}. Publicação em {_fmt_curta(res.data_publicacao)}; '
+        f'{evento_int_txt}. Publicação em {_fmt_curta(res.data_publicacao)}; '
         f'início do prazo em {_fmt_curta(res.data_inicio_contagem)}; '
         f'termo final em {_fmt_curta(res.ultimo_dia)}.'
     )
@@ -195,7 +212,8 @@ class Command(BaseCommand):
             )
             template_nome = 'Certidão de Recurso Inominado (COJE)'
         elif options['tipo'] != 'inominado':
-            texto_certidao = _texto_publico_prazo(res, info, options)
+            texto_certidao = _texto_publico_prazo(
+                res, info, options, tempestivo=tempestivo)
             template_nome = 'Certidão de Prazo — Modelo Base'
 
         self.stdout.write('=' * 70)
