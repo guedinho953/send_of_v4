@@ -110,6 +110,94 @@ def _texto_impugnacao_embargos(
     )
 
 
+def _fmt_data(valor):
+    return valor.strftime('%d/%m/%Y') if valor else '?'
+
+
+def _observacao_juntada_certidao(
+        tipo, info_label, resultado, data_envio, data_inicio, rotulo_meio,
+        evento_recurso='', evento_origem='', evento_impugnacao='',
+        evento_intimacao='', origem_intimacao_label='',
+        situacao_recurso='', seguranca_juizo='', recorrente=''):
+    """Observação curta da juntada, com as peculiaridades de cada tipo."""
+    if tipo == 'impugnacao_embargos_execucao':
+        tempestivo = bool(
+            data_envio and data_envio <= resultado.ultimo_dia
+        )
+        if tempestivo:
+            referencia = {
+                'integral': 'TEMPESTIVIDADE e SEGURANÇA INTEGRAL DO JUÍZO',
+                'parcial': (
+                    'TEMPESTIVIDADE e DEPÓSITO PARCIAL '
+                    '(SEM SEGURANÇA INTEGRAL DO JUÍZO)'
+                ),
+                'nenhuma': 'TEMPESTIVIDADE e SEM SEGURANÇA DO JUÍZO',
+            }.get(seguranca_juizo, 'TEMPESTIVIDADE')
+        else:
+            referencia = 'INTEMPESTIVIDADE'
+        texto = (
+            f'Certidão ref. a {referencia}; '
+            'último dia do prazo: '
+            f'{_fmt_data(resultado.ultimo_dia)}; '
+            'decurso do prazo: '
+            f'{_fmt_data(resultado.data_decurso)}; '
+            f'intimação: {_fmt_data(data_inicio)} ({rotulo_meio})'
+        )
+        if tempestivo:
+            texto += f'; segurança do juízo: {seguranca_juizo}'
+        return (
+            texto
+            + '; evento da impugnação/embargos: '
+            + f'{evento_impugnacao or "não informado"}.'
+        )
+
+    if tipo == 'recurso_inominado':
+        if situacao_recurso == 'preparo':
+            referencia = 'TEMPESTIVIDADE e PREPARO INTEGRAL'
+        elif situacao_recurso == 'gratuidade':
+            referencia = 'TEMPESTIVIDADE e GRATUIDADE'
+        else:
+            referencia = 'INTEMPESTIVIDADE'
+        texto = f'Certidão ref. a {referencia}'
+        if recorrente:
+            texto += f'; recorrente: {recorrente}'
+        if data_envio:
+            texto += f'; protocolo: {_fmt_data(data_envio)}'
+        if evento_recurso and evento_recurso != 'não informado':
+            texto += f'; evento do recurso: {evento_recurso}'
+    elif tipo == 'contrarrazoes':
+        texto = 'Certidão ref. ao prazo de CONTRARRAZÕES'
+        if evento_recurso and evento_recurso != 'não informado':
+            texto += f'; evento: {evento_recurso}'
+    elif tipo == 'impugnacao_cumprimento':
+        texto = 'Certidão ref. ao prazo de IMPUGNAÇÃO/CUMPRIMENTO DE SENTENÇA'
+        if evento_origem:
+            texto += f'; evento do despacho/decisão: {evento_origem}'
+    elif tipo == 'impugnacao_penhora':
+        texto = 'Certidão ref. ao prazo de IMPUGNAÇÃO/DECURSO DA PENHORA'
+        if evento_origem:
+            texto += f'; evento do despacho/decisão: {evento_origem}'
+    else:
+        texto = f'Certidão ref. a {info_label}'
+        if evento_origem:
+            texto += f'; evento do despacho/decisão: {evento_origem}'
+
+    texto += (
+        f'; intimação: {_fmt_data(data_inicio)} ({rotulo_meio})'
+    )
+    if evento_intimacao and evento_intimacao != 'não informado':
+        complemento = (
+            f' ({origem_intimacao_label})'
+            if origem_intimacao_label else ''
+        )
+        texto += f'; evento da intimação{complemento}: {evento_intimacao}'
+    texto += (
+        f'; último dia do prazo: {_fmt_data(resultado.ultimo_dia)}'
+        f'; decurso do prazo: {_fmt_data(resultado.data_decurso)}.'
+    )
+    return texto
+
+
 def _texto_intimacao_decurso(resultado, modelo='voluntario'):
     """Texto único da observação da movimentação e da intimação."""
     if modelo == 'remanescente':
@@ -465,65 +553,29 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
 
         # Dados internos/privados: ficam no log e na observação de juntada,
         # não no corpo público da certidão.
-        tempestivo_calc = (
-            bool(data_envio and data_envio <= resultado.ultimo_dia)
-            if not (eh_recurso and situacao_recurso == 'intempestivo')
-            else False
-        )
-        if tipo == 'impugnacao_embargos_execucao':
-            status_temp = (
-                'TEMPESTIVO'
-                if data_envio and data_envio <= resultado.ultimo_dia
-                else 'INTEMPESTIVO'
-            )
-        else:
-            status_temp = (
-                'movimentação registrada' if self.origem == 'movimentacao'
-                else ('TEMPESTIVO' if tempestivo_calc else 'INTEMPESTIVO')
-            )
-        if self.origem == 'movimentacao':
-            inicio_obs = (
-                f'Certidão de {info["label"]} — movimentação de '
-                f'{data_envio.strftime("%d/%m/%Y") if data_envio else "?"}; '
-            )
-        else:
-            inicio_obs = (
-                f'Certidão de {info["label"]} — recurso/protocolo no evento '
-                f'{evento_recurso} em '
-                f'{data_envio.strftime("%d/%m/%Y") if data_envio else "?"}; '
-            )
-        observacao_juntada = (
-            inicio_obs
-            + f'{status_temp}; último dia do prazo: '
-            + f'{resultado.ultimo_dia.strftime("%d/%m/%Y")}; '
-            + 'decurso do prazo: '
-            + f'{resultado.data_decurso.strftime("%d/%m/%Y")}; intimação: '
-            + f'{data_inicio.strftime("%d/%m/%Y")} ({rotulo_meio})'
-        )
-        if tipo == 'impugnacao_embargos_execucao':
-            observacao_juntada += (
-                f'; segurança do juízo: {seguranca_juizo}; '
-                f'evento da impugnação/embargos: '
-                f'{evento_impugnacao or "não informado"}'
-            )
+        origem_intimacao_label = ''
         if eh_recurso:
             origem_intimacao_label = (
                 'Embargos de declaração'
                 if origem_intimacao == 'embargos'
                 else 'Sentença'
             )
-            origem_obs = (
-                'dos embargos de declaração'
-                if origem_intimacao == 'embargos'
-                else 'da sentença'
-            )
-            observacao_juntada += (
-                f'; evento da intimação {origem_obs}: '
-                f'{evento_intimacao}; '
-                f'recorrente: {recorrente or "não identificado"}.'
-            )
-        else:
-            observacao_juntada += '.'
+        observacao_juntada = _observacao_juntada_certidao(
+            tipo=tipo,
+            info_label=info['label'],
+            resultado=resultado,
+            data_envio=data_envio,
+            data_inicio=data_inicio,
+            rotulo_meio=rotulo_meio,
+            evento_recurso=evento_recurso,
+            evento_origem=evento_origem,
+            evento_impugnacao=evento_impugnacao,
+            evento_intimacao=evento_intimacao,
+            origem_intimacao_label=origem_intimacao_label,
+            situacao_recurso=situacao_recurso,
+            seguranca_juizo=seguranca_juizo,
+            recorrente=recorrente,
+        )
 
         logging.getLogger('projudi.certidoes').info(
             'Certidão de %s gerada | processo=%s | tipo=%s | %s',
@@ -993,12 +1045,15 @@ class CertidaoPeticaoJuntarIntimarView(LoginRequiredMixin, View):
         certidao_juntada = bool(doc.exported_to_projudi)
         if acao in ('juntar', 'juntar_intimar') and not certidao_juntada:
             try:
+                observacao_mov = (
+                    observacao
+                    if (eh_embargos or origem_certidao == 'movimentacao')
+                    else f'Juntada da {rotulo_certidao}. {observacao}'
+                ).strip()
                 record = service.importar(
                     processo_numero=processo,
                     act_verb='certifique-se',
-                    observacao=(
-                        f'Juntada da {rotulo_certidao}. ' + observacao
-                    ).strip(),
+                    observacao=observacao_mov,
                     categoria='certidao',
                     origem=origem_certidao,
                     processo_cnj=processo,
