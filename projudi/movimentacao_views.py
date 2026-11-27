@@ -287,7 +287,7 @@ class MovimentacaoExecutarView(LoginRequiredMixin, View):
         record = get_object_or_404(MovimentacaoRecord, pk=pk, user=request.user)
         service = MovimentacaoService(request.user)
         try:
-            if (record.codigo_movimentacao == '11383'
+            if (record.codigo_movimentacao in ('581', '11383')
                     and record.categoria == 'intimacao'):
                 sucesso = service.executar_intimacao_record(record)
             else:

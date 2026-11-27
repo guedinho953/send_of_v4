@@ -55,11 +55,9 @@ def _evento_recurso_certidao(html):
 
 
 def _texto_intimacao_decurso(resultado, modelo='voluntario'):
-    """Texto único da observação da 11383 e da intimação da parte autora."""
+    """Texto único da observação da movimentação e da intimação."""
     if modelo == 'remanescente':
-        objeto = (
-            'pagamento do débito remanescente pelo(a)(s) executado(a)(s)'
-        )
+        objeto = 'pagamento do débito remanescente'
     else:
         objeto = 'pagamento voluntário do débito'
     data_intimacao = resultado['data_intimacao'].strftime('%d/%m/%Y')
@@ -70,13 +68,11 @@ def _texto_intimacao_decurso(resultado, modelo='voluntario'):
         else (resultado.get('meio_label') or 'intimação')
     )
     return (
-        f'Intime-se a parte autora para ciência de que o prazo de 15 '
-        f'(quinze) dias para {objeto}, referente ao Despacho (evento n.º '
-        f'{resultado["evento_despacho"]}), cuja intimação ocorreu em '
-        f'{data_intimacao} (evento {resultado["evento_intimacao"]} — '
-        f'{canal}), ainda não decorreu.\n\n'
-        f'Último dia do prazo: {ultimo_dia}.\n'
-        f'O decurso do prazo ocorrerá em {data_decurso}.'
+        f'Intime-se a parte autora: o prazo de 15 dias para {objeto} '
+        f'(Despacho, evento {resultado["evento_despacho"]}), com intimação '
+        f'em {data_intimacao} (evento {resultado["evento_intimacao"]} — '
+        f'{canal}), ainda não decorreu. '
+        f'Último dia: {ultimo_dia}. Decurso: {data_decurso}.'
     )
 
 
@@ -1286,7 +1282,7 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
 
         # Enquanto o prazo não decorrer, não há certidão de decurso.
         # Mostra uma prévia do texto e só executa depois da confirmação:
-        # 11383 (Cumprimento de Ofício) + intimação eletrônica da parte
+        # movimentação 581 (Intimação) + intimação eletrônica da parte
         # autora. Nunca usa AR, mandado ou precatória.
         if date.today() < resultado['data_decurso']:
             from .movimentacao_service import MovimentacaoService
@@ -1337,8 +1333,13 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
                     parte_nome=resultado.get('parte_autora') or '',
                     parte_papel=resultado.get('parte_autora_papel') or '',
                     url_processo=resultado['url'],
-                    codigo_movimentacao='11383',
-                    descricao_movimentacao='Cumprimento de Ofício',
+                    codigo_movimentacao=(
+                        '581' if confirmar == 'intimar' else '11383'
+                    ),
+                    descricao_movimentacao=(
+                        'Intimação' if confirmar == 'intimar'
+                        else 'Cumprimento de Ofício'
+                    ),
                 )
                 logger = logging.getLogger('projudi.certidoes')
                 logger.info(
@@ -1362,15 +1363,15 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
                 if sucesso:
                     messages.success(
                         request,
-                        '✅ Movimentação 11383 e intimação eletrônica da '
-                        'parte autora executadas. O decurso está previsto '
-                        'para '
+                        '✅ Movimentação 581 (Intimação) e intimação '
+                        'eletrônica da parte autora executadas. O decurso '
+                        'está previsto para '
                         f'{resultado["data_decurso"].strftime("%d/%m/%Y")}.'
                     )
                 else:
                     messages.error(
                         request,
-                        '❌ A movimentação 11383 + intimação não foi '
+                        '❌ A movimentação 581 + intimação não foi '
                         'confirmada. Confira o registro e os logs; nenhum '
                         'AR, mandado ou precatória foi gerado.'
                     )

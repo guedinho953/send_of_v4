@@ -1783,8 +1783,8 @@ class MovimentacaoService:
             if rec.status not in ('pendente', 'falha'):
                 continue
             try:
-                # 11383 + intimação (decurso) usa o painel Autoras/Rés.
-                if (rec.codigo_movimentacao == '11383'
+                # Movimentação + intimação (decurso) usa o painel Autoras/Rés.
+                if (rec.codigo_movimentacao in ('581', '11383')
                         and rec.categoria == 'intimacao'):
                     ok = self.executar_intimacao_record(rec)
                 # 11383 simples = requests direto (sem Playwright)
@@ -2680,11 +2680,12 @@ class MovimentacaoService:
         return sucesso
 
     def executar_intimacao_record(self, record: MovimentacaoRecord) -> bool:
-        """Executa 11383 + intimação eletrônica da parte autora.
+        """Executa a movimentação + intimação eletrônica da parte autora.
 
         Usado pelo decurso de pagamento quando o prazo ainda não venceu.
-        Não passa por AR, mandado ou precatória: o chamador só cria este
-        registro quando a parte autora tem advogado/e-mail/DJEN.
+        Normalmente o registro é 581 (Intimação). Não passa por AR,
+        mandado ou precatória: o chamador só cria este registro quando a
+        parte autora tem advogado/e-mail/DJEN.
         """
         proc_projudi = self._extrair_numero_projudi(record)
         if not proc_projudi:
@@ -2698,9 +2699,9 @@ class MovimentacaoService:
             ok = self.executar_com_intimacao(
                 processo_numero=record.numero_processo_cnj or record.processo,
                 observacao=record.observacao,
-                codigo_mov=record.codigo_movimentacao or '11383',
+                codigo_mov=record.codigo_movimentacao or '581',
                 descricao_mov=(
-                    record.descricao_movimentacao or 'Cumprimento de Ofício'
+                    record.descricao_movimentacao or 'Intimação'
                 ),
                 proc_projudi=proc_projudi,
                 prazo_intimacao='2',   # 5 dias (ciência)
@@ -2718,8 +2719,9 @@ class MovimentacaoService:
         self._log(
             record,
             'execucao' if ok else 'erro',
-            ('11383 + intimação eletrônica da parte autora executadas.'
-             if ok else 'Falha ao executar 11383 + intimação da parte autora.'),
+            ('Movimentação + intimação eletrônica da parte autora '
+             'executadas.' if ok
+             else 'Falha ao executar movimentação + intimação da parte autora.'),
         )
         return ok
 

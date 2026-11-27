@@ -25,9 +25,9 @@
     identificar, pede para informar o evento manualmente. Depois confere se
     o prazo já decorreu: se decorreu, gera a certidão; se ainda não decorreu,
     <strong>não gera certidão</strong>. Mostra uma prévia do texto e permite
-    criar a movimentação <strong>11383</strong> com intimação eletrônica da
-    parte autora (advogado, e-mail ou DJEN), sem AR, mandado ou precatória.
-    Confirme que o executado não efetuou o pagamento.
+    criar a movimentação <strong>581 (Intimação)</strong> com intimação
+    eletrônica da parte autora (advogado, e-mail ou DJEN), sem AR, mandado
+    ou precatória. Confirme que o executado não efetuou o pagamento.
 </div>
 
 {% if previa %}
@@ -68,11 +68,11 @@
 
         {% if previa.pode_intimar %}
         <button type="submit" name="confirmar" value="intimar" class="btn" style="background:#059669; color:white;">
-            ✅ Criar 11383 + intimar parte autora
+            ✅ Criar intimação 581
         </button>
         {% endif %}
         <button type="submit" name="confirmar" value="so_11383" class="btn btn-orange">
-            📝 Apenas criar 11383
+            📝 Apenas registrar observação (11383)
         </button>
         <a href="{% url 'projudi:certidao_decurso_pagamento' %}" class="btn btn-outline">Cancelar</a>
     </form>
