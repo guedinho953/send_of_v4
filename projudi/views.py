@@ -115,10 +115,20 @@ class MovimentacoesListView(LoginRequiredMixin, ListView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        from .assinantes import ASSINANTE_PADRAO, ASSINANTES
+        from .peticao_service import MEIO_LABEL, TIPOS_MOVIMENTACAO
+
         context['session_active'] = ProjudiSession.objects.filter(
             user=self.request.user, 
             status='active'
         ).exists()
+        context['tipos'] = TIPOS_MOVIMENTACAO
+        context['meios'] = MEIO_LABEL
+        context['assinante_padrao'] = ASSINANTE_PADRAO
+        context['assinantes'] = [
+            {'chave': chave, 'nome': dados[0], 'cargo': dados[1]}
+            for chave, dados in ASSINANTES.items()
+        ]
         return context
 
 

@@ -6,26 +6,44 @@
 <style>
     .mov-top { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
     .mov-top h1 { margin:0; font-size:22px; }
-    .mov-top p { margin:4px 0 0; font-size:13px; color:#6b7280; }
+    .mov-top p { margin:4px 0 0; font-size:13px; color:#6b7280; max-width:760px; }
     .mov-actions-top { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
     .filtro-btn { padding:7px 14px; border-radius:20px; font-size:12px; border:1px solid #e5e7eb; background:#fff; color:#374151; cursor:pointer; text-decoration:none; }
     .filtro-btn.active { background:#0f766e; color:#fff; border-color:#0f766e; }
     .filtro-btn:hover:not(.active) { background:#f9fafb; }
-    .tabela { width:100%; border-collapse:collapse; background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,.07); font-size:13px; }
-    .tabela th { background:#f8fafc; color:#475569; text-align:left; padding:10px 12px; font-size:11px; text-transform:uppercase; letter-spacing:.4px; border-bottom:1px solid #e5e7eb; }
-    .tabela td { padding:10px 12px; border-bottom:1px solid #f1f5f9; vertical-align:top; }
-    .tabela tr:hover td { background:#f8fafc; }
-    .processo { font-family:monospace; font-size:12px; font-weight:700; color:#1e3a5f; white-space:nowrap; }
-    .badge-rag { display:none; margin-left:5px; padding:2px 7px; border-radius:9px; background:#ccfbf1; color:#0f766e; font-size:10px; font-weight:700; text-transform:uppercase; vertical-align:middle; }
-    .tipo { font-weight:600; color:#374151; }
-    .data { color:#6b7280; font-size:12px; white-space:nowrap; }
-    .sugestao { font-size:12px; line-height:1.45; min-width:190px; }
+    .mov-card { background:#fff; border-radius:9px; padding:14px 16px; margin-bottom:12px; box-shadow:0 1px 4px rgba(0,0,0,.07); border-left:4px solid #0f766e; }
+    .mov-card.tem-certidao { border-left-color:#7c3aed; }
+    .mov-header { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap; }
+    .processo { font-family:monospace; font-weight:700; color:#1e3a5f; font-size:15px; }
+    .tipo { font-weight:600; color:#374151; margin-top:4px; }
+    .meta { font-size:12px; color:#6b7280; margin-top:5px; line-height:1.55; }
+    .badge-rag { display:none; margin-left:6px; padding:2px 7px; border-radius:9px; background:#ccfbf1; color:#0f766e; font-size:10px; font-weight:700; text-transform:uppercase; vertical-align:middle; }
+    .sugestao-wrap { text-align:right; font-size:12px; min-width:220px; }
+    .sugestao { color:#374151; line-height:1.45; }
     .sugestao strong { color:#0f766e; }
     .sugestao .rag { display:block; color:#6b7280; font-size:11px; margin-top:2px; }
-    .sugestao .sem-rag { display:block; color:#a16207; font-size:11px; margin-top:2px; }
-    .sugestao .aviso { display:block; color:#b45309; font-size:11px; margin-top:2px; }
-    .acoes { display:flex; gap:5px; flex-wrap:wrap; }
+    .sugestao .aviso, .sugestao .sem-rag { display:block; color:#a16207; font-size:11px; margin-top:2px; }
+    .obs { color:#6b7280; font-size:11px; margin-top:2px; }
+    .modelo-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:8px; width:100%; margin:8px 0 10px; }
+    .modelo-card { display:block; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; background:#fff; cursor:pointer; transition:border-color .12s, background .12s; }
+    .modelo-card:hover { border-color:#a78bfa; background:#faf5ff; }
+    .modelo-card:has(input:checked) { border-color:#7c3aed; box-shadow:0 0 0 2px #ddd6fe; background:#faf5ff; }
+    .modelo-card.sugerido { border-color:#8b5cf6; background:#f5f3ff; }
+    .modelo-card input { margin-right:5px; vertical-align:top; }
+    .modelo-titulo { font-size:12px; font-weight:700; color:#1e3a5f; }
+    .modelo-dias { display:inline-block; margin-left:4px; padding:1px 6px; border-radius:9px; background:#ede9fe; color:#5b21b6; font-size:10px; font-weight:700; }
+    .modelo-desc { display:block; margin-top:4px; font-size:11px; line-height:1.35; color:#6b7280; }
+    .badge-sugerido { display:inline-block; margin-left:5px; padding:1px 6px; border-radius:9px; background:#dcfce7; color:#166534; font-size:9px; font-weight:700; text-transform:uppercase; }
+    .campos { display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; margin-top:8px; }
+    .campo { display:flex; flex-direction:column; gap:3px; }
+    .campo label { font-size:11px; font-weight:600; color:#374151; }
+    .campo input, .campo select { padding:6px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px; }
+    .campo small { font-size:10px; color:#6b7280; max-width:230px; }
+    .aviso-decurso { display:none; background:#f5f3ff; border:1px solid #ddd6fe; border-radius:7px; padding:8px 10px; margin:8px 0 4px; font-size:11px; color:#5b21b6; line-height:1.4; width:100%; }
+    .acoes { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:10px; }
     .btn-sm { padding:5px 10px; font-size:11px; border-radius:5px; }
+    .rag-acoes { margin-top:8px; }
+    .rag-acoes summary { cursor:pointer; color:#0f766e; font-size:11px; font-weight:600; }
     .empty-state { text-align:center; padding:46px 20px; color:#6b7280; background:#fff; border-radius:10px; }
     .alert { padding:11px 14px; border-radius:7px; margin-bottom:14px; font-size:13px; }
     .alert-error { background:#fee2e2; color:#991b1b; border-left:4px solid #ef4444; }
@@ -33,7 +51,6 @@
     .alert-info { background:#dbeafe; color:#1e40af; border-left:4px solid #3b82f6; }
     .alert-warning { background:#fef3c7; color:#92400e; border-left:4px solid #f59e0b; }
     .contador-rag { font-size:12px; color:#6b7280; }
-    .obs { color:#6b7280; font-size:11px; margin-top:4px; }
 </style>
 {% endblock %}
 
@@ -42,17 +59,14 @@
     <div>
         <h1>📋 Movimentações Projudi</h1>
         <p>
-            Lista direta da fila de movimentações. As sugestões de certidão
-            são calculadas pela RAG do despacho.
+            Mesmo fluxo da fila de petições: escolha o modelo, confira data,
+            meio e eventos e gere a certidão para revisão antes de juntar.
+            A sugestão da RAG apenas pré-seleciona o modelo.
         </p>
     </div>
     <div class="mov-actions-top">
-        <button type="button" id="btn-so-rag" class="filtro-btn">
-            🔎 Só com RAG
-        </button>
-        <button type="button" id="btn-so-certidao" class="filtro-btn">
-            📄 Só com certidão
-        </button>
+        <button type="button" id="btn-so-rag" class="filtro-btn">🔎 Só com RAG</button>
+        <button type="button" id="btn-so-certidao" class="filtro-btn">📄 Só com certidão</button>
         <span id="contador-certidao" class="contador-rag"></span>
         <a href="{% url 'projudi:movimentacao_fila' %}" class="btn btn-outline">📥 Fila interna</a>
         <a href="{% url 'projudi:certidao_peticoes' %}" class="btn btn-outline">📥 Fila de Petições</a>
@@ -74,111 +88,174 @@
 </div>
 {% endif %}
 
+<div style="background:#f5f3ff; border:1px solid #ddd6fe; border-radius:8px; padding:10px 12px; margin-bottom:14px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+    <strong style="font-size:13px; color:#5b21b6;">Assinatura da certidão:</strong>
+    <select id="assinanteSelect" onchange="atualizarAssinatura()" style="padding:6px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px;">
+        {% for a in assinantes %}
+        <option value="{{ a.chave }}" {% if a.chave == assinante_padrao %}selected{% endif %}>{{ a.nome }} — {{ a.cargo }}</option>
+        {% endfor %}
+        <option value="outro">Outro (digitar)</option>
+    </select>
+    <input id="assinanteNome" type="text" placeholder="Nome do assinante"
+           style="display:none; padding:6px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px; min-width:220px;">
+    <input id="assinanteCargo" type="text" placeholder="Cargo"
+           style="display:none; padding:6px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px; min-width:180px;">
+    <span style="font-size:11px; color:#6b7280;">Aplicada a todas as certidões geradas nesta tela.</span>
+</div>
+
 {% if movimentacoes %}
 <div style="font-size:11px; color:#6b7280; margin-bottom:8px;">
     <span class="badge-rag" style="display:inline-block;">RAG</span>
     indica movimentação com RAG relacionada ao despacho.
 </div>
-<div style="overflow-x:auto;">
-    <table class="tabela">
-        <thead>
-            <tr>
-                <th>Processo</th>
-                <th>Tipo</th>
-                <th>Data</th>
-                <th>Certidão sugerida (RAG)</th>
-                <th>Ações</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for m in movimentacoes %}
-            <tr class="mov-row" data-tem-rag="0" data-tem-certidao="0">
-                <td>
-                    <div class="processo">
-                        {{ m.processo }}
-                        <span class="badge-rag">RAG</span>
-                    </div>
-                </td>
-                <td>
-                    <div class="tipo">{{ m.tipo|default:"—" }}</div>
-                    {% if m.movimentar %}
-                    <div class="obs">Fila de análise do Projudi</div>
-                    {% endif %}
-                </td>
-                <td class="data">{{ m.data|default:"—" }}</td>
-                <td>
-                    <span class="sugestao sugestao-certidao"
-                          data-processo="{{ m.processo }}"
-                          data-documento="{{ m.link_documento|default:'' }}"
-                          data-url="{{ m.link_processo|default:'' }}">
-                        analisando…
-                    </span>
-                </td>
-                <td>
-                    <div class="acoes">
-                        <a class="btn btn-sm btn-outline btn-gerar"
-                           href="#" target="_blank" style="display:none;">
-                            📄 Gerar certidão
-                        </a>
-                        <form method="post"
-                              action="{% url 'projudi:certidao_gerar_rag' %}"
-                              class="fila-gerar-rag"
-                              style="margin:0; display:none;">
-                            {% csrf_token %}
-                            <input type="hidden" name="processo" value="{{ m.processo }}">
-                            <input type="hidden" name="processo_url" value="{{ m.link_processo|default:'' }}">
-                            <input type="hidden" name="rag_id" value="">
-                            <button type="submit" name="acao" value="preview"
-                                    class="btn btn-sm btn-outline">
-                                👁 Só gerar para revisar
-                            </button>
-                            <button type="submit" name="acao" value="executar"
-                                    class="btn btn-sm btn-outline"
-                                    onclick="return confirm('Gerar, assinar e juntar a certidão no Projudi?');">
-                                📄 Gerar e juntar
-                            </button>
-                        </form>
-                        {% if request.user.is_staff %}
-                        <a class="btn btn-sm btn-outline btn-config-rag"
-                           href="#" target="_blank" style="display:none;">
-                            ✏️ Configurar RAG
-                        </a>
-                        {% endif %}
-                        {% if m.link_processo %}
-                        <a class="btn btn-sm btn-outline"
-                           href="{{ m.link_processo }}" target="_blank">
-                            🔗 Processo
-                        </a>
-                        {% endif %}
-                        {% if m.link_documento %}
-                        <a class="btn btn-sm btn-outline"
-                           href="{{ m.link_documento }}" target="_blank">
-                            📎 Documento
-                        </a>
-                        {% endif %}
-                        <form method="post"
-                              action="{% url 'projudi:movimentacao_criar_rag' %}"
-                              class="fila-criar-rag"
-                              style="margin:0;"
-                              onsubmit="return confirm('Gerar uma RAG a partir do texto desta movimentação?');">
-                            {% csrf_token %}
-                            <input type="hidden" name="processo" value="{{ m.processo }}">
-                            <input type="hidden" name="tipo" value="{{ m.tipo|default:'' }}">
-                            <input type="hidden" name="data" value="{{ m.data|default:'' }}">
-                            <input type="hidden" name="link_processo" value="{{ m.link_processo|default:'' }}">
-                            <input type="hidden" name="link_documento" value="{{ m.link_documento|default:'' }}">
-                            <input type="hidden" name="texto_movimentacao" value="{{ m.tipo|default:'' }} {{ m.data|default:'' }}">
-                            <button type="submit" class="btn btn-sm btn-outline">
-                                🧠 Gerar RAG
-                            </button>
-                        </form>
-                    </div>
-                </td>
-            </tr>
+
+{% for m in movimentacoes %}
+<div class="mov-card mov-row" data-tem-rag="0" data-tem-certidao="0">
+    <div class="mov-header">
+        <div>
+            <div class="processo">
+                {{ m.processo }}
+                <span class="badge-rag">RAG</span>
+            </div>
+            <div class="tipo">
+                {{ m.tipo|default:"—" }}
+                {% if m.movimentar %}
+                <span style="display:inline-block; margin-left:6px; padding:2px 8px; border-radius:9px; background:#e0f2fe; color:#0369a1; font-size:10px; font-weight:700;">Fila de análise</span>
+                {% endif %}
+            </div>
+            <div class="meta">
+                📅 {{ m.data|default:"—" }}
+                {% if m.link_processo %}
+                &nbsp;|&nbsp; <a href="{{ m.link_processo }}" target="_blank" rel="noopener">🔗 Processo</a>
+                {% endif %}
+                {% if m.link_documento %}
+                &nbsp;|&nbsp; <a href="{{ m.link_documento }}" target="_blank" rel="noopener">📎 Documento</a>
+                {% endif %}
+                {% if m.movimentar %}
+                &nbsp;|&nbsp; <a href="{{ m.movimentar }}" target="_blank" rel="noopener">⚙️ Movimentar</a>
+                {% endif %}
+            </div>
+        </div>
+        <div class="sugestao-wrap">
+            <span class="sugestao sugestao-certidao"
+                  data-processo="{{ m.processo }}"
+                  data-documento="{{ m.link_documento|default:'' }}"
+                  data-url="{{ m.link_processo|default:'' }}">
+                analisando…
+            </span>
+        </div>
+    </div>
+
+    <form method="post" action="{% url 'projudi:certidao_movimentacao_gerar' %}" class="mov-form" style="margin-top:6px;">
+        {% csrf_token %}
+        <input type="hidden" name="processo" value="{{ m.processo }}">
+        <input type="hidden" name="processo_url" value="{{ m.link_processo|default:'' }}">
+        <input type="hidden" name="data_envio" value="{{ m.data|default:'' }}">
+        <input type="hidden" name="documento_texto" value="{{ m.tipo|default:'' }}">
+        <input type="hidden" name="assinante" value="{{ assinante_padrao }}" class="assinante-hidden">
+        <input type="hidden" name="assinante_nome" value="" class="assinante-nome-hidden">
+        <input type="hidden" name="assinante_cargo" value="" class="assinante-cargo-hidden">
+
+        <div style="font-size:11px; color:#6b7280; margin-bottom:4px;">
+            Escolha o modelo da certidão. A sugestão automática pode ser trocada.
+        </div>
+
+        <div class="modelo-grid">
+            {% for chave, info in tipos.items %}
+            <label class="modelo-card">
+                <input type="radio" name="tipo" value="{{ chave }}" class="tipo-radio" required>
+                <span class="modelo-titulo">{{ info.label }}</span>
+                <span class="modelo-dias">{{ info.dias }} dias</span>
+                <span class="modelo-desc">{{ info.descricao }}</span>
+            </label>
             {% endfor %}
-        </tbody>
-    </table>
+        </div>
+
+        <div class="aviso-decurso">
+            <strong>Decurso de pagamento:</strong> o sistema localiza o despacho
+            e a intimação do executado. A data/meio abaixo não são usados neste
+            modelo; os campos de evento do despacho, executado e requerimento
+            podem ser usados para conferência.
+        </div>
+
+        <div class="campos">
+            <div class="campo">
+                <label>Data da intimação</label>
+                <input name="data_inicio" placeholder="dd/mm/aaaa" style="width:105px;">
+                <small>Para DJEN, use a disponibilização. No decurso é automática.</small>
+            </div>
+            <div class="campo">
+                <label>Meio</label>
+                <select name="meio_intimacao" style="min-width:170px;">
+                    {% for chave, label in meios.items %}
+                    <option value="{{ chave }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="campo">
+                <label>Evento do despacho/decisão</label>
+                <input name="evento_origem" placeholder="ex.: 74" style="width:105px;">
+                <small>No decurso, é o despacho de pagamento.</small>
+            </div>
+            <div class="campo">
+                <label>Evento da intimação</label>
+                <input name="evento_intimacao" placeholder="ex.: 77" style="width:105px;">
+                <small>Opcional; ajuda a localizar a data.</small>
+            </div>
+            <div class="campo">
+                <label>Parte a intimar</label>
+                <input name="parte" placeholder="nome da parte" style="width:210px;">
+            </div>
+            <div class="campo">
+                <label>Executado(a) — decurso</label>
+                <input name="executado" placeholder="opcional" style="width:210px;">
+                <small>Deixe vazio para usar o promovido.</small>
+            </div>
+            <div class="campo">
+                <label>Evento do requerimento — decurso</label>
+                <input name="evento_requerimento" placeholder="opcional" style="width:115px;">
+            </div>
+            <div class="campo">
+                <button type="submit" class="btn" style="background:#0f766e; color:white;">📄 Gerar certidão para revisão</button>
+            </div>
+        </div>
+    </form>
+
+    <div class="acoes">
+        <form method="post" action="{% url 'projudi:movimentacao_criar_rag' %}"
+              style="margin:0;"
+              onsubmit="return confirm('Gerar uma RAG a partir do texto desta movimentação?');">
+            {% csrf_token %}
+            <input type="hidden" name="processo" value="{{ m.processo }}">
+            <input type="hidden" name="tipo" value="{{ m.tipo|default:'' }}">
+            <input type="hidden" name="data" value="{{ m.data|default:'' }}">
+            <input type="hidden" name="link_processo" value="{{ m.link_processo|default:'' }}">
+            <input type="hidden" name="link_documento" value="{{ m.link_documento|default:'' }}">
+            <input type="hidden" name="texto_movimentacao" value="{{ m.tipo|default:'' }} {{ m.data|default:'' }}">
+            <button type="submit" class="btn btn-sm btn-outline">🧠 Gerar RAG</button>
+        </form>
+        {% if request.user.is_staff %}
+        <a class="btn btn-sm btn-outline btn-config-rag"
+           href="#" target="_blank" style="display:none;">✏️ Configurar RAG</a>
+        {% endif %}
+    </div>
+
+    <details class="rag-acoes fila-gerar-rag" style="display:none;">
+        <summary>🧠 Ações diretas da RAG (alternativa ao modelo acima)</summary>
+        <form method="post" action="{% url 'projudi:certidao_gerar_rag' %}" style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;">
+            {% csrf_token %}
+            <input type="hidden" name="processo" value="{{ m.processo }}">
+            <input type="hidden" name="processo_url" value="{{ m.link_processo|default:'' }}">
+            <input type="hidden" name="rag_id" value="">
+            <input type="hidden" name="evento_decisao" value="">
+            <button type="submit" name="acao" value="preview" class="btn btn-sm btn-outline">👁 Só gerar para revisar</button>
+            <button type="submit" name="acao" value="executar" class="btn btn-sm btn-outline"
+                    onclick="return confirm('Gerar, assinar e juntar a certidão no Projudi?');">📄 Gerar e juntar</button>
+        </form>
+    </details>
 </div>
+{% endfor %}
+
 <div id="sem-certidao" class="empty-state" style="display:none; margin-top:14px;">
     Nenhuma movimentação encontrada com os filtros selecionados.
 </div>
@@ -191,8 +268,27 @@
 
 {% block extra_js %}
 <script>
+function atualizarAssinatura() {
+    const sel = document.getElementById('assinanteSelect');
+    if (!sel) return;
+    const outro = sel.value === 'outro';
+    const nome = document.getElementById('assinanteNome');
+    const cargo = document.getElementById('assinanteCargo');
+    if (nome) nome.style.display = outro ? 'inline-block' : 'none';
+    if (cargo) cargo.style.display = outro ? 'inline-block' : 'none';
+
+    document.querySelectorAll('.mov-form').forEach(function (form) {
+        const h = form.querySelector('.assinante-hidden');
+        const hn = form.querySelector('.assinante-nome-hidden');
+        const hc = form.querySelector('.assinante-cargo-hidden');
+        if (h) h.value = sel.value;
+        if (hn) hn.value = outro && nome ? nome.value : '';
+        if (hc) hc.value = outro && cargo ? cargo.value : '';
+    });
+}
+
 (function () {
-    const botao = document.getElementById('btn-so-certidao');
+    const botaoCertidao = document.getElementById('btn-so-certidao');
     const botaoRag = document.getElementById('btn-so-rag');
     const contador = document.getElementById('contador-certidao');
     const vazio = document.getElementById('sem-certidao');
@@ -200,26 +296,26 @@
     let somenteComRag = false;
 
     function aplicarFiltro() {
-        const linhas = document.querySelectorAll('tr.mov-row');
+        const cards = document.querySelectorAll('.mov-row');
         let comCertidao = 0;
         let comRag = 0;
         let visiveis = 0;
-        linhas.forEach(function (linha) {
-            const temCertidao = linha.dataset.temCertidao === '1';
-            const temRag = linha.dataset.temRag === '1';
+        cards.forEach(function (card) {
+            const temCertidao = card.dataset.temCertidao === '1';
+            const temRag = card.dataset.temRag === '1';
             if (temCertidao) comCertidao += 1;
             if (temRag) comRag += 1;
             const mostrar = (
                 (!somenteComCertidao || temCertidao)
                 && (!somenteComRag || temRag)
             );
-            linha.style.display = mostrar ? '' : 'none';
+            card.style.display = mostrar ? '' : 'none';
             if (mostrar) visiveis += 1;
         });
         if (contador) {
             contador.textContent = (
                 comCertidao + ' com certidão · ' +
-                comRag + ' com RAG de ' + linhas.length
+                comRag + ' com RAG de ' + cards.length
             );
         }
         if (vazio) {
@@ -227,9 +323,9 @@
                 (somenteComCertidao || somenteComRag) && visiveis === 0
             ) ? 'block' : 'none';
         }
-        if (botao) {
-            botao.classList.toggle('active', somenteComCertidao);
-            botao.textContent = somenteComCertidao
+        if (botaoCertidao) {
+            botaoCertidao.classList.toggle('active', somenteComCertidao);
+            botaoCertidao.textContent = somenteComCertidao
                 ? 'Mostrar todas' : '📄 Só com certidão';
         }
         if (botaoRag) {
@@ -239,8 +335,8 @@
         }
     }
 
-    if (botao) {
-        botao.addEventListener('click', function () {
+    if (botaoCertidao) {
+        botaoCertidao.addEventListener('click', function () {
             somenteComCertidao = !somenteComCertidao;
             aplicarFiltro();
         });
@@ -254,13 +350,42 @@
     window.aplicarFiltroCertidao = aplicarFiltro;
     aplicarFiltro();
 
+    // Mapa entre o tipo sugerido pela RAG e os modelos locais.
+    const mapaTipos = {
+        decurso_pagamento: 'decurso_pagamento',
+        cumprimento_sentenca: 'impugnacao_cumprimento',
+        pagamento_impugnacao_penhora: 'impugnacao_penhora',
+        impugnacao_embargos_execucao: 'impugnacao_embargos_execucao'
+    };
+
+    function alternarModoDecurso(form) {
+        const radio = form.querySelector('input[name="tipo"]:checked');
+        const aviso = form.querySelector('.aviso-decurso');
+        const decurso = radio && (
+            radio.value === 'decurso_pagamento'
+            || radio.value === 'decurso_debito_remanescente'
+        );
+        if (aviso) aviso.style.display = decurso ? 'block' : 'none';
+    }
+
+    document.querySelectorAll('.mov-form').forEach(function (form) {
+        const radios = form.querySelectorAll('input[name="tipo"]');
+        radios.forEach(function (radio) {
+            radio.addEventListener('change', function () {
+                alternarModoDecurso(form);
+            });
+        });
+        alternarModoDecurso(form);
+    });
+
     async function analisar(el) {
+        const card = el.closest('.mov-row');
+        const form = card ? card.querySelector('.mov-form') : null;
         const params = new URLSearchParams({
             processo: el.dataset.processo || '',
             documento: el.dataset.documento || '',
             url: el.dataset.url || ''
         });
-        const linha = el.closest('tr.mov-row');
         try {
             const resposta = await fetch(
                 "{% url 'projudi:certidao_sugestao_movimentacao' %}?" + params.toString()
@@ -271,10 +396,10 @@
                 return;
             }
 
-            if (linha) {
-                linha.dataset.temRag = dados.rag_encontrada ? '1' : '0';
-                linha.dataset.temCertidao = dados.tipo_certidao ? '1' : '0';
-                const badge = linha.querySelector('.badge-rag');
+            if (card) {
+                card.dataset.temRag = dados.rag_encontrada ? '1' : '0';
+                card.dataset.temCertidao = dados.tipo_certidao ? '1' : '0';
+                const badge = card.querySelector('.badge-rag');
                 if (badge) {
                     if (dados.rag_encontrada) {
                         badge.textContent = dados.rag_id
@@ -286,6 +411,7 @@
                 }
             }
 
+            const chaveLocal = mapaTipos[dados.tipo_certidao] || '';
             el.textContent = '';
             if (dados.tipo_label) {
                 const nome = document.createElement('strong');
@@ -325,37 +451,44 @@
                 el.appendChild(nada);
             }
 
-            if (linha) {
-                const ehDecurso = dados.tipo_certidao === 'decurso_pagamento';
-                const botaoGerar = linha.querySelector('.btn-gerar');
-                if (botaoGerar) {
-                    if (ehDecurso && dados.url_form) {
-                        botaoGerar.href = dados.url_form;
-                        botaoGerar.style.display = '';
-                    } else {
-                        botaoGerar.style.display = 'none';
+            if (form && chaveLocal) {
+                const radio = form.querySelector(
+                    'input[name="tipo"][value="' + chaveLocal + '"]'
+                );
+                if (radio) {
+                    radio.checked = true;
+                    const label = radio.closest('.modelo-card');
+                    if (label) {
+                        label.classList.add('sugerido');
+                        if (!label.querySelector('.badge-sugerido')) {
+                            const selo = document.createElement('span');
+                            selo.className = 'badge-sugerido';
+                            selo.textContent = 'Sugerido';
+                            label.appendChild(selo);
+                        }
                     }
+                    alternarModoDecurso(form);
                 }
+            }
 
-                const formRag = linha.querySelector('.fila-gerar-rag');
-                if (formRag) {
-                    if (dados.rag_id && dados.tem_template && !ehDecurso) {
-                        const campoRag = formRag.querySelector('[name="rag_id"]');
-                        if (campoRag) campoRag.value = dados.rag_id;
-                        formRag.style.display = 'inline';
-                    } else {
-                        formRag.style.display = 'none';
-                    }
+            if (card) {
+                const detalhesRag = card.querySelector('.fila-gerar-rag');
+                if (detalhesRag) {
+                    const temTemplate = !!dados.tem_template;
+                    detalhesRag.style.display = (
+                        dados.rag_id && temTemplate ? 'block' : 'none'
+                    );
+                    const campoRag = detalhesRag.querySelector('[name="rag_id"]');
+                    if (campoRag) campoRag.value = dados.rag_id || '';
                 }
-
-                const botaoConfig = linha.querySelector('.btn-config-rag');
+                const botaoConfig = card.querySelector('.btn-config-rag');
                 if (botaoConfig) {
-                    if (dados.rag_id && !dados.tem_template && !ehDecurso) {
+                    if (dados.rag_id && !dados.tem_template) {
                         botaoConfig.href = (
                             '/admin/processes/ragexample/' +
                             dados.rag_id + '/change/'
                         );
-                        botaoConfig.style.display = '';
+                        botaoConfig.style.display = 'inline-block';
                     } else {
                         botaoConfig.style.display = 'none';
                     }
@@ -378,6 +511,15 @@
         }
     }
     Promise.all([trabalhador(), trabalhador(), trabalhador(), trabalhador()]);
+
+    document.addEventListener('DOMContentLoaded', atualizarAssinatura);
+    const selAssinante = document.getElementById('assinanteSelect');
+    if (selAssinante) {
+        selAssinante.addEventListener('change', atualizarAssinatura);
+    }
+    document.querySelectorAll('#assinanteNome, #assinanteCargo').forEach(function (el) {
+        el.addEventListener('input', atualizarAssinatura);
+    });
 })();
 </script>
 {% endblock %}

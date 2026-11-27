@@ -28,7 +28,7 @@
     </div>
     <div style="display:flex; gap:8px;">
         <button onclick="window.print()" class="btn">🖨 Imprimir</button>
-        <a href="{% url 'projudi:certidao_peticoes' %}" class="btn btn-outline">← Voltar à fila</a>
+        <a href="{% url item.url_voltar|default:'projudi:certidao_peticoes' %}" class="btn btn-outline">← Voltar à fila</a>
         <a href="{% url 'projudi:certidao_dashboard' %}" class="btn btn-outline">Certidões</a>
     </div>
 </div>

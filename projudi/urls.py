@@ -99,6 +99,7 @@ urlpatterns = [
     path('certidoes/peticoes/certificadas/', certidao_views.CertidaoPeticaoTabelaView.as_view(), name='certidao_peticoes_tabela'),
     path('certidoes/movimentacoes/certificadas/', certidao_views.CertidaoMovimentacaoTabelaView.as_view(), name='certidao_movimentacoes_tabela'),
     path('certidoes/peticoes/gerar/', certidao_peticao_views.CertidaoPeticaoGerarView.as_view(), name='certidao_peticao_gerar'),
+    path('certidoes/movimentacoes/gerar/', certidao_peticao_views.CertidaoMovimentacaoGerarView.as_view(), name='certidao_movimentacao_gerar'),
     path('certidoes/movimentacoes/custas/inexistencia/', certidao_peticao_views.CertidaoMovimentacaoCustasView.as_view(), name='certidao_movimentacao_custas'),
     path('certidoes/movimentacoes/decurso-pagamento/', certidao_peticao_views.CertidaoDecursoPagamentoView.as_view(), name='certidao_decurso_pagamento'),
     path('certidoes/movimentacoes/sugerir/', certidao_views.CertidaoSugestaoMovimentacaoView.as_view(), name='certidao_sugestao_movimentacao'),

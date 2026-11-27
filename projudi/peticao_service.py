@@ -72,6 +72,33 @@ TIPOS = {
             'prazo da penhora.'
         ),
     },
+    'impugnacao_embargos_execucao': {
+        'label': 'Impugnação/Embargos à Execução',
+        'dias': 15,
+        'descricao': (
+            'Certifica o prazo de 15 dias para impugnação ou embargos à '
+            'execução.'
+        ),
+    },
+}
+
+# A fila de petições mantém os modelos que já existiam. O modelo de
+# embargos à execução é específico da fila de movimentações.
+TIPOS_PETICAO = {
+    chave: info for chave, info in TIPOS.items()
+    if chave != 'impugnacao_embargos_execucao'
+}
+
+# Tipos que fazem sentido na fila de movimentações (não são petições).
+TIPOS_MOVIMENTACAO = {
+    chave: TIPOS[chave]
+    for chave in (
+        'decurso_pagamento',
+        'decurso_debito_remanescente',
+        'impugnacao_cumprimento',
+        'impugnacao_penhora',
+        'impugnacao_embargos_execucao',
+    )
 }
 
 

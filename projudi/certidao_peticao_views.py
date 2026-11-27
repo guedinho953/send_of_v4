@@ -14,7 +14,9 @@ from django.views.generic import TemplateView
 from .assinantes import ASSINANTE_PADRAO, ASSINANTES
 from .certidao_constants import NOME_CERTIDAO_CUSTAS
 from .cumprimento_service import CumprimentoService
-from .peticao_service import MEIO_LABEL, TIPOS, PeticaoQueueService
+from .peticao_service import (
+    MEIO_LABEL, TIPOS, TIPOS_PETICAO, PeticaoQueueService,
+)
 
 
 def _parse_data_br(valor):
@@ -92,7 +94,7 @@ class CertidaoPeticaoQueueView(LoginRequiredMixin, TemplateView):
             erro = str(exc)
 
         # Contagem por tipo.
-        contagem = {chave: 0 for chave in TIPOS}
+        contagem = {chave: 0 for chave in TIPOS_PETICAO}
         for item in itens:
             contagem[item['tipo']] = contagem.get(item['tipo'], 0) + 1
 
@@ -101,7 +103,7 @@ class CertidaoPeticaoQueueView(LoginRequiredMixin, TemplateView):
             'erro': erro,
             'total': len(itens),
             'contagem': contagem,
-            'tipos': TIPOS,
+            'tipos': TIPOS_PETICAO,
             'meios': MEIO_LABEL,
             'assinante_padrao': ASSINANTE_PADRAO,
             'assinantes': [
@@ -115,26 +117,48 @@ class CertidaoPeticaoQueueView(LoginRequiredMixin, TemplateView):
 class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
     """Gera a prévia da certidão e salva em GeneratedDocument."""
 
+    origem = 'peticao'
+    url_voltar = 'projudi:certidao_peticoes'
+    rotulo_origem = 'Petição'
+
     def post(self, request):
         tipo = (request.POST.get('tipo') or '').strip()
         info = TIPOS.get(tipo)
         if not info:
-            messages.error(request, 'Tipo de petição inválido.')
-            return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
+            messages.error(
+                request, f'Tipo de {self.rotulo_origem.lower()} inválido.'
+            )
+            return HttpResponseRedirect(reverse(self.url_voltar))
 
         processo = (request.POST.get('processo') or '').strip()
         processo_url = (request.POST.get('processo_url') or '').strip()
         if not processo:
             messages.error(request, 'Processo não informado.')
-            return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
+            return HttpResponseRedirect(reverse(self.url_voltar))
+
+        evento_origem = (
+            request.POST.get('evento_origem')
+            or request.POST.get('evento_despacho')
+            or ''
+        ).strip()
+        evento_requerimento = (
+            request.POST.get('evento_requerimento') or ''
+        ).strip()
+        executado = (request.POST.get('executado') or '').strip()
+        parte = (request.POST.get('parte') or '').strip()
 
         if tipo == 'decurso_pagamento':
             return CertidaoDecursoPagamentoView().processar(
-                request, processo,
+                request, processo, evento=evento_origem,
+                executado=executado,
+                evento_requerimento=evento_requerimento,
             )
         if tipo == 'decurso_debito_remanescente':
             return CertidaoDecursoPagamentoView().processar(
-                request, processo, modelo='remanescente',
+                request, processo, evento=evento_origem,
+                executado=executado,
+                evento_requerimento=evento_requerimento,
+                modelo='remanescente',
             )
 
         data_envio = _parse_data_br(request.POST.get('data_envio'))
@@ -143,7 +167,7 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
             data_inicio = data_envio
         if not data_inicio:
             messages.error(request, 'Data de início da intimação não informada.')
-            return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
+            return HttpResponseRedirect(reverse(self.url_voltar))
 
         meio = (request.POST.get('meio_intimacao') or 'intimacao').strip()
         meio_label = (request.POST.get('meio_label') or '').strip()
@@ -176,7 +200,7 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
             )
         except Exception as exc:
             messages.error(request, f'Erro ao contar o prazo: {exc}')
-            return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
+            return HttpResponseRedirect(reverse(self.url_voltar))
 
         rotulo_meio = meio_label or {
             'eletronico': 'DJEN / domicílio eletrônico',
@@ -197,7 +221,9 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
             request.POST.get('evento_intimacao') or ''
         ).strip() or 'não informado'
         evento_recurso = (
-            request.POST.get('evento_recurso') or ''
+            request.POST.get('evento_recurso')
+            or evento_origem
+            or ''
         ).strip() or 'não informado'
 
         if eh_recurso:
@@ -237,10 +263,16 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
             ctx_extra = {'texto_certidao': mark_safe(texto)}
         else:
             situacao_label = ''
-            texto = (
-                f'Certifico que, referente ao processo em epígrafe, foi '
-                f'juntado(a) {info["label"]}'
-            )
+            if self.origem == 'movimentacao':
+                texto = (
+                    f'Certifico que, referente ao processo em epígrafe, foi '
+                    f'identificada a movimentação "{info["label"]}"'
+                )
+            else:
+                texto = (
+                    f'Certifico que, referente ao processo em epígrafe, foi '
+                    f'juntado(a) {info["label"]}'
+                )
             if data_envio:
                 texto += f' em {data_envio.strftime("%d/%m/%Y")}'
             texto += (
@@ -262,15 +294,28 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
             if not (eh_recurso and situacao_recurso == 'intempestivo')
             else False
         )
-        status_temp = 'TEMPESTIVO' if tempestivo_calc else 'INTEMPESTIVO'
+        status_temp = (
+            'movimentação registrada' if self.origem == 'movimentacao'
+            else ('TEMPESTIVO' if tempestivo_calc else 'INTEMPESTIVO')
+        )
+        if self.origem == 'movimentacao':
+            inicio_obs = (
+                f'Certidão de {info["label"]} — movimentação de '
+                f'{data_envio.strftime("%d/%m/%Y") if data_envio else "?"}; '
+            )
+        else:
+            inicio_obs = (
+                f'Certidão de {info["label"]} — recurso/protocolo no evento '
+                f'{evento_recurso} em '
+                f'{data_envio.strftime("%d/%m/%Y") if data_envio else "?"}; '
+            )
         observacao_juntada = (
-            f'Certidão de {info["label"]} — recurso/protocolo no evento '
-            f'{evento_recurso} em '
-            f'{data_envio.strftime("%d/%m/%Y") if data_envio else "?"}; '
-            f'{status_temp}; último dia do prazo: '
-            f'{resultado.ultimo_dia.strftime("%d/%m/%Y")}; decurso do prazo: '
-            f'{resultado.data_decurso.strftime("%d/%m/%Y")}; intimação: '
-            f'{data_inicio.strftime("%d/%m/%Y")} ({rotulo_meio})'
+            inicio_obs
+            + f'{status_temp}; último dia do prazo: '
+            + f'{resultado.ultimo_dia.strftime("%d/%m/%Y")}; '
+            + 'decurso do prazo: '
+            + f'{resultado.data_decurso.strftime("%d/%m/%Y")}; intimação: '
+            + f'{data_inicio.strftime("%d/%m/%Y")} ({rotulo_meio})'
         )
         if eh_recurso:
             origem_intimacao_label = (
@@ -292,8 +337,9 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
             observacao_juntada += '.'
 
         logging.getLogger('projudi.certidoes').info(
-            'Certidão de petição gerada | processo=%s | tipo=%s | %s',
-            processo, info['label'], observacao_juntada,
+            'Certidão de %s gerada | processo=%s | tipo=%s | %s',
+            self.rotulo_origem.lower(), processo, info['label'],
+            observacao_juntada,
         )
 
         try:
@@ -337,7 +383,7 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
                 template=template,
                 sequential_number=seq,
                 year=date.today().year,
-                recipient_name=f'Petição: {info["label"]}',
+                recipient_name=f'{self.rotulo_origem}: {info["label"]}',
                 html_content=html,
             )
             try:
@@ -345,8 +391,8 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
                 registrar_documento(
                     request.user, doc,
                     tipo_prazo=tipo,
-                    origem='peticao',
-                    parte=recorrente or '',
+                    origem=self.origem,
+                    parte=recorrente or parte or '',
                     status='gerada',
                     data_intimacao=data_inicio,
                     data_inicio=data_inicio,
@@ -360,7 +406,7 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
                 pass
         except Exception as exc:
             messages.error(request, f'Erro ao gerar a certidão: {exc}')
-            return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
+            return HttpResponseRedirect(reverse(self.url_voltar))
 
         # Polo do recorrente e polo a ser intimado:
         # - preparo integral e gratuidade: intima-se a parte contrária
@@ -394,6 +440,9 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
             'item': {
                 'processo': processo,
                 'processo_url': processo_url,
+                'origem': self.origem,
+                'origem_label': self.rotulo_origem,
+                'url_voltar': self.url_voltar,
                 'tipo': tipo,
                 'eh_recurso': eh_recurso,
                 'situacao_recurso': situacao_recurso,
@@ -427,6 +476,18 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
         })
 
 
+class CertidaoMovimentacaoGerarView(CertidaoPeticaoGerarView):
+    """Gera certidão a partir da fila de movimentações do Projudi.
+
+    Reaproveita o fluxo das petições, mas registra a origem como
+    movimentação e volta para a fila de movimentações.
+    """
+
+    origem = 'movimentacao'
+    url_voltar = 'projudi:movimentacoes'
+    rotulo_origem = 'Movimentação'
+
+
 class CertidaoPeticaoPreviewView(LoginRequiredMixin, TemplateView):
     """Reabre a prévia de uma certidão já gerada.
 
@@ -449,6 +510,11 @@ class CertidaoPeticaoPreviewView(LoginRequiredMixin, TemplateView):
 
         rotulo = doc.template.name if doc.template else 'Certidão'
         eh_recurso = rotulo == 'Certidão de Recurso Inominado'
+        origem = (
+            'movimentacao'
+            if (doc.recipient_name or '').startswith('Movimentação:')
+            else 'peticao'
+        )
         situacao = (
             _situacao_certidao_recurso(doc.html_content)
             if eh_recurso else ''
@@ -460,6 +526,14 @@ class CertidaoPeticaoPreviewView(LoginRequiredMixin, TemplateView):
                 'processo': doc.process.number if doc.process else '',
                 'processo_url': (
                     doc.process.projudi_url if doc.process else ''
+                ),
+                'origem': origem,
+                'origem_label': (
+                    'Movimentação' if origem == 'movimentacao' else 'Petição'
+                ),
+                'url_voltar': (
+                    'projudi:movimentacoes' if origem == 'movimentacao'
+                    else 'projudi:certidao_peticoes'
                 ),
                 'tipo': '',
                 'eh_recurso': eh_recurso,
