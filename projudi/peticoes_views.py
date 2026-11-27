@@ -21,6 +21,7 @@ from projudi.assinantes_certidao import (
 )
 from projudi.decurso_certidao import gerar_e_registrar
 from projudi.decurso_pagamento_service import DecursoPagamentoService
+from projudi.intimacao_service import localizar_intimacao_do_processo
 from projudi.models import PrazoDjenRecord
 from projudi.peticoes_inominado import TIPOS_CERTIDAO, carregar_fila
 
@@ -78,6 +79,8 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
         data_intimacao = (request.POST.get('data_intimacao') or '').strip()
         evento_intimacao = (
             request.POST.get('evento_intimacao') or '').strip()
+        evento_origem = (
+            request.POST.get('evento_origem') or '').strip()
         parte = (request.POST.get('parte') or '').strip()
         processo_url = (request.POST.get('processo_url') or '').strip()
         peticao_url = (request.POST.get('peticao_url') or '').strip()
@@ -86,6 +89,10 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
         evento_despacho = (
             request.POST.get('evento_despacho') or '').strip()
         executado = (request.POST.get('executado') or '').strip()
+        data_intimacao_manual = (
+            request.POST.get('data_intimacao_manual') or '').strip()
+        evento_intimacao_manual = (
+            request.POST.get('evento_intimacao_manual') or '').strip()
         assinante = (
             request.POST.get('assinante') or ASSINANTE_PADRAO).strip()
         assinante_nome = (
@@ -117,6 +124,8 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
                 processo_url=processo_url,
                 evento=evento_despacho,
                 executado=executado,
+                data_intimacao_manual=data_intimacao_manual,
+                evento_intimacao_manual=evento_intimacao_manual,
                 assinante=assinante,
                 assinante_nome=assinante_nome,
                 assinante_cargo=assinante_cargo,
@@ -150,23 +159,66 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
                     parte=parte,
                 )
             else:
-                if not data_intimacao:
+                data_intimacao_final = self._data(data_intimacao)
+                evento_intimacao_final = evento_intimacao
+                evento_busca = evento_intimacao or evento_origem
+
+                if evento_busca and not evento_busca.isdigit():
                     messages.error(
                         request,
-                        'Para esta certidão, informe a data da intimação '
-                        'que abriu o prazo.',
+                        'Evento inválido. Informe apenas o número do '
+                        'evento da decisão/recurso ou da intimação.',
                     )
                     return voltar
-                if not self._data(data_intimacao):
+
+                if evento_busca:
+                    intima = localizar_intimacao_do_processo(
+                        request.user,
+                        processo_url,
+                        evento_busca,
+                        parte=parte,
+                    )
+                    if intima:
+                        data_intimacao_final = intima['data']
+                        evento_intimacao_final = intima['evento']
+                        if intima.get('meio') not in (
+                                'eletronico', 'intimacao'):
+                            messages.warning(
+                                request,
+                                'A intimação foi localizada por '
+                                f'{intima.get("meio")}. A contagem DJEN '
+                                'pode precisar de ajuste; confira a prévia.',
+                            )
+                    elif not data_intimacao_final:
+                        messages.error(
+                            request,
+                            'Não localizei a intimação pelo evento '
+                            f'{evento_busca}. Informe a data manualmente '
+                            'no campo de fallback.',
+                        )
+                        return voltar
+                    else:
+                        messages.warning(
+                            request,
+                            'Não localizei a intimação pelo evento '
+                            f'{evento_busca}; usando a data manual '
+                            f'{data_intimacao}.',
+                        )
+
+                if not data_intimacao_final:
                     messages.error(
                         request,
-                        'Data da intimação inválida. Use DD/MM/AAAA.',
+                        'Informe o evento da decisão/recurso para localizar '
+                        'a intimação automaticamente ou a data da intimação '
+                        'no fallback.',
                     )
                     return voltar
+
                 call_command(
                     'prazo_djen',
                     tipo=tipo_prazo,
-                    disponibilizacao=data_intimacao,
+                    disponibilizacao=data_intimacao_final.strftime(
+                        '%d/%m/%Y'),
                     protocolo=data_protocolo.strftime('%d/%m/%Y'),
                     processo=processo,
                     parte=parte,
@@ -174,7 +226,7 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
                     peticao_documento=peticao_documento,
                     peticao_url=peticao_url,
                     evento_recurso='infra',
-                    evento_intimacao=evento_intimacao,
+                    evento_intimacao=evento_intimacao_final,
                 )
         except CommandError as exc:
             messages.error(request, str(exc))
@@ -204,7 +256,8 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
         return redirect('projudi:certidao_peticoes')
 
     def _gerar_decurso(self, request, *, processo, processo_url, evento,
-                       executado, assinante, assinante_nome,
+                       executado, data_intimacao_manual,
+                       evento_intimacao_manual, assinante, assinante_nome,
                        assinante_cargo):
         voltar = redirect('projudi:certidao_peticoes_fila')
         if evento and not evento.isdigit():
@@ -221,6 +274,8 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
                 evento=evento,
                 parte_nome=executado,
                 url=processo_url or None,
+                data_intimacao=data_intimacao_manual or None,
+                evento_intimacao=evento_intimacao_manual or None,
             )
         except Exception as exc:
             messages.error(

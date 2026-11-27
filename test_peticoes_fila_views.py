@@ -113,6 +113,54 @@ class PeticaoFilaViewsTest(TestCase):
         self.assertEqual(resposta.status_code, 302)
         comando.assert_not_called()
 
+    @patch('projudi.peticoes_views.localizar_intimacao_do_processo')
+    @patch('projudi.peticoes_views.call_command')
+    def test_contrarrazoes_localiza_intimacao_pelo_evento(
+            self, comando, localizar):
+        localizar.return_value = {
+            'evento': '56',
+            'data': date(2026, 12, 5),
+            'meio': 'eletronico',
+        }
+        resposta = self.client.post(
+            reverse('projudi:certidao_peticoes_fila_gerar'),
+            {
+                'processo': '0000001-11.2026.8.05.0191',
+                'processo_url': 'https://projudi/processo',
+                'data_envio': '10/12/2026',
+                'tipo_prazo': 'contrarrazoes_inominado',
+                'evento_origem': '55',
+                'parte': 'FULANO DE TAL',
+                'acao': 'gerar',
+            },
+        )
+        self.assertEqual(resposta.status_code, 302)
+        comando.assert_called_once()
+        args, kwargs = comando.call_args
+        self.assertEqual(args[0], 'prazo_djen')
+        self.assertEqual(kwargs['disponibilizacao'], '05/12/2026')
+        self.assertEqual(kwargs['evento_intimacao'], '56')
+        localizar.assert_called_once()
+
+    @patch('projudi.peticoes_views.localizar_intimacao_do_processo',
+           return_value=None)
+    @patch('projudi.peticoes_views.call_command')
+    def test_contrarrazoes_sem_intimacao_e_sem_data_nao_gera(
+            self, comando, _localizar):
+        resposta = self.client.post(
+            reverse('projudi:certidao_peticoes_fila_gerar'),
+            {
+                'processo': '0000001-11.2026.8.05.0191',
+                'processo_url': 'https://projudi/processo',
+                'data_envio': '10/12/2026',
+                'tipo_prazo': 'contrarrazoes_inominado',
+                'evento_origem': '55',
+                'acao': 'gerar',
+            },
+        )
+        self.assertEqual(resposta.status_code, 302)
+        comando.assert_not_called()
+
     @patch('projudi.peticoes_views.call_command')
     def test_acao_nao_implementada_nao_gera(self, comando):
         resposta = self.client.post(

@@ -169,7 +169,8 @@ class DecursoPagamentoService:
 
     # ────────────────────────────── análise ─────────────────────────────────
     def analisar(self, numero, evento='', parte_nome='', url=None,
-                 dias=DIAS_PAGAMENTO, hoje=None):
+                 dias=DIAS_PAGAMENTO, hoje=None, data_intimacao=None,
+                 evento_intimacao=None, meio=None):
         try:
             session, url, partes, movs = self._carregar(numero, url)
         except ValueError as exc:
@@ -177,6 +178,17 @@ class DecursoPagamentoService:
 
         if not movs:
             return {'erro': 'Nenhuma movimentação encontrada no processo.'}
+
+        data_intimacao_manual = data_intimacao
+        if isinstance(data_intimacao_manual, str) and data_intimacao_manual.strip():
+            data_intimacao_manual = _data_br(data_intimacao_manual)
+            if not data_intimacao_manual:
+                return {
+                    'erro': (
+                        'Data da intimação manual inválida. '
+                        'Use DD/MM/AAAA.'
+                    )
+                }
 
         evento = str(evento or '').strip()
         despacho_auto = False
@@ -234,17 +246,31 @@ class DecursoPagamentoService:
                 }
 
         texto_despacho = _texto_mov(despacho)
-        intima = self._intimacao(
-            movs, evento, _nome_compacto(parte['nome']),
-            _descricao_evento(texto_despacho),
-        )
-        if not intima:
-            return {
-                'erro': (
-                    'Não localizei a intimação do despacho para a parte '
-                    'executada.'
-                )
-            }
+        intimacao_manual = bool(
+            data_intimacao_manual or evento_intimacao)
+        if intimacao_manual:
+            intima = self._intimacao_manual(
+                movs, evento_intimacao, data_intimacao_manual, meio)
+            if not intima:
+                return {
+                    'erro': (
+                        'Não foi possível usar a intimação manual. Confira '
+                        'a data e o evento informados.'
+                    )
+                }
+        else:
+            intima = self._intimacao(
+                movs, evento, _nome_compacto(parte['nome']),
+                _descricao_evento(texto_despacho),
+            )
+            if not intima:
+                return {
+                    'erro': (
+                        'Não localizei a intimação do despacho '
+                        'automaticamente. Informe a data ou o evento da '
+                        'intimação nos campos de fallback.'
+                    )
+                }
 
         try:
             prazo = CumprimentoService(self.user).contar_prazo_por_fluxo(
@@ -277,6 +303,7 @@ class DecursoPagamentoService:
             'prazo_info': prazo.to_dict(),
             'decorrido': hoje >= prazo.data_decurso,
             'hoje': hoje,
+            'intimacao_manual': intimacao_manual,
         }
 
     # ─────────────────────── despacho de pagamento ──────────────────────────
@@ -369,6 +396,42 @@ class DecursoPagamentoService:
         return ''
 
     # ───────────────────────────── intimação ────────────────────────────────
+    def _intimacao_manual(self, movs, evento_intimacao, data_intimacao,
+                          meio=None):
+        """Fallback: usa a data/evento informados pelo usuário."""
+        mov = None
+        evento_intimacao = str(evento_intimacao or '').strip()
+        if evento_intimacao:
+            if not evento_intimacao.isdigit():
+                return None
+            mov = next(
+                (m for m in movs
+                 if str(m.get('evento')) == evento_intimacao),
+                None,
+            )
+            if not mov:
+                return None
+
+        if not data_intimacao and mov:
+            data_intimacao = (
+                _data_disponibilizacao(_texto_mov(mov))
+                or data_djen(mov)
+                or data_mov(mov)
+            )
+        if not data_intimacao:
+            return None
+
+        texto = _texto_mov(mov) if mov else ''
+        if not meio:
+            meio = _classificar_meio(texto) if mov else 'intimacao'
+        return {
+            'evento': evento_intimacao or 'manual',
+            'data': data_intimacao,
+            'meio': meio,
+            'score': 999,
+            'texto': texto[:500],
+        }
+
     def _intimacao(self, movs, evento, alvo, descricao_despacho=''):
         candidatas = []
         for mov in movs:

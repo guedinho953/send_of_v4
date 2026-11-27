@@ -242,8 +242,13 @@ Opções da tela:
   Pagamento (15);
 - **Preparo**: para recurso inominado (gratuidade, completo,
   incompleto/insuficiente ou não pagou);
-- **Intimação**: para contrarrazões/impugnação, informe a data que abriu o
-  prazo;
+- **Intimação**: para contrarrazões/impugnação, informe o **evento da
+  decisão/recurso**; o sistema localiza automaticamente a intimação
+  posterior (ou usa o próprio evento, se ele já for a intimação). A data
+  manual fica como **fallback**, para quando a localização automática não
+  encontrar. Para decurso, a data também é automática, com fallback manual;
+- **Parte a intimar**: opcional, ajuda a desambiguar quando há mais de uma
+  intimação após o evento;
 - **Ação**: por ora **Gerar certidão**. As ações **Juntar** e
   **Juntar + intimar** aparecem como “em breve” e serão habilitadas na
   próxima etapa.
@@ -292,7 +297,7 @@ ficam registradas em:
 ## Testes
 
 ```bat
-python -m unittest test_prazo_djen test_verificacao_inominado test_peticoes_inominado test_partes_inominado
+python -m unittest test_prazo_djen test_verificacao_inominado test_peticoes_inominado test_partes_inominado test_intimacao_evento
 python manage.py test test_certidao_origem test_decurso_pagamento test_peticoes_fila_views
 ```
 
@@ -317,7 +322,9 @@ Casos cobertos:
   decurso de 15 dias;
 - geração do HTML e registro da certidão de decurso em Movimentações;
 - fila de petições com sugestão de certidão e escolha manual do tipo,
-  preparo e ação.
+  preparo e ação;
+- localização da intimação por evento (contrarrazões/impugnação), com data
+  manual apenas como fallback.
 
 ## Limitações / próximos passos
 

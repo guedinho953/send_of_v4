@@ -29,12 +29,14 @@
 <div style="background:#eff6ff; border:1px solid #bfdbfe; color:#1e3a8a; padding:10px 14px; border-radius:8px; margin-bottom:16px; font-size:12px; line-height:1.5;">
     Para <strong>recurso inominado</strong>, informe o preparo e o sistema
     calcula automaticamente a intimação do recorrente. Para
-    <strong>contrarrazões/impugnação</strong>, informe a data da intimação que
-    abriu o prazo. Ao escolher <strong>Decurso de Pagamento</strong>, os campos
-    <strong>Evento do despacho</strong>, <strong>Executado(a)</strong> e
-    <strong>Assinatura</strong> aparecem no próprio card; não precisa sair da
-    fila. A ação <strong>Juntar/Intimar</strong> será habilitada na próxima
-    etapa; por ora use <strong>Gerar certidão</strong>.
+    <strong>contrarrazões/impugnação</strong>, informe o <strong>evento da
+    decisão/recurso</strong>; o sistema procura a intimação automaticamente e
+    só usa a data manual como fallback. Ao escolher <strong>Decurso de
+    Pagamento</strong>, os campos <strong>Evento do despacho</strong>,
+    <strong>Executado(a)</strong> e <strong>Assinatura</strong> aparecem no
+    próprio card; não precisa sair da fila. A ação
+    <strong>Juntar/Intimar</strong> será habilitada na próxima etapa; por ora
+    use <strong>Gerar certidão</strong>.
 </div>
 
 {% if peticoes %}
@@ -102,7 +104,7 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div>
+                    <div class="campo-preparo">
                         <label style="display:block; font-size:11px; font-weight:600; color:#374151; margin-bottom:3px;">Preparo (inominado)</label>
                         <select name="preparo" style="padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px;">
                             {% for valor, label in preparos %}
@@ -110,15 +112,27 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div>
-                        <label style="display:block; font-size:11px; font-weight:600; color:#374151; margin-bottom:3px;">Intimação (demais tipos)</label>
-                        <input name="data_intimacao" placeholder="DD/MM/AAAA"
-                               style="width:110px; padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px;">
+                    <div class="campo-intimacao">
+                        <label style="display:block; font-size:11px; font-weight:600; color:#374151; margin-bottom:3px;">Evento da decisão/recurso</label>
+                        <input name="evento_origem" placeholder="ex.: 55"
+                               style="width:100px; padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px;">
+                        <div style="font-size:11px; color:#6b7280;">Opcional: o sistema localiza a intimação.</div>
                     </div>
-                    <div>
-                        <label style="display:block; font-size:11px; font-weight:600; color:#374151; margin-bottom:3px;">Evento da intimação</label>
+                    <div class="campo-intimacao">
+                        <label style="display:block; font-size:11px; font-weight:600; color:#374151; margin-bottom:3px;">Parte a intimar (opcional)</label>
+                        <input name="parte" placeholder="nome da parte"
+                               style="width:180px; padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px;">
+                    </div>
+                    <div class="campo-intimacao">
+                        <label style="display:block; font-size:11px; font-weight:600; color:#374151; margin-bottom:3px;">Evento da intimação (se souber)</label>
                         <input name="evento_intimacao" placeholder="opcional"
                                style="width:100px; padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px;">
+                    </div>
+                    <div class="campo-intimacao">
+                        <label style="display:block; font-size:11px; font-weight:600; color:#374151; margin-bottom:3px;">Data da intimação (fallback)</label>
+                        <input name="data_intimacao" placeholder="DD/MM/AAAA"
+                               style="width:110px; padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px;">
+                        <div style="font-size:11px; color:#6b7280;">Só use se não localizar pelo evento.</div>
                     </div>
                     <div>
                         <label style="display:block; font-size:11px; font-weight:600; color:#374151; margin-bottom:3px;">Ação</label>
@@ -144,6 +158,33 @@
                         <label style="display:block; font-size:11px; font-weight:600; color:#5b21b6; margin-bottom:3px;">Executado(a) (opcional)</label>
                         <input name="executado" placeholder="deixe vazio para usar o promovido"
                                style="width:260px; padding:6px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px;">
+                    </div>
+                    <div style="font-size:11px; color:#5b21b6; max-width:260px;">
+                        A data da intimação é localizada automaticamente a partir
+                        do despacho; só preencha o fallback se ela não for
+                        encontrada.
+                    </div>
+                    <div style="flex-basis:100%;">
+                        <details>
+                            <summary style="cursor:pointer; font-size:11px; color:#5b21b6;">
+                                Não localizou a intimação? Informe manualmente
+                            </summary>
+                            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:8px;">
+                                <div>
+                                    <label style="display:block; font-size:11px; font-weight:600; color:#5b21b6; margin-bottom:3px;">Data da intimação (fallback)</label>
+                                    <input name="data_intimacao_manual" placeholder="DD/MM/AAAA"
+                                           style="width:110px; padding:6px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px;">
+                                </div>
+                                <div>
+                                    <label style="display:block; font-size:11px; font-weight:600; color:#5b21b6; margin-bottom:3px;">Evento da intimação (fallback)</label>
+                                    <input name="evento_intimacao_manual" placeholder="opcional"
+                                           style="width:110px; padding:6px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px;">
+                                </div>
+                                <div style="font-size:11px; color:#6b7280; align-self:flex-end;">
+                                    Deixe vazio para o sistema continuar tentando o automático.
+                                </div>
+                            </div>
+                        </details>
                     </div>
                     <div>
                         <label style="display:block; font-size:11px; font-weight:600; color:#5b21b6; margin-bottom:3px;">Assinatura da certidão</label>
@@ -178,15 +219,27 @@
 document.querySelectorAll('form.fila-peticao-form').forEach(function (form) {
     const tipo = form.querySelector('[name="tipo_prazo"]');
     const bloco = form.querySelector('.decurso-campos');
+    const preparo = form.querySelector('.campo-preparo');
+    const intimacao = form.querySelectorAll('.campo-intimacao');
     const sel = form.querySelector('.assinante-select');
     const nome = form.querySelector('.assinante-nome');
     const cargo = form.querySelector('.assinante-cargo');
 
     function atualizarTipo() {
-        if (bloco && tipo) {
-            bloco.style.display = tipo.value === 'decurso_pagamento'
-                ? 'flex' : 'none';
+        const valor = tipo ? tipo.value : '';
+        const decurso = valor === 'decurso_pagamento';
+        const inominado = valor === 'inominado';
+        const semTipo = !valor;
+
+        if (bloco) {
+            bloco.style.display = decurso ? 'flex' : 'none';
         }
+        if (preparo) {
+            preparo.style.display = (inominado || semTipo) ? 'block' : 'none';
+        }
+        intimacao.forEach(function (campo) {
+            campo.style.display = (!inominado && !decurso) ? 'block' : 'none';
+        });
     }
     function atualizarAssinante() {
         const outro = sel && sel.value === 'outro';
