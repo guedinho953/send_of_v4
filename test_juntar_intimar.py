@@ -217,6 +217,97 @@ class JuntarIntimarPlanTest(TestCase):
         self.assertEqual(kwargs['proc_projudi'], '12345678901234')
 
     @patch('projudi.juntar_views.executar_juntada')
+    def test_juntar_localizador(self, juntar):
+        registro = PrazoDjenRecord.objects.create(
+            processo='0000014-14.2026.8.05.0191',
+            origem='movimentacao',
+            tipo_prazo='impugnacao_embargos_execucao',
+            prazo_dias=15,
+            seguranca_juizo='parcial',
+            tipo_localizador='15286',
+            localizador='1',
+            certidao_path=str(self.preview),
+        )
+        juntar.return_value = (True, SimpleNamespace(id=600))
+        resposta = self.client.post(
+            reverse('projudi:certidao_juntar_intimar',
+                    args=[registro.id]),
+            {
+                'acao': 'juntar_localizador',
+                'processo_url': (
+                    'https://projudi.tjba.jus.br/projudi/listagens/'
+                    'DadosProcesso?numeroProcesso=12345678901234'),
+                'polo': 'autores',
+                'prazo': '15',
+                'confirmo': 'on',
+            },
+        )
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'juntada com localizador')
+        juntar.assert_called_once()
+
+    @patch('projudi.juntar_views.executar_contadoria')
+    @patch('projudi.juntar_views.executar_juntada')
+    def test_juntar_contadoria(self, juntar, contadoria):
+        registro = PrazoDjenRecord.objects.create(
+            processo='0000015-15.2026.8.05.0191',
+            origem='movimentacao',
+            tipo_prazo='impugnacao_embargos_execucao',
+            prazo_dias=15,
+            seguranca_juizo='parcial',
+            certidao_path=str(self.preview),
+        )
+        juntar.return_value = (True, SimpleNamespace(id=700))
+        contadoria.return_value = (True, SimpleNamespace(id=701))
+        resposta = self.client.post(
+            reverse('projudi:certidao_juntar_intimar',
+                    args=[registro.id]),
+            {
+                'acao': 'juntar_contadoria',
+                'processo_url': (
+                    'https://projudi.tjba.jus.br/projudi/listagens/'
+                    'DadosProcesso?numeroProcesso=12345678901234'),
+                'polo': 'autores',
+                'prazo': '15',
+                'confirmo': 'on',
+            },
+        )
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'autos remetidos à contadoria')
+        contadoria.assert_called_once()
+
+    @patch('projudi.juntar_views.executar_conclusao')
+    @patch('projudi.juntar_views.executar_juntada')
+    def test_juntar_conclusao(self, juntar, conclusao):
+        registro = PrazoDjenRecord.objects.create(
+            processo='0000016-16.2026.8.05.0191',
+            origem='movimentacao',
+            tipo_prazo='impugnacao_embargos_execucao',
+            prazo_dias=15,
+            seguranca_juizo='parcial',
+            certidao_path=str(self.preview),
+        )
+        juntar.return_value = (True, SimpleNamespace(id=800))
+        conclusao.return_value = (True, SimpleNamespace(id=801))
+        resposta = self.client.post(
+            reverse('projudi:certidao_juntar_intimar',
+                    args=[registro.id]),
+            {
+                'acao': 'juntar_conclusao',
+                'processo_url': (
+                    'https://projudi.tjba.jus.br/projudi/listagens/'
+                    'DadosProcesso?numeroProcesso=12345678901234'),
+                'polo': 'autores',
+                'prazo': '15',
+                'tipo_conclusao': '18',
+                'confirmo': 'on',
+            },
+        )
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'conclusão ao Juiz')
+        conclusao.assert_called_once()
+
+    @patch('projudi.juntar_views.executar_juntada')
     def test_so_certificar_nao_envia_ao_projudi(self, executar):
         registro = PrazoDjenRecord.objects.create(
             processo='0000013-13.2026.8.05.0191',

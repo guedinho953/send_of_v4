@@ -325,6 +325,25 @@ def executar_juntada(registro, user, plano=None):
     return ok, record
 
 
+def executar_contadoria(registro, user, plano):
+    """Remete os autos à contadoria (movimentação 11383 + contador)."""
+    from projudi.movimentacao_service import MovimentacaoService
+
+    service = MovimentacaoService(user)
+    record = service.importar(
+        processo_numero=registro.processo,
+        act_verb='contadoria',
+        observacao='Remessa à contadoria.',
+        categoria='outro',
+        processo_cnj=registro.processo,
+        url_processo=plano.get('processo_url') or '',
+        codigo_movimentacao='11383',
+        descricao_movimentacao='Remessa à Contadoria',
+    )
+    ok = service.executar_requests(record, enviar_contador=True)
+    return ok, record
+
+
 def executar_conclusao(registro, user, plano, tipo_conclusao='18',
                        juiz_conclusao='41201'):
     """Registra a conclusão ao juiz no Projudi (movimentação 11383).

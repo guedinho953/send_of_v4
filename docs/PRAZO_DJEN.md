@@ -433,6 +433,12 @@ A ação **Juntar certidão** executa no Projudi, com confirmação e via
 certidão). Se a certidão já foi juntada, a tela mostra **já juntada** e
 bloqueia nova execução.
 
+Na impugnação/embargos também existem ações diretas:
+
+- **Juntar + localizador** — aplica o localizador na mesma movimentação;
+- **Juntar + contadoria** — junta e remete à contadoria;
+- **Juntar + conclusão** — junta e conclui ao Juiz.
+
 Para a **Impugnação/Embargos à Execução TEMPESTIVA**, a ação
 **Juntar + intimar** também intima o(a) **embargado(a)** (exequente) para,
 querendo, no prazo de 15 dias úteis, apresentar manifestação acerca dos

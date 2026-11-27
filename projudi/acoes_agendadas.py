@@ -81,19 +81,11 @@ def executar_acao(acao, user):
             ok = service.executar_requests(record)
 
         elif acao.tipo == 'contadoria':
-            url = _processo_url(registro, user)
-            service = MovimentacaoService(user)
-            record = service.importar(
-                processo_numero=registro.processo,
-                act_verb='contadoria',
-                observacao='Remessa à contadoria após o prazo da intimação.',
-                categoria='outro',
-                processo_cnj=registro.processo,
-                url_processo=url,
-                codigo_movimentacao='11383',
-                descricao_movimentacao='Remessa à Contadoria',
+            from projudi.juntar_service import (
+                executar_contadoria, montar_plano,
             )
-            ok = service.executar_requests(record, enviar_contador=True)
+            plano = montar_plano(registro, user)
+            ok, _rec = executar_contadoria(registro, user, plano)
 
         elif acao.tipo == 'conclusao':
             from projudi.juntar_service import (

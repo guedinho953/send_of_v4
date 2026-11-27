@@ -9,7 +9,8 @@ from django.views import View
 
 from projudi.acoes_agendadas import agendar_pos_intimacao
 from projudi.juntar_service import (
-    executar_juntada, executar_juntada_e_intimacao, montar_plano,
+    executar_contadoria, executar_conclusao, executar_juntada,
+    executar_juntada_e_intimacao, montar_plano,
 )
 from projudi.models import PrazoDjenRecord
 
@@ -45,6 +46,13 @@ class CertidaoJuntarIntimarView(LoginRequiredMixin, View):
                 ('so_certificar', 'Só certificar (não juntar)'))
         if plano.get('pode_juntar', True):
             acoes.append(('juntar', 'Juntar certidão'))
+        if (registro.tipo_prazo == 'impugnacao_embargos_execucao'
+                and plano.get('pode_juntar', True)):
+            acoes.extend([
+                ('juntar_localizador', 'Juntar + localizador'),
+                ('juntar_contadoria', 'Juntar + contadoria'),
+                ('juntar_conclusao', 'Juntar + conclusão'),
+            ])
         if plano.get('pode_intimar'):
             acoes.append(('juntar_intimar', 'Juntar + intimar'))
         embargos = registro.tipo_prazo == 'impugnacao_embargos_execucao'
@@ -164,6 +172,130 @@ class CertidaoJuntarIntimarView(LoginRequiredMixin, View):
                 self.template_name,
                 self._contexto(
                     registro, plano, acao=acao,
+                    processo_url=processo_url, polo=polo, prazo=prazo),
+            )
+
+        if acao in (
+                'juntar_localizador', 'juntar_contadoria',
+                'juntar_conclusao'):
+            if plano.get('ja_juntada'):
+                messages.info(
+                    request,
+                    f'Certidão já juntada (movimentação '
+                    f'#{plano.get("movimentacao_id")}). Nada foi enviado.',
+                )
+                return render(
+                    request,
+                    self.template_name,
+                    self._contexto(
+                        registro, plano, acao=acao,
+                        processo_url=processo_url, polo=polo, prazo=prazo),
+                )
+            if plano.get('erros'):
+                messages.error(request, '; '.join(plano['erros']))
+                return render(
+                    request,
+                    self.template_name,
+                    self._contexto(
+                        registro, plano, acao=acao,
+                        processo_url=processo_url, polo=polo, prazo=prazo),
+                )
+
+            try:
+                ok, record = executar_juntada(
+                    registro, request.user, plano=plano)
+            except Exception as exc:
+                messages.error(
+                    request, f'Erro ao juntar a certidão: {exc}')
+                return render(
+                    request,
+                    self.template_name,
+                    self._contexto(
+                        registro, plano, acao=acao,
+                        processo_url=processo_url, polo=polo, prazo=prazo),
+                )
+
+            if not ok:
+                messages.error(
+                    request,
+                    'A juntada não foi confirmada. Confira a movimentação '
+                    f'#{record.id} e os logs.',
+                )
+            elif acao == 'juntar_localizador':
+                if not (plano.get('tipo_localizador')
+                        or plano.get('localizador')):
+                    messages.warning(
+                        request,
+                        'A certidão foi juntada, mas não há localizador '
+                        'definido para aplicar.',
+                    )
+                else:
+                    messages.success(
+                        request,
+                        '✅ Certidão juntada com localizador no Projudi '
+                        f'(movimentação #{record.id}).',
+                    )
+            elif acao == 'juntar_contadoria':
+                try:
+                    extra_ok, extra_rec = executar_contadoria(
+                        registro, request.user, plano)
+                except Exception as exc:
+                    messages.warning(
+                        request,
+                        'A certidão foi juntada, mas a remessa à '
+                        f'contadoria falhou: {exc}',
+                    )
+                else:
+                    if extra_ok:
+                        messages.success(
+                            request,
+                            '✅ Certidão juntada e autos remetidos à '
+                            f'contadoria (movimentação #{extra_rec.id}).',
+                        )
+                    else:
+                        messages.warning(
+                            request,
+                            'A certidão foi juntada, mas a remessa à '
+                            'contadoria não foi confirmada.',
+                        )
+            elif acao == 'juntar_conclusao':
+                try:
+                    extra_ok, extra_rec = executar_conclusao(
+                        registro, request.user, plano,
+                        tipo_conclusao=tipo_conclusao,
+                        juiz_conclusao=juiz_conclusao)
+                except Exception as exc:
+                    messages.warning(
+                        request,
+                        'A certidão foi juntada, mas a conclusão falhou: '
+                        f'{exc}',
+                    )
+                else:
+                    if extra_ok:
+                        messages.success(
+                            request,
+                            '✅ Certidão juntada e conclusão ao Juiz '
+                            f'registrada (movimentação #{extra_rec.id}).',
+                        )
+                    else:
+                        messages.warning(
+                            request,
+                            'A certidão foi juntada, mas a conclusão não '
+                            'foi confirmada.',
+                        )
+
+            novo_plano = montar_plano(
+                registro,
+                request.user,
+                processo_url=processo_url,
+                polo=polo,
+                prazo=prazo,
+            )
+            return render(
+                request,
+                self.template_name,
+                self._contexto(
+                    registro, novo_plano, acao=acao,
                     processo_url=processo_url, polo=polo, prazo=prazo),
             )
 
