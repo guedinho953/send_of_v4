@@ -255,11 +255,43 @@ class CertidaoGerarViaRagView(LoginRequiredMixin, View):
     Projudi via `CumprimentoService.executar_cumprimento`.
     """
 
+    @staticmethod
+    def _renderizar_preview(service, record, template, rag):
+        """Tenta gerar o HTML da certidão sem executar nada no Projudi."""
+        try:
+            service.gerar_observacao_prazo(record)
+        except Exception:
+            pass
+        try:
+            html = service._html_certidao_prazo(record)
+        except Exception:
+            html = ''
+        if not html:
+            from datetime import date
+            from django.template import Context, Template
+            try:
+                ctx = rag.get_template_context() or {}
+                ctx.update({
+                    'data': date.today().strftime('%d/%m/%Y'),
+                    'servidor': getattr(service.user, 'full_name', '') or (
+                        getattr(service.user, 'first_name', '') or '...'),
+                    'servidor_cargo': 'Secretário em Substituição',
+                })
+                html = Template(template.html_template).render(
+                    Context(ctx))
+            except Exception:
+                html = ''
+        return html
+
     def post(self, request):
         from base.utils import (
             format_process_number, normalize_process_number,
         )
-        from processes.models import Process, RAGExample
+        from datetime import date
+        from django.template import Context, Template
+        from processes.models import (
+            DocumentTemplate, GeneratedDocument, Process, RAGExample,
+        )
         from .cumprimento_service import CumprimentoService
         from .processo_lookup import localizar_processo
 
@@ -270,6 +302,9 @@ class CertidaoGerarViaRagView(LoginRequiredMixin, View):
             request.POST.get('evento_decisao') or ''
         ).strip()
         forcar = request.POST.get('forcar') == '1'
+        acao = (request.POST.get('acao') or 'executar').strip().lower()
+        if acao not in ('preview', 'executar'):
+            acao = 'executar'
 
         if not processo or not rag_id.isdigit():
             messages.error(request, 'Informe o processo e a RAG.')
@@ -393,6 +428,38 @@ class CertidaoGerarViaRagView(LoginRequiredMixin, View):
         )
 
         service = CumprimentoService(request.user)
+        if acao == 'preview':
+            html = self._renderizar_preview(
+                service, record, template, rag)
+            if not html.strip():
+                record.delete()
+                messages.error(
+                    request,
+                    'Não foi possível montar a prévia desta certidão. '
+                    'Confira o template vinculado à RAG.'
+                )
+                return HttpResponseRedirect(
+                    reverse('projudi:certidao_dashboard'))
+            seq = GeneratedDocument.proximo_numero(template)
+            doc = GeneratedDocument.objects.create(
+                tenant=getattr(request.user, 'tenant', None),
+                process=proc,
+                template=template,
+                rag_example=rag,
+                sequential_number=seq,
+                year=date.today().year,
+                recipient_name=f'Certidão: {template.name}',
+                html_content=html,
+            )
+            record.delete()
+            messages.info(
+                request,
+                '👁 Prévia gerada. Confira a certidão e escolha a ação '
+                'para executar o restante do fluxo.'
+            )
+            return HttpResponseRedirect(reverse(
+                'projudi:certidao_peticao_preview', args=[doc.id]))
+
         try:
             service.executar_cumprimento(record)
             record.refresh_from_db()

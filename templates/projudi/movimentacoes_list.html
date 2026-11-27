@@ -123,14 +123,19 @@
                         <form method="post"
                               action="{% url 'projudi:certidao_gerar_rag' %}"
                               class="fila-gerar-rag"
-                              style="margin:0; display:none;"
-                              onsubmit="return confirm('Gerar e assinar a certidão no Projudi com esta RAG?');">
+                              style="margin:0; display:none;">
                             {% csrf_token %}
                             <input type="hidden" name="processo" value="{{ m.processo }}">
                             <input type="hidden" name="processo_url" value="{{ m.link_processo|default:'' }}">
                             <input type="hidden" name="rag_id" value="">
-                            <button type="submit" class="btn btn-sm btn-outline">
-                                📄 Gerar certidão
+                            <button type="submit" name="acao" value="preview"
+                                    class="btn btn-sm btn-outline">
+                                👁 Só gerar para revisar
+                            </button>
+                            <button type="submit" name="acao" value="executar"
+                                    class="btn btn-sm btn-outline"
+                                    onclick="return confirm('Gerar, assinar e juntar a certidão no Projudi?');">
+                                📄 Gerar e juntar
                             </button>
                         </form>
                         {% if request.user.is_staff %}

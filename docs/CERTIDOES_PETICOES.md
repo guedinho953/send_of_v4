@@ -610,17 +610,34 @@ conclusão e link para editar a RAG no admin.
 
 ## Criar RAG pela fila de movimentações
 
-Na página `/projudi/movimentacoes/`, cada movimentação com documento tem o
-botão **🧠 Criar RAG**. Ele baixa o documento, cria a `RAGExample` com o
-texto do despacho, vincula o processo e tenta inferir o tipo de certidão.
+Na página `/projudi/movimentacoes/`, cada movimentação tem o botão
+**🧠 Gerar RAG**, sempre disponível. Ele baixa o documento, cria a
+`RAGExample` com o texto do despacho e, se não houver documento, usa o
+texto da movimentação. O processo é vinculado e o tipo de certidão é
+inferido.
 
 Depois da análise da RAG:
 
-- se a RAG foi encontrada e tem certidão configurada, aparece
-  **📄 Gerar certidão**;
+- se a RAG foi encontrada e tem certidão configurada, aparecem
+  **👁 Só gerar para revisar** e **📄 Gerar e juntar**;
 - se a RAG foi encontrada mas ainda não tem certidão/template, aparece
   **✏️ Configurar RAG**;
-- se nenhuma RAG foi encontrada, aparece **🧠 Criar RAG**.
+- se nenhuma RAG foi encontrada, aparece **🧠 Gerar RAG**.
+
+## Gerar sem juntar e ações posteriores
+
+Ao escolher **👁 Só gerar para revisar**, o sistema monta a prévia da
+certidão e não executa nada no Projudi. Na prévia ou na tabela de certidões,
+o usuário escolhe depois:
+
+- só gerar/manter sem juntar;
+- juntar certidão;
+- juntar + localizador;
+- juntar + conclusão;
+- juntar + contadoria.
+
+Os parâmetros de localizador, conclusão e contadoria são enviados ao
+serviço de movimentação somente quando a ação é confirmada.
 
 ## Certidões em tabela
 
