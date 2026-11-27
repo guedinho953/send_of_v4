@@ -173,7 +173,7 @@ class Command(BaseCommand):
             '--localizador', default='',
             help='Código do localizador para aplicar na juntada')
         parser.add_argument(
-            '--tipo-conclusao', default='3',
+            '--tipo-conclusao', default='18',
             help='Tipo de conclusão (radio conclusao): 1=Despacho, '
                  '3=Sentença, 18=Embargos de Execução etc.')
         parser.add_argument(
@@ -505,7 +505,7 @@ class Command(BaseCommand):
                 seguranca_juizo=options.get('seguranca_juizo') or '',
                 tipo_localizador=options.get('tipo_localizador') or '',
                 localizador=options.get('localizador') or '',
-                tipo_conclusao=options.get('tipo_conclusao') or '3',
+                tipo_conclusao=options.get('tipo_conclusao') or '18',
                 juiz_conclusao=options.get('juiz_conclusao') or '41201',
                 habilitacao_regular=habilitacao_regular,
                 texto_certidao=texto_registro,

@@ -109,8 +109,8 @@ def sugerir_certidao(user, processo, documento_url, processo_url=''):
         'rag_ato': '',
         'tipo_localizador': '',
         'localizador': '',
-        'tipo_conclusao': '3',
-        'tipo_conclusao_label': CONCLUSAO_LABELS['3'],
+        'tipo_conclusao': '18',
+        'tipo_conclusao_label': CONCLUSAO_LABELS['18'],
         'juiz_conclusao': '41201',
         'mensagem': '',
         'url_form': '',
@@ -170,10 +170,10 @@ def sugerir_certidao(user, processo, documento_url, processo_url=''):
         'tipo_localizador': tipo_localizador,
         'localizador': localizador,
         'tipo_conclusao': (
-            getattr(rag, 'tipo_conclusao', '') or '3') if rag else '3',
+            getattr(rag, 'tipo_conclusao', '') or '18') if rag else '18',
         'tipo_conclusao_label': CONCLUSAO_LABELS.get(
-            (getattr(rag, 'tipo_conclusao', '') or '3') if rag else '3',
-            'Sentença'),
+            (getattr(rag, 'tipo_conclusao', '') or '18') if rag else '18',
+            'Embargos de Execução'),
         'juiz_conclusao': (
             getattr(rag, 'juiz_conclusao', '') or '41201') if rag else '41201',
     })

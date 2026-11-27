@@ -62,7 +62,7 @@ class CertidaoImpugnacaoEmbargosView(LoginRequiredMixin, View):
             'evento_intimacao_manual': '',
             'tipo_localizador': '',
             'localizador': '',
-            'tipo_conclusao': '3',
+            'tipo_conclusao': '18',
             'juiz_conclusao': '41201',
         }
         context.update(extra)
@@ -81,7 +81,7 @@ class CertidaoImpugnacaoEmbargosView(LoginRequiredMixin, View):
                 request.GET.get('tipo_localizador') or '').strip(),
             localizador=(request.GET.get('localizador') or '').strip(),
             tipo_conclusao=(
-                request.GET.get('tipo_conclusao') or '3').strip(),
+                request.GET.get('tipo_conclusao') or '18').strip(),
             juiz_conclusao=(
                 request.GET.get('juiz_conclusao') or '41201').strip(),
         )
@@ -106,7 +106,7 @@ class CertidaoImpugnacaoEmbargosView(LoginRequiredMixin, View):
         localizador = (
             request.POST.get('localizador') or '').strip()
         tipo_conclusao = (
-            request.POST.get('tipo_conclusao') or '3').strip()
+            request.POST.get('tipo_conclusao') or '18').strip()
         juiz_conclusao = (
             request.POST.get('juiz_conclusao') or '41201').strip()
 

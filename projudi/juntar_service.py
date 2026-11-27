@@ -267,7 +267,7 @@ def montar_plano(registro, user=None, processo_url='', polo='',
         'motivo_intimacao': '3',
         'tipo_localizador': registro.tipo_localizador or '',
         'localizador': registro.localizador or '',
-        'tipo_conclusao': registro.tipo_conclusao or '3',
+        'tipo_conclusao': registro.tipo_conclusao or '18',
         'juiz_conclusao': registro.juiz_conclusao or '41201',
         'pode_intimar': pode_intimar,
         'observacao_juntada': (
@@ -325,7 +325,7 @@ def executar_juntada(registro, user, plano=None):
     return ok, record
 
 
-def executar_conclusao(registro, user, plano, tipo_conclusao='3',
+def executar_conclusao(registro, user, plano, tipo_conclusao='18',
                        juiz_conclusao='41201'):
     """Registra a conclusão ao juiz no Projudi (movimentação 11383).
 
@@ -348,7 +348,7 @@ def executar_conclusao(registro, user, plano, tipo_conclusao='3',
     )
     ok = service.executar_requests(
         record,
-        conclusao=str(tipo_conclusao or '3'),
+        conclusao=str(tipo_conclusao or '18'),
         login_conclusao_pessoal=str(juiz_conclusao or '41201'),
     )
     return ok, record

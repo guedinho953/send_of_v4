@@ -67,7 +67,7 @@ class CertidaoJuntarIntimarView(LoginRequiredMixin, View):
             'polo': plano.get('polo', 'autores'),
             'prazo': plano.get('prazo', '10'),
             'fazer_conclusao': plano.get('fazer_conclusao', False),
-            'tipo_conclusao': plano.get('tipo_conclusao', '3'),
+            'tipo_conclusao': plano.get('tipo_conclusao', '18'),
             'conclusao_opcoes': CONCLUSAO_OPCOES,
             'juiz_conclusao': plano.get(
                 'juiz_conclusao', JUIZ_CONCLUSAO_PADRAO),
@@ -95,7 +95,7 @@ class CertidaoJuntarIntimarView(LoginRequiredMixin, View):
             and registro.tipo_prazo == 'impugnacao_embargos_execucao'
         )
         tipo_conclusao = (
-            request.POST.get('tipo_conclusao') or '3').strip()
+            request.POST.get('tipo_conclusao') or '18').strip()
         juiz_conclusao = (
             request.POST.get('juiz_conclusao')
             or JUIZ_CONCLUSAO_PADRAO).strip()
