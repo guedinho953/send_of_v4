@@ -546,3 +546,14 @@ como “Servidor Secretaria 2”.
 A primeira leitura consulta a fila e os processos no Projudi e pode levar
 até ~30 segundos. O resultado fica em cache por 5 minutos. O botão
 **Atualizar fila** força nova leitura.
+
+Para reduzir o tempo:
+
+- petições não classificadas não consultam o processo;
+- o PDF da petição só é baixado para **Recurso Inominado**, pois é o único
+  tipo que precisa identificar o recorrente;
+- do PDF, são lidas apenas as primeiras 5 páginas;
+- o nome do recorrente encontrado no PDF fica em cache por 12 horas;
+- as consultas aos processos rodam em paralelo, até 6 por vez.
+
+Mesmo assim, a maior parte do tempo depende da resposta do Projudi.

@@ -207,6 +207,15 @@ class PeticaoQueueService:
 
     def _recorrente_do_documento(self, session, documento_url, documento_texto):
         """Nome do recorrente a partir do texto da petição de recurso."""
+        chave_cache = (
+            f'recorrente_doc_v1:{documento_url}'
+            if documento_url else ''
+        )
+        if chave_cache:
+            em_cache = cache.get(chave_cache)
+            if em_cache:
+                return em_cache
+
         # 1) Tenta pelo texto do PDF da petição.
         if documento_url:
             try:
@@ -218,7 +227,12 @@ class PeticaoQueueService:
                         pdf = fitz.open(
                             stream=resposta.content, filetype='pdf'
                         )
-                        texto = '\n'.join(p.get_text() for p in pdf)
+                        # O nome do recorrente fica no cabeçalho; não é
+                        # necessário extrair o PDF inteiro.
+                        limite = min(5, pdf.page_count)
+                        texto = '\n'.join(
+                            pdf[i].get_text() for i in range(limite)
+                        )
                     except Exception:
                         texto = ''
 
@@ -256,12 +270,17 @@ class PeticaoQueueService:
                                         'RECURSO', 'PETICAO', 'EXCELENT',
                                         'PROCESSO', 'RAZOES', 'CERTIDAO',
                                         'TURMA', 'EGREGIA', 'COLENDA'))):
+                                if chave_cache:
+                                    cache.set(chave_cache, nome, 43200)
                                 return nome
             except Exception:
                 pass
 
         # 2) Fallback: nome no arquivo da petição.
-        return _nome_documento(documento_texto)
+        nome = _nome_documento(documento_texto)
+        if chave_cache and nome:
+            cache.set(chave_cache, nome, 43200)
+        return nome
 
     def _evento_recurso(self, session, processo_url, data_envio):
         """Evento em que a petição de recurso inominado foi protocolada."""
@@ -739,11 +758,16 @@ class PeticaoQueueService:
 
     def _analisar_item(self, cookies, base):
         session = self._nova_sessao(cookies)
-        recorrente = self._recorrente_do_documento(
-            session,
-            base['documento_url'],
-            base['documento_texto'],
-        )
+        # O nome do recorrente só é necessário para o recurso inominado.
+        # Nos demais tipos, evita baixar e interpretar o PDF da petição,
+        # que é uma das partes mais lentas da leitura da fila.
+        recorrente = ''
+        if base['tipo'] == 'recurso_inominado':
+            recorrente = self._recorrente_do_documento(
+                session,
+                base['documento_url'],
+                base['documento_texto'],
+            )
         intimacao = self._intimacao_do_processo(
             session,
             base['processo_url'],
