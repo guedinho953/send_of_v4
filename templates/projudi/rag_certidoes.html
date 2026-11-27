@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block title %}RAGs de Certidão — Send of v4{% endblock %}
+
+{% block extra_css %}
+<style>
+    .rag-top { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+    .rag-top h1 { margin:0; font-size:22px; }
+    .rag-top p { margin:4px 0 0; font-size:13px; color:#6b7280; }
+    .rag-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .filtro-btn { padding:7px 14px; border-radius:20px; font-size:12px; border:1px solid #e5e7eb; background:#fff; color:#374151; text-decoration:none; }
+    .filtro-btn.active { background:#0f766e; color:#fff; border-color:#0f766e; }
+    .filtro-btn:hover:not(.active) { background:#f9fafb; }
+    .stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:16px; }
+    .stat-card { background:#fff; border-radius:9px; padding:12px 14px; box-shadow:0 1px 3px rgba(0,0,0,.06); border-left:4px solid #0f766e; }
+    .stat-card h4 { margin:0; font-size:25px; color:#1e3a5f; }
+    .stat-card p { margin:3px 0 0; font-size:11px; color:#6b7280; text-transform:uppercase; }
+    .tabela { width:100%; border-collapse:collapse; background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,.07); font-size:13px; }
+    .tabela th { background:#f8fafc; color:#475569; text-align:left; padding:10px 12px; font-size:11px; text-transform:uppercase; border-bottom:1px solid #e5e7eb; }
+    .tabela td { padding:9px 12px; border-bottom:1px solid #f1f5f9; vertical-align:top; }
+    .tabela tr:hover td { background:#f8fafc; }
+    .tag { display:inline-block; padding:2px 8px; border-radius:9px; font-size:10px; font-weight:700; }
+    .tag-peticao { background:#dbeafe; color:#1e40af; }
+    .tag-movimentacao { background:#fef3c7; color:#92400e; }
+    .tag-tipo { background:#ccfbf1; color:#0f766e; }
+    .processo { font-family:monospace; font-weight:700; color:#1e3a5f; font-size:12px; }
+    .despacho { color:#374151; max-width:360px; line-height:1.35; }
+    .meta { color:#6b7280; font-size:11px; margin-top:3px; }
+    .acoes { display:flex; gap:5px; flex-wrap:wrap; }
+    .btn-sm { padding:5px 10px; font-size:11px; border-radius:5px; }
+    .empty-state { text-align:center; padding:44px 20px; color:#6b7280; background:#fff; border-radius:10px; }
+    .busca-form { display:flex; gap:6px; align-items:center; margin-left:auto; }
+    .busca-form input { padding:6px 9px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px; min-width:220px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="rag-top">
+    <div>
+        <h1>🧠 RAGs de Certidão</h1>
+        <p>
+            RAGs que têm certidão sugerida ou template de certidão vinculado,
+            separadas por origem.
+        </p>
+    </div>
+    <div class="rag-actions">
+        <a href="{% url 'projudi:certidao_dashboard' %}" class="btn btn-outline">📄 Certidões</a>
+        <a href="{% url 'projudi:movimentacoes' %}" class="btn btn-outline">📋 Movimentações Projudi</a>
+        {% if is_staff %}
+        <a href="{% url 'admin:processes_ragexample_add' %}" class="btn btn-outline">➕ Nova RAG</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card"><h4>{{ total }}</h4><p>Total de RAGs de certidão</p></div>
+    <div class="stat-card" style="border-left-color:#2563eb;"><h4>{{ total_peticoes }}</h4><p>Petições</p></div>
+    <div class="stat-card" style="border-left-color:#d97706;"><h4>{{ total_movimentacoes }}</h4><p>Movimentações</p></div>
+</div>
+
+<div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:14px;">
+    <a href="?{% if busca %}q={{ busca|urlencode }}{% endif %}"
+       class="filtro-btn {% if not origem_filtro %}active{% endif %}">
+        Todas ({{ total }})
+    </a>
+    <a href="?origem=peticao{% if busca %}&q={{ busca|urlencode }}{% endif %}"
+       class="filtro-btn {% if origem_filtro == 'peticao' %}active{% endif %}">
+        📄 Petições ({{ total_peticoes }})
+    </a>
+    <a href="?origem=movimentacao{% if busca %}&q={{ busca|urlencode }}{% endif %}"
+       class="filtro-btn {% if origem_filtro == 'movimentacao' %}active{% endif %}">
+        ⚙️ Movimentações ({{ total_movimentacoes }})
+    </a>
+    <form method="get" class="busca-form">
+        {% if origem_filtro %}<input type="hidden" name="origem" value="{{ origem_filtro }}">{% endif %}
+        <input name="q" value="{{ busca }}" placeholder="processo, despacho ou texto">
+        <button type="submit" class="btn btn-sm btn-outline">Buscar</button>
+    </form>
+</div>
+
+{% if registros %}
+<div style="overflow-x:auto;">
+    <table class="tabela">
+        <thead>
+            <tr>
+                <th>RAG</th>
+                <th>Origem</th>
+                <th>Processo / Despacho</th>
+                <th>Certidão</th>
+                <th>Localizador</th>
+                <th>Conclusão</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in registros %}
+            <tr>
+                <td>
+                    <strong>#{{ r.id }}</strong>
+                    {% if r.evento_despacho %}<div class="meta">evento {{ r.evento_despacho }}</div>{% endif %}
+                </td>
+                <td>
+                    <span class="tag tag-{{ r.origem_certidao }}">
+                        {{ r.origem_certidao_label|default:r.origem_certidao }}
+                    </span>
+                </td>
+                <td>
+                    <div class="processo">{{ r.process.number|default:"—" }}</div>
+                    <div class="despacho">{{ r.despacho_ato|default:"—"|truncatechars:150 }}</div>
+                    {% if r.despacho_data %}<div class="meta">{{ r.despacho_data }}</div>{% endif %}
+                </td>
+                <td>
+                    <span class="tag tag-tipo">{{ r.tipo_certidao_label }}</span>
+                    {% if r.templates_nomes %}
+                    <div class="meta">{{ r.templates_nomes|join:", "|truncatechars:100 }}</div>
+                    {% endif %}
+                </td>
+                <td>
+                    {{ r.tipo_localizador|default:"—" }}
+                    {% if r.localizador %}/ {{ r.localizador }}{% endif %}
+                </td>
+                <td>
+                    {{ r.get_tipo_conclusao_display|default:"—" }}
+                    {% if r.juiz_conclusao %}<div class="meta">juiz {{ r.juiz_conclusao }}</div>{% endif %}
+                </td>
+                <td>
+                    <div class="acoes">
+                        {% if is_staff %}
+                        <a class="btn btn-sm btn-outline"
+                           href="{% url 'admin:processes_ragexample_change' r.id %}">
+                            ✏️ Editar
+                        </a>
+                        {% endif %}
+                        <a class="btn btn-sm btn-outline"
+                           href="{% url 'projudi:movimentacoes' %}?q={{ r.process.number|urlencode }}">
+                            🔎 Movimentações
+                        </a>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">
+    Nenhuma RAG de certidão encontrada para este filtro.
+</div>
+{% endif %}
+{% endblock %}

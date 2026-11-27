@@ -93,6 +93,10 @@ class CertidaoDashboardView(LoginRequiredMixin, TemplateView):
             'rag_pendentes': rag_pendentes,
             'status_atual': status_filter,
             'origem_atual': origem,
+            'processo_prefill': (
+                self.request.GET.get('processo') or '').strip(),
+            'rag_prefill': (
+                self.request.GET.get('rag_id') or '').strip(),
             'session_active': self._session_ativa(user),
         })
         return context
@@ -517,3 +521,176 @@ class CertidaoSugestaoMovimentacaoView(LoginRequiredMixin, View):
                 {'erro': f'Erro ao sugerir certidão: {exc}'},
                 status=500,
             )
+
+
+class CriarRagMovimentacaoView(LoginRequiredMixin, View):
+    """Cria uma RAG a partir de uma movimentação/documento do Projudi."""
+
+    def post(self, request):
+        from processes.models import Process, RAGExample
+        from base.utils import normalize_process_number
+        from .certidao_sugestao import _texto_documento, _tipo_por_texto
+
+        processo = (request.POST.get('processo') or '').strip()
+        tipo = (request.POST.get('tipo') or '').strip()
+        data = (request.POST.get('data') or '').strip()
+        link_processo = (request.POST.get('link_processo') or '').strip()
+        link_documento = (request.POST.get('link_documento') or '').strip()
+
+        if not processo or not link_documento:
+            messages.error(
+                request,
+                'Movimentação sem processo ou documento para criar a RAG.',
+            )
+            return HttpResponseRedirect(reverse('projudi:movimentacoes'))
+
+        resultado = ProjudiService(request.user)._get_session_from_cookies()
+        if not resultado:
+            messages.error(request, 'Sessão do Projudi não disponível.')
+            return HttpResponseRedirect(reverse('projudi:movimentacoes'))
+        session, _ = resultado
+
+        texto = _texto_documento(session, link_documento)
+        if len(texto.strip()) < 30:
+            messages.error(
+                request,
+                'Não foi possível extrair texto suficiente do documento.',
+            )
+            return HttpResponseRedirect(reverse('projudi:movimentacoes'))
+
+        numero = normalize_process_number(processo)
+        proc = Process.objects.filter(number_normalized=numero).first()
+        if not proc:
+            proc = Process.objects.create(
+                number=processo,
+                number_normalized=numero,
+                tenant=getattr(request.user, 'tenant', None),
+                status='analyzing',
+                projudi_url=link_processo,
+            )
+
+        existente = RAGExample.objects.filter(
+            process=proc,
+            despacho_observacao=texto,
+        ).first()
+        if existente:
+            messages.info(
+                request,
+                f'Essa movimentação já tem uma RAG cadastrada (#{existente.id}).',
+            )
+            if request.user.is_staff:
+                return HttpResponseRedirect(reverse(
+                    'admin:processes_ragexample_change',
+                    args=[existente.id],
+                ))
+            return HttpResponseRedirect(reverse('projudi:movimentacoes'))
+
+        tipo_certidao = _tipo_por_texto(texto)
+        rag = RAGExample.objects.create(
+            process=proc,
+            tenant=getattr(request.user, 'tenant', None),
+            despacho_ato=(tipo or 'Movimentação')[:200],
+            despacho_observacao=texto,
+            despacho_data=data,
+            documentos=[{
+                'nome': f'Documento — {data or tipo or "movimentação"}',
+                'url': link_documento,
+            }],
+            tipo_certidao=tipo_certidao,
+            active=True,
+        )
+        messages.success(
+            request,
+            f'✅ RAG #{rag.id} criada a partir da movimentação. '
+            'Revise o tipo de certidão e os parâmetros no admin.',
+        )
+        if request.user.is_staff:
+            return HttpResponseRedirect(reverse(
+                'admin:processes_ragexample_change', args=[rag.id]))
+        return HttpResponseRedirect(reverse('projudi:movimentacoes'))
+
+
+class RagCertidaoListView(LoginRequiredMixin, TemplateView):
+    """Tabela das RAGs que geram certidão, separadas por origem."""
+
+    template_name = 'projudi/rag_certidoes.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from django.db.models import Q
+        from processes.models import RAGExample
+        from .certidao_sugestao import (
+            TIPOS_CERTIDAO, _normalizar, _tipo_por_texto,
+        )
+
+        tipos_peticao = {'inominado', 'contrarrazoes_inominado'}
+        labels = {t['valor']: t['label'] for t in TIPOS_CERTIDAO}
+
+        busca = (self.request.GET.get('q') or '').strip()
+        origem = (self.request.GET.get('origem') or '').strip()
+        if origem not in ('peticao', 'movimentacao'):
+            origem = ''
+
+        qs = (
+            RAGExample.objects
+            .select_related('process')
+            .prefetch_related('suggested_templates')
+            .filter(active=True)
+        )
+        if busca:
+            qs = qs.filter(
+                Q(process__number__icontains=busca)
+                | Q(despacho_ato__icontains=busca)
+                | Q(despacho_observacao__icontains=busca)
+            )
+
+        registros = []
+        contagem = {'peticao': 0, 'movimentacao': 0}
+        for rag in qs.order_by('-created_at'):
+            templates = [
+                t.name for t in rag.suggested_templates.all()
+                if t.template_type == 'certidao'
+            ]
+            tipo = rag.tipo_certidao or ''
+            if not tipo:
+                tipo = _tipo_por_texto(
+                    f'{rag.despacho_ato or ""} '
+                    f'{rag.despacho_observacao or ""}'
+                )
+            if not tipo and not templates:
+                continue
+            if tipo in tipos_peticao:
+                origem_rag = 'peticao'
+            elif tipo:
+                origem_rag = 'movimentacao'
+            else:
+                nomes = _normalizar(' '.join(templates))
+                origem_rag = (
+                    'peticao'
+                    if ('RECURSO INOMINADO' in nomes
+                        or 'CONTRARRAZOES' in nomes)
+                    else 'movimentacao'
+                )
+
+            rag.origem_certidao = origem_rag
+            rag.origem_certidao_label = (
+                'Petições' if origem_rag == 'peticao' else 'Movimentações'
+            )
+            rag.tipo_certidao_label = labels.get(
+                tipo, templates[0] if templates else 'Sem certidão')
+            rag.templates_nomes = templates
+            contagem[origem_rag] += 1
+            if origem and origem_rag != origem:
+                continue
+            registros.append(rag)
+
+        context.update({
+            'registros': registros,
+            'busca': busca,
+            'origem_filtro': origem,
+            'total': contagem['peticao'] + contagem['movimentacao'],
+            'total_peticoes': contagem['peticao'],
+            'total_movimentacoes': contagem['movimentacao'],
+            'is_staff': self.request.user.is_staff,
+        })
+        return context

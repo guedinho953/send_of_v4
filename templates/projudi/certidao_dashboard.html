@@ -89,6 +89,7 @@
     <a href="#certidoes-rag" class="btn" style="background:#0891b2; color:white;">🔎 Localizar despacho modelo (RAG)</a>
     <a href="{% url 'projudi:transito_julgado' %}" class="btn btn-outline">⚖️ Trânsito em Julgado</a>
     <a href="{% url 'projudi:certidao_modelos' %}" class="btn btn-outline">🧩 Modelos de Certidões</a>
+    <a href="{% url 'projudi:rag_certidoes' %}" class="btn btn-outline">🧠 RAGs de Certidão</a>
     <a href="{% url 'projudi:movimentacao_fila' %}" class="btn btn-outline">📥 Fila de Movimentações</a>
     <a href="{% url 'projudi:movimentacao_dashboard' %}" class="btn btn-outline">📋 Todas as Movimentações</a>
     <a href="{% url 'projudi:cumprimento_dashboard' %}" class="btn btn-outline">📬 Cumprimentos</a>
@@ -244,6 +245,7 @@
             <div>
                 <label style="display:block; font-size:11px; color:#374151; margin-bottom:3px;">Processo</label>
                 <input name="processo" required placeholder="0000000-00.0000.8.05.0191"
+                       value="{{ processo_prefill }}"
                        style="padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px; min-width:210px;">
             </div>
             <div>
@@ -251,7 +253,7 @@
                 <select name="rag_id" required
                         style="padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px; max-width:360px;">
                     {% for r in rags_certidao %}
-                    <option value="{{ r.id }}">#{{ r.id }} — {{ r.despacho_ato|truncatechars:70 }}</option>
+                    <option value="{{ r.id }}" {% if r.id|stringformat:"s" == rag_prefill %}selected{% endif %}>#{{ r.id }} — {{ r.despacho_ato|truncatechars:70 }}</option>
                     {% endfor %}
                 </select>
             </div>

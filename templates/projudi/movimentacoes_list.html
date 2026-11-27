@@ -56,6 +56,7 @@
         <span id="contador-certidao" class="contador-rag"></span>
         <a href="{% url 'projudi:movimentacao_fila' %}" class="btn btn-outline">📥 Fila interna</a>
         <a href="{% url 'projudi:certidao_peticoes' %}" class="btn btn-outline">📥 Fila de Petições</a>
+        <a href="{% url 'projudi:rag_certidoes' %}" class="btn btn-outline">🧠 RAGs de Certidão</a>
         <a href="{% url 'projudi:certidao_dashboard' %}" class="btn btn-outline">📄 Certidões</a>
     </div>
 </div>
@@ -119,6 +120,12 @@
                            href="#" target="_blank" style="display:none;">
                             📄 Gerar certidão
                         </a>
+                        {% if request.user.is_staff %}
+                        <a class="btn btn-sm btn-outline btn-config-rag"
+                           href="#" target="_blank" style="display:none;">
+                            ✏️ Configurar RAG
+                        </a>
+                        {% endif %}
                         {% if m.link_processo %}
                         <a class="btn btn-sm btn-outline"
                            href="{{ m.link_processo }}" target="_blank">
@@ -130,6 +137,21 @@
                            href="{{ m.link_documento }}" target="_blank">
                             📎 Documento
                         </a>
+                        <form method="post"
+                              action="{% url 'projudi:movimentacao_criar_rag' %}"
+                              class="fila-criar-rag"
+                              style="margin:0; display:none;"
+                              onsubmit="return confirm('Criar uma RAG a partir deste documento?');">
+                            {% csrf_token %}
+                            <input type="hidden" name="processo" value="{{ m.processo }}">
+                            <input type="hidden" name="tipo" value="{{ m.tipo|default:'' }}">
+                            <input type="hidden" name="data" value="{{ m.data|default:'' }}">
+                            <input type="hidden" name="link_processo" value="{{ m.link_processo|default:'' }}">
+                            <input type="hidden" name="link_documento" value="{{ m.link_documento }}">
+                            <button type="submit" class="btn btn-sm btn-outline">
+                                🧠 Criar RAG
+                            </button>
+                        </form>
                         {% endif %}
                     </div>
                 </td>
@@ -289,6 +311,25 @@
                 if (botaoGerar) {
                     botaoGerar.href = dados.url_form;
                     botaoGerar.style.display = '';
+                }
+            }
+            if (linha) {
+                const formCriar = linha.querySelector('.fila-criar-rag');
+                if (formCriar) {
+                    formCriar.style.display = dados.rag_encontrada
+                        ? 'none' : 'block';
+                }
+                const botaoConfig = linha.querySelector('.btn-config-rag');
+                if (botaoConfig) {
+                    if (dados.rag_id && !dados.url_form) {
+                        botaoConfig.href = (
+                            '/admin/processes/ragexample/' +
+                            dados.rag_id + '/change/'
+                        );
+                        botaoConfig.style.display = '';
+                    } else {
+                        botaoConfig.style.display = 'none';
+                    }
                 }
             }
             if (window.aplicarFiltroCertidao) {

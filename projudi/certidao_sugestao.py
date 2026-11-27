@@ -165,6 +165,7 @@ def sugerir_certidao(user, processo, documento_url, processo_url=''):
         'juiz_conclusao': '41201',
         'mensagem': '',
         'url_form': '',
+        'tem_template': False,
     }
 
     if not documento_url:
@@ -245,6 +246,13 @@ def sugerir_certidao(user, processo, documento_url, processo_url=''):
     label = _label_tipo(tipo)
     tipo_localizador, localizador = (
         _localizadores_da_rag(rag) if rag else ('', ''))
+    template_certidao = None
+    if rag:
+        template_certidao = (
+            rag.suggested_templates
+            .filter(template_type='certidao', active=True)
+            .first()
+        )
 
     resultado.update({
         'tipo_certidao': tipo,
@@ -262,6 +270,7 @@ def sugerir_certidao(user, processo, documento_url, processo_url=''):
             'Embargos de Execução'),
         'juiz_conclusao': (
             getattr(rag, 'juiz_conclusao', '') or '41201') if rag else '41201',
+        'tem_template': bool(template_certidao),
     })
 
     if tipo == 'decurso_pagamento':
@@ -271,6 +280,13 @@ def sugerir_certidao(user, processo, documento_url, processo_url=''):
         resultado['url_form'] = (
             reverse('projudi:certidao_decurso_pagamento')
             + '?' + urlencode(params)
+        )
+    elif rag and template_certidao:
+        params = {'processo': processo, 'rag_id': rag.id}
+        resultado['url_form'] = (
+            reverse('projudi:certidao_dashboard')
+            + '?' + urlencode(params)
+            + '#certidoes-rag'
         )
 
     if chave_cache:

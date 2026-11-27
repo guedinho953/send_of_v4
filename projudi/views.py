@@ -99,10 +99,19 @@ class MovimentacoesListView(LoginRequiredMixin, ListView):
     def get_queryset(self):
         service = ProjudiService(self.request.user)
         try:
-            return service.list_movimentacoes()
+            movimentacoes = service.list_movimentacoes()
         except Exception as e:
             messages.error(self.request, f"Erro ao buscar movimentacoes: {e}")
             return []
+
+        busca = (self.request.GET.get('q') or '').strip().lower()
+        if busca:
+            movimentacoes = [
+                m for m in movimentacoes
+                if busca in str(m.get('processo', '')).lower()
+                or busca in str(m.get('tipo', '')).lower()
+            ]
+        return movimentacoes
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

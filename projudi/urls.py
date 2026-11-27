@@ -77,6 +77,7 @@ urlpatterns = [
 
     # Aba Certidões (separadas por origem: petição x movimentação)
     path('certidoes/dashboard/', certidao_views.CertidaoDashboardView.as_view(), name='certidao_dashboard'),
+    path('certidoes/rags/', certidao_views.RagCertidaoListView.as_view(), name='rag_certidoes'),
     path('certidoes/transito-julgado/', transito_julgado_views.TransitoJulgadoView.as_view(), name='transito_julgado'),
     path('certidoes/transito-julgado/criar/', transito_julgado_views.TransitoJulgadoCriarView.as_view(), name='transito_julgado_criar'),
     path('certidoes/modelos/', certidao_modelo_views.CertidaoModeloListView.as_view(), name='certidao_modelos'),
@@ -102,6 +103,7 @@ urlpatterns = [
     path('movimentacoes/fila/', movimentacao_views.MovimentacaoFilaView.as_view(), name='movimentacao_fila'),
     path('movimentacoes/lista/', movimentacao_views.MovimentacaoListView.as_view(), name='movimentacao_list'),
     path('movimentacoes/sync/', movimentacao_views.MovimentacaoSyncView.as_view(), name='movimentacao_sync'),
+    path('movimentacoes/rag/criar/', certidao_views.CriarRagMovimentacaoView.as_view(), name='movimentacao_criar_rag'),
     path('movimentacoes/<int:pk>/', movimentacao_views.MovimentacaoDetailView.as_view(), name='movimentacao_detail'),
     path('movimentacoes/<int:pk>/executar/', movimentacao_views.MovimentacaoExecutarView.as_view(), name='movimentacao_executar'),
     path('movimentacoes/<int:pk>/dispensar/', movimentacao_views.MovimentacaoDispensarView.as_view(), name='movimentacao_dispensar'),

@@ -589,6 +589,39 @@ tipo_conclusao
 juiz_conclusao
 ```
 
+## Tabela de RAGs de certidão
+
+A página:
+
+```text
+/projudi/certidoes/rags/
+```
+
+lista somente as RAGs que geram certidão, separadas em:
+
+- **📄 Petições** — tipos de recurso inominado/contrarrazões;
+- **⚙️ Movimentações** — cumprimento, penhora, decurso e embargos.
+
+A origem é inferida pelo `tipo_certidao` configurado ou, quando vazio, pelo
+texto do despacho e pelo template de certidão vinculado.
+
+A tabela mostra processo, despacho, certidão sugerida, localizador,
+conclusão e link para editar a RAG no admin.
+
+## Criar RAG pela fila de movimentações
+
+Na página `/projudi/movimentacoes/`, cada movimentação com documento tem o
+botão **🧠 Criar RAG**. Ele baixa o documento, cria a `RAGExample` com o
+texto do despacho, vincula o processo e tenta inferir o tipo de certidão.
+
+Depois da análise da RAG:
+
+- se a RAG foi encontrada e tem certidão configurada, aparece
+  **📄 Gerar certidão**;
+- se a RAG foi encontrada mas ainda não tem certidão/template, aparece
+  **✏️ Configurar RAG**;
+- se nenhuma RAG foi encontrada, aparece **🧠 Criar RAG**.
+
 ## Desempenho
 
 A primeira leitura consulta a fila e os processos no Projudi e pode levar
