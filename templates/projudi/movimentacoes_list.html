@@ -63,7 +63,10 @@
         <p>
             Mesmo fluxo da fila de petições: escolha o modelo, confira data,
             meio e eventos e gere a certidão para revisão antes de juntar.
-            A sugestão da RAG apenas pré-seleciona o modelo.
+            A sugestão da RAG apenas pré-seleciona o modelo. A nota ao lado
+            mostra a semelhança: só RAG com <strong>75% ou mais</strong>
+            pré-seleciona; abaixo disso aparece a mais próxima, mas sem
+            selecionar automaticamente.
         </p>
     </div>
     <div class="mov-actions-top">
@@ -145,6 +148,7 @@
                   data-url="{{ m.link_processo|default:'' }}">
                 analisando…
             </span>
+            <div class="rag-nota" style="display:none; margin-top:5px; font-size:11px; line-height:1.4;"></div>
         </div>
     </div>
 
@@ -457,6 +461,35 @@ function atualizarAssinatura() {
                         badge.style.display = 'inline-block';
                     } else {
                         badge.style.display = 'none';
+                    }
+                }
+                const notaRag = card.querySelector('.rag-nota');
+                if (notaRag) {
+                    if (dados.rag_encontrada) {
+                        const pct = dados.similaridade_pct
+                            || dados.melhor_similaridade_pct || 0;
+                        notaRag.textContent = (
+                            'RAG #' + dados.rag_id + ' · ' + pct +
+                            '% de semelhança (limiar ' +
+                            (dados.limiar_rag_pct || 75) + '%)'
+                        );
+                        notaRag.style.color = '#0f766e';
+                        notaRag.style.display = 'block';
+                    } else if (dados.melhor_similaridade_pct) {
+                        notaRag.textContent = (
+                            'RAG mais próxima: ' +
+                            (dados.rag_mais_proxima_id
+                                ? '#' + dados.rag_mais_proxima_id + ' · '
+                                : '') +
+                            dados.melhor_similaridade_pct +
+                            '% — abaixo do limiar de ' +
+                            (dados.limiar_rag_pct || 75) + '%'
+                        );
+                        notaRag.style.color = '#b45309';
+                        notaRag.style.display = 'block';
+                    } else {
+                        notaRag.textContent = '';
+                        notaRag.style.display = 'none';
                     }
                 }
             }

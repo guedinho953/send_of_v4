@@ -135,6 +135,9 @@ def _label_tipo(valor):
     )
 
 
+LIMIAR_RAG = 0.75
+
+
 def sugerir_certidao(user, processo, documento_url, processo_url=''):
     """Retorna o tipo de certidão e os parâmetros sugeridos pela RAG."""
     from processes.models import RAGExample
@@ -142,7 +145,7 @@ def sugerir_certidao(user, processo, documento_url, processo_url=''):
     from projudi.services import ProjudiService
 
     chave_cache = (
-        f'certidao_sugestao_v1:{processo}:{documento_url}'
+        f'certidao_sugestao_v2:{processo}:{documento_url}'
         if documento_url else ''
     )
     if chave_cache:
@@ -166,6 +169,11 @@ def sugerir_certidao(user, processo, documento_url, processo_url=''):
         'mensagem': '',
         'url_form': '',
         'tem_template': False,
+        'similaridade_pct': 0,
+        'melhor_similaridade_pct': 0,
+        'limiar_rag_pct': int(LIMIAR_RAG * 100),
+        'rag_mais_proxima_id': None,
+        'rag_mais_proxima_ato': '',
     }
 
     if not documento_url:
@@ -187,7 +195,28 @@ def sugerir_certidao(user, processo, documento_url, processo_url=''):
         resultado['mensagem'] = 'Documento sem texto suficiente para a RAG.'
         return resultado
 
-    similares = buscar_cumprimentos_similares(texto, top_k=10)
+    similares_todos = buscar_cumprimentos_similares(texto, top_k=10)
+    melhor = similares_todos[0] if similares_todos else None
+    if melhor:
+        resultado.update({
+            'melhor_similaridade_pct': round(
+                float(melhor.get('jaccard') or 0) * 100
+            ),
+            'rag_mais_proxima_id': melhor.get('id'),
+            'rag_mais_proxima_ato': (
+                (melhor.get('despacho_ato') or '')[:160]
+            ),
+        })
+    # Só considera RAG realmente parecida (limiar de 75%).
+    similares = [
+        s for s in similares_todos
+        if float(s.get('jaccard') or 0) >= LIMIAR_RAG
+    ]
+    similar_escolhida = similares[0] if similares else None
+    if similar_escolhida:
+        resultado['similaridade_pct'] = round(
+            float(similar_escolhida.get('jaccard') or 0) * 100
+        )
     tipo = ''
     rag = None
     rag_similar = None
@@ -204,6 +233,9 @@ def sugerir_certidao(user, processo, documento_url, processo_url=''):
             tipo = candidata.tipo_certidao
             rag = candidata
             origem = 'rag'
+            resultado['similaridade_pct'] = round(
+                float(similar.get('jaccard') or 0) * 100
+            )
             break
         if not tipo_rag_texto:
             tipo_rag_texto = _tipo_por_texto(
@@ -212,6 +244,9 @@ def sugerir_certidao(user, processo, documento_url, processo_url=''):
             )
             if tipo_rag_texto:
                 rag_tipo_texto = candidata
+                resultado['similaridade_pct'] = round(
+                    float(similar.get('jaccard') or 0) * 100
+                )
     if rag is None:
         rag = rag_similar
     if not tipo and tipo_rag_texto:
@@ -237,6 +272,12 @@ def sugerir_certidao(user, processo, documento_url, processo_url=''):
                     'RAG encontrada, mas sem tipo de certidão configurado.'
                 ),
             })
+        elif melhor:
+            resultado['mensagem'] = (
+                f'RAG mais próxima com {resultado["melhor_similaridade_pct"]}% '
+                f'de semelhança (abaixo do limiar de '
+                f'{resultado["limiar_rag_pct"]}%).'
+            )
         else:
             resultado['mensagem'] = 'Nenhuma RAG com certidão configurada.'
         if chave_cache:
