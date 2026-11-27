@@ -118,6 +118,19 @@ def _parse_data(texto):
         return None
 
 
+def _classificar_documento(nome):
+    """Classifica o anexo da linha para exibição na fila."""
+    up = _norm(nome)
+    if any(k in up for k in (
+        'GUIA', 'COMPROVANTE', 'CUSTAS', 'DAJE', 'PIX',
+        'DEPOSITO', 'DEPÓSITO', 'SEGURO',
+    )):
+        return 'preparo'
+    if 'RECURSO INOMINADO' in up or 'PETICAO' in up:
+        return 'peticao'
+    return 'anexo'
+
+
 def _nome_documento(texto):
     """Tenta extrair um nome próprio do nome do arquivo da petição."""
     texto = re.sub(r'\s+', ' ', texto or '')
@@ -580,7 +593,7 @@ class PeticaoQueueService:
 
     def listar(self, forcar=False):
         """Lê a fila e devolve tipos conhecidos e petições não classificadas."""
-        chave_cache = f'peticao_queue_v2:{self.user.pk}'
+        chave_cache = f'peticao_queue_v3:{self.user.pk}'
         if not forcar:
             em_cache = cache.get(chave_cache)
             if em_cache is not None:
@@ -633,15 +646,44 @@ class PeticaoQueueService:
                 continue
             # Mantém também petições que a classificação automática não
             # reconheceu, para o usuário escolher a ação manualmente.
-            if not tipo and 'JUNTADA DE PETICAO' not in _norm(texto_tipo):
-                continue
+            if not tipo:
+                up_tipo = _norm(texto_tipo)
+                if not any(k in up_tipo for k in (
+                    'PETICAO', 'RECURSO', 'IMPUGNACAO',
+                    'CONTRARRAZOES', 'CUMPRIMENTO', 'DECURSO',
+                    'REQUERIMENTO',
+                )):
+                    continue
 
-            doc_link = tr.find('a', href=re.compile('DownloadArquivo'))
-            doc_url = ''
-            doc_texto = ''
-            if doc_link:
-                doc_url = urljoin(BASE_URL, doc_link.get('href', ''))
-                doc_texto = doc_link.get_text(' ', strip=True)
+            documentos = []
+            vistos_docs = set()
+            for a in tr.find_all('a', href=re.compile('DownloadArquivo')):
+                url = urljoin(BASE_URL, a.get('href', ''))
+                if url in vistos_docs:
+                    continue
+                vistos_docs.add(url)
+                nome = a.get_text(' ', strip=True)
+                documentos.append({
+                    'nome': nome,
+                    'url': url,
+                    'categoria': _classificar_documento(nome),
+                })
+
+            peticao_doc = next(
+                (d for d in documentos
+                 if 'RECURSO INOMINADO' in _norm(d['nome'])),
+                documentos[0] if documentos else None,
+            )
+            if peticao_doc:
+                peticao_doc['categoria'] = 'peticao'
+            preparo_docs = [
+                d for d in documentos
+                if d is not peticao_doc and d['categoria'] == 'preparo'
+            ]
+            anexos = [
+                d for d in documentos
+                if d is not peticao_doc and d['categoria'] != 'preparo'
+            ]
 
             bases.append({
                 'cod_documento': cod_doc,
@@ -651,8 +693,12 @@ class PeticaoQueueService:
                 ),
                 'data_envio': data_envio,
                 'tipo': tipo or '',
-                'documento_url': doc_url,
-                'documento_texto': doc_texto,
+                'documento_url': peticao_doc['url'] if peticao_doc else '',
+                'documento_texto': peticao_doc['nome'] if peticao_doc else '',
+                'documentos': documentos,
+                'peticao': peticao_doc,
+                'preparo_docs': preparo_docs,
+                'anexos': anexos,
             })
             vistos.add(cod_doc)
 
@@ -763,6 +809,10 @@ class PeticaoQueueService:
                 'dias': info['dias'] if info else None,
                 'documento_url': base['documento_url'],
                 'documento_texto': base['documento_texto'],
+                'documentos': base.get('documentos') or [],
+                'peticao': base.get('peticao'),
+                'preparo_docs': base.get('preparo_docs') or [],
+                'anexos': base.get('anexos') or [],
                 'recorrente': (
                     base.get('_recorrente')
                     or _nome_documento(base['documento_texto'])

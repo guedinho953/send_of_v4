@@ -44,6 +44,11 @@ Exemplo: uma linha `Juntada de Petição de Solicitação de Execução de
 Sentença` não é classificada automaticamente, mas passa a aparecer na
 fila para que a ação seja escolhida manualmente.
 
+A fila inclui linhas de **petição, requerimento, recurso, impugnação,
+contrarrazões, cumprimento e decurso**. Cada card mostra todos os
+documentos da linha, separando a petição dos comprovantes/guias de
+preparo e dos demais anexos.
+
 O modelo **Decurso do Prazo de Pagamento Voluntário** também tem destaque
 visual na fila. Ao escolhê-lo, o sistema localiza automaticamente o
 despacho que determinou o pagamento, sem depender do tipo da petição.
