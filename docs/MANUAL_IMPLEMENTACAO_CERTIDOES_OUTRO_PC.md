@@ -25,10 +25,10 @@ Consequências:
 
 | App | Neste PC (branch) | No outro PC (`origin/master`) | O que fazer |
 |-----|-------------------|-------------------------------|-------------|
-| `projudi` | `0018` a `0020` | já tem `0019` (e anteriores) | criar novas migrations a partir de **`0020`**; a nossa `0020` é só referência |
-| `processes` | `0024` a `0029` | já tem `0020` a `0031` | criar novas migrations a partir de **`0032`** |
+| `projudi` | `0018` a `0022` | já tem `0019` (e anteriores) | criar novas migrations a partir de **`0020`**; as nossas `0020`–`0022` são só referência |
+| `processes` | `0024` a `0031` | já tem `0020` a `0031` | criar novas migrations a partir de **`0032`**; as nossas `0030`–`0031` são só referência |
 
-Nunca copie `projudi/0018*`–`0020*` nem `processes/0024*`–`0029*`
+Nunca copie `projudi/0018*`–`0022*` nem `processes/0024*`–`0031*`
 para o outro PC. Use o conteúdo delas como referência e crie migrations
 novas depois da última de lá.
 
@@ -94,6 +94,8 @@ git switch -c integracao-certidoes FETCH_HEAD
 | Impugnação/Embargos à Execução | `_texto_publico_prazo`, `peticoes_views.py`, `certidao_peticoes_fila.html`, `models.py` | 15 dias a partir da intimação do pagamento; conclusão TEMPESTIVA/INTEMPESTIVA + segurança do juízo (integral/parcial/não houve); texto cita art. 525 e FONAJE 117; migration `projudi/0020` |
 | Juntar + intimar embargado | `projudi/juntar_service.py`, `projudi/juntar_views.py` | Se TEMPESTIVA, intima o embargado/exequente para manifestação em 15 dias; se INTEMPESTIVA, apenas junta a certidão; usa `executar_com_intimacao` e deve ser validado no processo real |
 | Formulário na aba/fila de Movimentações | `impugnacao_embargos_views.py`, `certidao_impugnacao_embargos.html`, `movimentacoes_list.html`, `certidao_dashboard.html`, `urls.py` | Mesma certidão sem depender da fila de petições; atalho **Fila de movimentações** na aba Movimentações e botão **Gerar certidão** em cada linha, com processo/URL preenchidos; registra com `origem='movimentacao'` |
+| Sugestão pela RAG | `certidao_sugestao.py`, `certidao_views.py`, `movimentacoes_list.html`, `processes/models.py` | Baixa o documento, faz match RAG e mostra `tipo_certidao`, localizador e conclusão; novo campo `RAGExample.tipo_certidao`, `tipo_localizador`, `localizador`, `tipo_conclusao`, `juiz_conclusao` |
+| Conclusão ao Juiz | `juntar_service.py`, `juntar_views.py`, `certidao_juntar_intimar.html` | Movimentação 11383, radio `conclusao` (ex.: 18=Embargos de Execução), juiz `loginConclusaoPessoal` (padrão 41201 — Dr. Martinho), após juntar/intimar |
 | Recorrente na linha `PARA` | `projudi/partes_inominado.py`, `projudi/management/commands/certidao_inominado.py` | Reforço por rótulos e trechos “já devidamente qualificado”, “nos autos”, “vem interpor” |
 | Juntar/intimar | `projudi/juntar_service.py`, `projudi/juntar_views.py`, `templates/projudi/certidao_juntar_intimar.html` | O outro PC já tem o fluxo completo; usar como referência, não duplicar |
 | Senha da assinatura | `accounts_user.projudi_password` | Campo no Admin em **Usuários → Projudi → Senha da assinatura**; vazio = assinatura manual |
@@ -296,7 +298,7 @@ Testes de referência desta branch:
 - [ ] Backup do `pg_send_of` e do código.
 - [ ] `DJANGO_ALLOW_ASYNC_UNSAFE=1` no `settings.py`.
 - [ ] Migrations novas criadas depois das últimas do outro PC (não copiar
-      `projudi/0018-0020` nem `processes/0024-0029`).
+      `projudi/0018-0022` nem `processes/0024-0031`).
 - [ ] Contagem DJEN corrigida.
 - [ ] Decurso com texto/evento/assinatura revisados.
 - [ ] Cabeçalho de parte condicional.
@@ -310,6 +312,10 @@ Testes de referência desta branch:
 - [ ] Juntar + intimar do embargado somente se TEMPESTIVO, em 15 dias.
 - [ ] RAG do despacho revisada com foco nos dois primeiros parágrafos
       (`docs/RAG_DESPACHO_IMPUGNACAO_EMBARGOS.md`).
+- [ ] Campos de sugestão da RAG (`tipo_certidao`, `tipo_localizador`,
+      `localizador`, `tipo_conclusao`, `juiz_conclusao`) implementados.
+- [ ] Conclusão 11383 com radio `conclusao` e juiz padrão 41201 validados
+      em processo real.
 - [ ] Juntar/intimar do outro PC revisado (não duplicar).
 - [ ] Senha da assinatura configurada (ou manual assumido).
 - [ ] `manage.py check` e testes passando.

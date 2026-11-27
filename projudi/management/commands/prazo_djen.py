@@ -167,6 +167,20 @@ class Command(BaseCommand):
                 'Segurança do juízo na impugnação/embargos à execução: '
                 'integral, depósito parcial ou não houve.'))
         parser.add_argument(
+            '--tipo-localizador', default='',
+            help='Código do tipo de localizador para aplicar na juntada')
+        parser.add_argument(
+            '--localizador', default='',
+            help='Código do localizador para aplicar na juntada')
+        parser.add_argument(
+            '--tipo-conclusao', default='3',
+            help='Tipo de conclusão (radio conclusao): 1=Despacho, '
+                 '3=Sentença, 18=Embargos de Execução etc.')
+        parser.add_argument(
+            '--juiz-conclusao', default='41201',
+            help='Login do juiz em loginConclusaoPessoal '
+                 '(default 41201 = Dr. Martinho)')
+        parser.add_argument(
             '--habilitacao', choices=['regular', 'omitir'], default='regular',
             help='Cláusula de habilitação dos advogados (default: regular)')
         parser.add_argument('--processo', help='Número CNJ')
@@ -489,6 +503,10 @@ class Command(BaseCommand):
                 evento_intimacao=options.get('evento_intimacao') or '',
                 preparo_status=preparo_status or '',
                 seguranca_juizo=options.get('seguranca_juizo') or '',
+                tipo_localizador=options.get('tipo_localizador') or '',
+                localizador=options.get('localizador') or '',
+                tipo_conclusao=options.get('tipo_conclusao') or '3',
+                juiz_conclusao=options.get('juiz_conclusao') or '41201',
                 habilitacao_regular=habilitacao_regular,
                 texto_certidao=texto_registro,
                 tempestivo=tempestivo,
@@ -525,6 +543,10 @@ class Command(BaseCommand):
                 'evento_intimacao': options.get('evento_intimacao') or '',
                 'preparo_status': preparo_status or '',
                 'seguranca_juizo': options.get('seguranca_juizo') or '',
+                'tipo_localizador': options.get('tipo_localizador') or '',
+                'localizador': options.get('localizador') or '',
+                'tipo_conclusao': options.get('tipo_conclusao') or '3',
+                'juiz_conclusao': options.get('juiz_conclusao') or '41201',
                 'habilitacao_regular': habilitacao_regular,
                 'texto_certidao': texto_registro,
                 'motivo': motivo,

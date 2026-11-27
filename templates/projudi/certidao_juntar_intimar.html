@@ -38,6 +38,10 @@
         <div><strong>Situação:</strong> {{ plano.situacao_label|default:plano.situacao }}</div>
         <div><strong>Polo sugerido:</strong> {{ plano.polo }}</div>
         <div><strong>Prazo:</strong> {{ plano.prazo }} dias úteis</div>
+        <div><strong>Localizador:</strong>
+            {{ plano.tipo_localizador|default:"—" }}
+            {% if plano.localizador %}/ {{ plano.localizador }}{% endif %}
+        </div>
         <div><strong>Número interno:</strong> {{ plano.proc_projudi|default:"—" }}</div>
         <div><strong>HTML da certidão:</strong> {{ plano.html_tamanho }} caracteres</div>
         <div><strong>Assinatura:</strong>
@@ -108,6 +112,35 @@
                 </select>
             </div>
         </div>
+
+        {% if registro.tipo_prazo == 'impugnacao_embargos_execucao' %}
+        <div style="background:#eef2ff; border:1px solid #c7d2fe; border-radius:8px; padding:10px 12px; margin-bottom:12px; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+            <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:#3730a3; font-weight:600;">
+                <input type="checkbox" name="fazer_conclusao" {% if fazer_conclusao %}checked{% endif %}>
+                Fazer conclusão ao Juiz
+            </label>
+            <div>
+                <label style="font-size:11px; color:#3730a3; margin-right:4px;">Tipo:</label>
+                <select name="tipo_conclusao" style="padding:5px 8px; border:1px solid #a5b4fc; border-radius:5px; font-size:12px;">
+                    {% for valor, label in conclusao_opcoes %}
+                    <option value="{{ valor }}" {% if valor == tipo_conclusao %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label style="font-size:11px; color:#3730a3; margin-right:4px;">Juiz:</label>
+                <select name="juiz_conclusao" style="padding:5px 8px; border:1px solid #a5b4fc; border-radius:5px; font-size:12px;">
+                    {% for valor, label in juizes_conclusao %}
+                    <option value="{{ valor }}" {% if valor == juiz_conclusao %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div style="font-size:11px; color:#4338ca;">
+                Movimentação 11383, na sequência da juntada/intimação.
+            </div>
+        </div>
+        {% endif %}
+
         <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:#374151; margin-bottom:12px;">
             <input type="checkbox" name="confirmo">
             Confirmo que conferi a certidão, o processo, o polo e o prazo.

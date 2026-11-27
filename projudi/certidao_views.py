@@ -7,7 +7,7 @@ from pathlib import Path
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Q
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views import View
 from django.views.generic import DetailView, TemplateView
@@ -122,6 +122,22 @@ class CertidaoPeticaoView(CertidaoDashboardView):
 class CertidaoMovimentacaoView(CertidaoDashboardView):
     origem = 'movimentacao'
     url_name = 'projudi:certidao_movimentacoes'
+
+
+class CertidaoSugestaoMovimentacaoView(LoginRequiredMixin, View):
+    """Sugere a certidão de uma movimentação a partir do match RAG."""
+
+    def get(self, request):
+        from projudi.certidao_sugestao import sugerir_certidao
+
+        processo = (request.GET.get('processo') or '').strip()
+        documento = (request.GET.get('documento') or '').strip()
+        processo_url = (request.GET.get('url') or '').strip()
+        if not processo:
+            return JsonResponse(
+                {'erro': 'Processo não informado.'}, status=400)
+        return JsonResponse(sugerir_certidao(
+            request.user, processo, documento, processo_url))
 
 
 class CertidaoDetailView(LoginRequiredMixin, DetailView):

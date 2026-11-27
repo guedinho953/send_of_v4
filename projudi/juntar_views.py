@@ -8,9 +8,31 @@ from django.shortcuts import get_object_or_404, render
 from django.views import View
 
 from projudi.juntar_service import (
-    executar_juntada, executar_juntada_e_intimacao, montar_plano,
+    executar_conclusao, executar_juntada, executar_juntada_e_intimacao,
+    montar_plano,
 )
 from projudi.models import PrazoDjenRecord
+
+CONCLUSAO_OPCOES = [
+    ('1', 'Despacho'),
+    ('2', 'Decisão'),
+    ('3', 'Sentença'),
+    ('5', 'Decisão Urgente'),
+    ('17', 'Embargos de Declaração'),
+    ('18', 'Embargos de Execução'),
+    ('19', 'Sentença Extintiva'),
+    ('22', 'Exceção de Pré-executividade'),
+]
+JUIZ_CONCLUSAO_PADRAO = '41201'
+JUIZES_CONCLUSAO = [
+    ('41201', 'MARTINHO FERRAZ DA NOBREGA JUNIOR'),
+    ('bsaraiva', 'BALTAZAR MIRANDA SARAIVA'),
+    ('juiz.plantonista', 'JUIZ DESIGNADO'),
+    ('37470', 'LEANDRO FERREIRA DE MORAES'),
+    ('pachenaud', 'PAULO ALBERTO NUNES CHENAUD'),
+    ('7946', 'PAULO EDUARDO DE MENEZES MOREIRA'),
+    ('24575', 'REGINALDO COELHO CAVALCANTE'),
+]
 
 
 class CertidaoJuntarIntimarView(LoginRequiredMixin, View):
@@ -44,6 +66,12 @@ class CertidaoJuntarIntimarView(LoginRequiredMixin, View):
             'processo_url': plano.get('processo_url', ''),
             'polo': plano.get('polo', 'autores'),
             'prazo': plano.get('prazo', '10'),
+            'fazer_conclusao': plano.get('fazer_conclusao', False),
+            'tipo_conclusao': plano.get('tipo_conclusao', '3'),
+            'conclusao_opcoes': CONCLUSAO_OPCOES,
+            'juiz_conclusao': plano.get(
+                'juiz_conclusao', JUIZ_CONCLUSAO_PADRAO),
+            'juizes_conclusao': JUIZES_CONCLUSAO,
             'acao': 'simular',
         }
         context.update(extra)
@@ -62,6 +90,15 @@ class CertidaoJuntarIntimarView(LoginRequiredMixin, View):
         polo = (request.POST.get('polo') or '').strip()
         prazo = (request.POST.get('prazo') or '').strip()
         confirmo = request.POST.get('confirmo') == 'on'
+        fazer_conclusao = (
+            request.POST.get('fazer_conclusao') == 'on'
+            and registro.tipo_prazo == 'impugnacao_embargos_execucao'
+        )
+        tipo_conclusao = (
+            request.POST.get('tipo_conclusao') or '3').strip()
+        juiz_conclusao = (
+            request.POST.get('juiz_conclusao')
+            or JUIZ_CONCLUSAO_PADRAO).strip()
 
         plano = montar_plano(
             registro,
@@ -70,6 +107,9 @@ class CertidaoJuntarIntimarView(LoginRequiredMixin, View):
             polo=polo,
             prazo=prazo,
         )
+        plano['fazer_conclusao'] = fazer_conclusao
+        plano['tipo_conclusao'] = tipo_conclusao
+        plano['juiz_conclusao'] = juiz_conclusao
 
         if acao == 'simular':
             messages.info(
@@ -171,6 +211,33 @@ class CertidaoJuntarIntimarView(LoginRequiredMixin, View):
                     f'#{getattr(record, "id", "?")} e os logs.',
                 )
 
+            if (fazer_conclusao and ok
+                    and (intimacao_ok or not plano.get('pode_intimar'))):
+                try:
+                    conc_ok, conc_record = executar_conclusao(
+                        registro, request.user, plano,
+                        tipo_conclusao=tipo_conclusao,
+                        juiz_conclusao=juiz_conclusao)
+                except Exception as exc:
+                    messages.warning(
+                        request,
+                        'A juntada/intimação foi feita, mas a conclusão '
+                        f'falhou: {exc}',
+                    )
+                else:
+                    if conc_ok:
+                        messages.success(
+                            request,
+                            '✅ Conclusão ao Juiz registrada '
+                            f'(movimentação #{conc_record.id}).',
+                        )
+                    else:
+                        messages.warning(
+                            request,
+                            'A juntada/intimação foi feita, mas a conclusão '
+                            'não foi confirmada. Confira o Projudi.',
+                        )
+
             novo_plano = montar_plano(
                 registro,
                 request.user,
@@ -178,6 +245,9 @@ class CertidaoJuntarIntimarView(LoginRequiredMixin, View):
                 polo=polo,
                 prazo=prazo,
             )
+            novo_plano['fazer_conclusao'] = fazer_conclusao
+            novo_plano['tipo_conclusao'] = tipo_conclusao
+            novo_plano['juiz_conclusao'] = juiz_conclusao
             return render(
                 request,
                 self.template_name,
@@ -230,6 +300,31 @@ class CertidaoJuntarIntimarView(LoginRequiredMixin, View):
                     f'✅ Juntada concluída no Projudi '
                     f'(movimentação #{record.id}).',
                 )
+                if fazer_conclusao:
+                    try:
+                        conc_ok, conc_record = executar_conclusao(
+                            registro, request.user, plano,
+                            tipo_conclusao=tipo_conclusao,
+                            juiz_conclusao=juiz_conclusao)
+                    except Exception as exc:
+                        messages.warning(
+                            request,
+                            'A certidão foi juntada, mas a conclusão '
+                            f'falhou: {exc}',
+                        )
+                    else:
+                        if conc_ok:
+                            messages.success(
+                                request,
+                                '✅ Conclusão ao Juiz registrada '
+                                f'(movimentação #{conc_record.id}).',
+                            )
+                        else:
+                            messages.warning(
+                                request,
+                                'A certidão foi juntada, mas a conclusão '
+                                'não foi confirmada. Confira o Projudi.',
+                            )
             else:
                 messages.error(
                     request,
@@ -244,6 +339,9 @@ class CertidaoJuntarIntimarView(LoginRequiredMixin, View):
                 polo=polo,
                 prazo=prazo,
             )
+            novo_plano['fazer_conclusao'] = fazer_conclusao
+            novo_plano['tipo_conclusao'] = tipo_conclusao
+            novo_plano['juiz_conclusao'] = juiz_conclusao
             return render(
                 request,
                 self.template_name,

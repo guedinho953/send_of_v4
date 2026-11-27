@@ -50,7 +50,8 @@ class ImpugnacaoEmbargosViewTest(TestCase):
                     'processo': '0000001-11.2026.8.05.0191',
                     'tipo': 'Juntada de Petição de Embargos à Execução',
                     'data': '25/11/2026',
-                    'link': 'https://projudi/processo',
+                    'link_processo': 'https://projudi/processo',
+                    'link_documento': 'https://projudi/documento',
                 }],
             },
         )
@@ -58,6 +59,89 @@ class ImpugnacaoEmbargosViewTest(TestCase):
             reverse('projudi:certidao_impugnacao_embargos'), html)
         self.assertIn('Gerar certidão', html)
         self.assertIn('0000001-11.2026.8.05.0191', html)
+        self.assertIn(
+            reverse('projudi:certidao_sugestao_movimentacao'), html)
+        self.assertIn('data-documento="https://projudi/documento"', html)
+
+    @patch('projudi.certidao_sugestao.sugerir_certidao')
+    def test_api_sugestao_retorna_tipo_e_localizador(self, sugerir):
+        sugerir.return_value = {
+            'tipo_certidao': 'impugnacao_embargos_execucao',
+            'tipo_label': 'Impugnação/Embargos à Execução',
+            'tipo_localizador': '15286',
+            'localizador': '1',
+            'url_form': '/projudi/certidoes/movimentacoes/'
+                        'impugnacao-embargos/?processo=123',
+        }
+        resposta = self.client.get(
+            reverse('projudi:certidao_sugestao_movimentacao'),
+            {
+                'processo': '0000001-11.2026.8.05.0191',
+                'documento': 'https://projudi/documento',
+            },
+        )
+        self.assertEqual(resposta.status_code, 200)
+        dados = resposta.json()
+        self.assertEqual(
+            dados['tipo_certidao'], 'impugnacao_embargos_execucao')
+        self.assertEqual(dados['tipo_localizador'], '15286')
+        sugerir.assert_called_once()
+
+    @patch('projudi.certidao_sugestao._texto_documento', return_value=(
+        'Certifique-se a tempestividade dos embargos à execução e a '
+        'segurança do Juízo. Intime-se o embargado para manifestação.'))
+    @patch('processes.movimentacoes_service.buscar_cumprimentos_similares')
+    @patch('projudi.services.ProjudiService._get_session_from_cookies',
+           return_value=(object(), {}))
+    def test_sugestao_usa_campos_da_rag(self, _sessao, buscar, _texto):
+        from processes.models import Process, RAGExample
+        from projudi.certidao_sugestao import sugerir_certidao
+
+        from accounts.models import Tenant
+        tenant = Tenant.objects.create(
+            name='Tenant teste RAG', cnpj='99.999.999/0001-99')
+        self.user.tenant = tenant
+        self.user.save(update_fields=['tenant'])
+        proc = Process.objects.create(
+            number='0000008-88.2026.8.05.0191',
+            number_normalized='00000088820268050191',
+            tenant=tenant,
+        )
+        rag = RAGExample.objects.create(
+            process=proc,
+            despacho_ato='Certifique-se tempestividade dos embargos',
+            despacho_observacao='Intime-se o embargado. Segurança do juízo.',
+            tipo_certidao='impugnacao_embargos_execucao',
+            tipo_localizador='15286',
+            localizador='1',
+            tipo_conclusao='18',
+            juiz_conclusao='41201',
+            active=True,
+        )
+        buscar.return_value = [{'id': rag.id}]
+        dados = sugerir_certidao(
+            self.user, proc.number, 'https://projudi/documento')
+        self.assertEqual(
+            dados['tipo_certidao'], 'impugnacao_embargos_execucao')
+        self.assertEqual(dados['tipo_localizador'], '15286')
+        self.assertEqual(dados['localizador'], '1')
+        self.assertEqual(dados['tipo_conclusao'], '18')
+        self.assertEqual(dados['juiz_conclusao'], '41201')
+        self.assertIn('impugnacao-embargos', dados['url_form'])
+        self.assertIn('tipo_conclusao=18', dados['url_form'])
+
+    def test_fallback_de_tipo_por_texto(self):
+        from projudi.certidao_sugestao import _tipo_por_texto
+
+        self.assertEqual(
+            _tipo_por_texto(
+                'Certifique-se a tempestividade dos embargos à execução.'),
+            'impugnacao_embargos_execucao',
+        )
+        self.assertEqual(
+            _tipo_por_texto('Certifique-se o decurso do prazo de pagamento.'),
+            'decurso_pagamento',
+        )
 
     def test_aba_movimentacoes_tem_atalho_para_o_formulario(self):
         resposta = self.client.get(reverse('projudi:certidao_movimentacoes'))

@@ -128,6 +128,10 @@ class JuntarIntimarPlanTest(TestCase):
             tempestivo=True,
             seguranca_juizo='integral',
             evento_recurso='88',
+            tipo_localizador='15286',
+            localizador='1',
+            tipo_conclusao='18',
+            juiz_conclusao='41201',
             certidao_path=str(self.preview),
         )
         plano = montar_plano(
@@ -138,6 +142,10 @@ class JuntarIntimarPlanTest(TestCase):
                 'DadosProcesso?numeroProcesso=12345678901234'),
         )
         self.assertEqual(plano['situacao'], 'embargos_tempestivos')
+        self.assertEqual(plano['tipo_localizador'], '15286')
+        self.assertEqual(plano['localizador'], '1')
+        self.assertEqual(plano['tipo_conclusao'], '18')
+        self.assertEqual(plano['juiz_conclusao'], '41201')
         self.assertTrue(plano['pode_intimar'])
         self.assertEqual(plano['polo'], 'autores')
         self.assertEqual(plano['prazo'], '15')
@@ -205,6 +213,70 @@ class JuntarIntimarPlanTest(TestCase):
         self.assertEqual(kwargs['prazo_intimacao'], '4')
         self.assertEqual(kwargs['polo_intimacao'], 'autores')
         self.assertEqual(kwargs['proc_projudi'], '12345678901234')
+
+    @patch('projudi.juntar_views.executar_conclusao')
+    @patch('projudi.juntar_views.executar_juntada')
+    def test_juntar_com_conclusao_usa_codigo_11383(self, juntar, conclusao):
+        registro = PrazoDjenRecord.objects.create(
+            processo='0000006-66.2026.8.05.0191',
+            origem='movimentacao',
+            tipo_prazo='impugnacao_embargos_execucao',
+            prazo_dias=15,
+            tempestivo=False,
+            seguranca_juizo='nenhuma',
+            certidao_path=str(self.preview),
+        )
+        juntar.return_value = (True, SimpleNamespace(id=200))
+        conclusao.return_value = (True, SimpleNamespace(id=201))
+        resposta = self.client.post(
+            reverse('projudi:certidao_juntar_intimar',
+                    args=[registro.id]),
+            {
+                'acao': 'juntar',
+                'processo_url': (
+                    'https://projudi.tjba.jus.br/projudi/listagens/'
+                    'DadosProcesso?numeroProcesso=12345678901234'),
+                'polo': 'autores',
+                'prazo': '15',
+                'fazer_conclusao': 'on',
+                'tipo_conclusao': '18',
+                'confirmo': 'on',
+            },
+        )
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'Conclusão ao Juiz registrada')
+        conclusao.assert_called_once()
+        self.assertEqual(
+            conclusao.call_args.kwargs['tipo_conclusao'], '18')
+        self.assertEqual(
+            conclusao.call_args.kwargs['juiz_conclusao'], '41201')
+
+    @patch('projudi.movimentacao_service.MovimentacaoService')
+    def test_executar_conclusao_chama_11383(self, service_cls):
+        from projudi.juntar_service import executar_conclusao
+
+        service = service_cls.return_value
+        service.importar.return_value = SimpleNamespace(id=300)
+        service.executar_requests.return_value = True
+        registro = SimpleNamespace(
+            processo='0000007-77.2026.8.05.0191')
+        plano = {
+            'processo_url': (
+                'https://projudi.tjba.jus.br/projudi/listagens/'
+                'DadosProcesso?numeroProcesso=12345678901234'),
+        }
+        ok, record = executar_conclusao(
+            registro, self.user, plano, tipo_conclusao='18')
+        self.assertTrue(ok)
+        self.assertEqual(record.id, 300)
+        kwargs = service.importar.call_args.kwargs
+        self.assertEqual(kwargs['codigo_movimentacao'], '11383')
+        self.assertEqual(kwargs['descricao_movimentacao'], 'Conclusão')
+        self.assertEqual(
+            service.executar_requests.call_args.kwargs['conclusao'], '18')
+        self.assertEqual(
+            service.executar_requests.call_args.kwargs[
+                'login_conclusao_pessoal'], '41201')
 
     @patch('projudi.juntar_views.executar_juntada')
     def test_juntar_sem_confirmacao_nao_executa(self, executar):

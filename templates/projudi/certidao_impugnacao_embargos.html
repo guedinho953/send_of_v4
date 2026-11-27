@@ -94,6 +94,21 @@
                         {% endfor %}
                     </select>
                 </div>
+                <div>
+                    <label for="tipo_localizador" style="display:block; font-size:13px; font-weight:600; color:#166534; margin-bottom:4px;">Tipo localizador (RAG)</label>
+                    <input id="tipo_localizador" name="tipo_localizador" value="{{ tipo_localizador }}"
+                           placeholder="código"
+                           style="width:110px; padding:8px 10px; border:1px solid #86efac; border-radius:6px; font-size:13px;">
+                </div>
+                <div>
+                    <label for="localizador" style="display:block; font-size:13px; font-weight:600; color:#166534; margin-bottom:4px;">Localizador (RAG)</label>
+                    <input id="localizador" name="localizador" value="{{ localizador }}"
+                           placeholder="código"
+                           style="width:110px; padding:8px 10px; border:1px solid #86efac; border-radius:6px; font-size:13px;">
+                    <div style="font-size:11px; color:#6b7280; margin-top:4px;">
+                        Aplicado na mesma movimentação da juntada.
+                    </div>
+                </div>
             </div>
 
             <div style="display:flex; gap:12px; flex-wrap:wrap;">
@@ -114,6 +129,9 @@
                 </div>
             </div>
         </div>
+
+        <input type="hidden" name="tipo_conclusao" value="{{ tipo_conclusao|default:'3' }}">
+        <input type="hidden" name="juiz_conclusao" value="{{ juiz_conclusao|default:'41201' }}">
 
         <div style="background:#f5f3ff; border:1px solid #ddd6fe; border-radius:8px; padding:10px 12px; margin-bottom:16px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
             <strong style="font-size:13px; color:#5b21b6;">Assinatura da certidão:</strong>

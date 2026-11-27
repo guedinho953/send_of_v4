@@ -617,7 +617,9 @@ class MovimentacaoService:
                            promotor_mp: str = None,
                            cod_analise: str = None,
                            certidao_html: str = None,
-                           certidao_titulo: str = 'Certidão Criminal - art. 76 Lei 9.099/95') -> bool:
+                           certidao_titulo: str = 'Certidão Criminal - art. 76 Lei 9.099/95',
+                           conclusao: str = '',
+                           login_conclusao_pessoal: str = '') -> bool:
         """Executa movimentação via Playwright headless + submit via JavaScript.
 
         Args:
@@ -1549,6 +1551,12 @@ class MovimentacaoService:
             payload['descCategoriaMovimentacao'] = record.descricao_movimentacao or 'TD - Tipo Documental'
         if record.observacao:
             payload['observacao'] = record.observacao[:500]
+
+        # Conclusão (código 11383): radio `conclusao` + juiz, se informado.
+        if conclusao:
+            payload['conclusao'] = str(conclusao)
+        if login_conclusao_pessoal:
+            payload['loginConclusaoPessoal'] = login_conclusao_pessoal
 
         # Concluir.x e Concluir.y (obrigatório para input type=image)
         payload['Concluir.x'] = '10'

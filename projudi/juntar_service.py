@@ -265,6 +265,10 @@ def montar_plano(registro, user=None, processo_url='', polo='',
         'prazo': prazo_final,
         'prazo_codigo': prazo_codigo,
         'motivo_intimacao': '3',
+        'tipo_localizador': registro.tipo_localizador or '',
+        'localizador': registro.localizador or '',
+        'tipo_conclusao': registro.tipo_conclusao or '3',
+        'juiz_conclusao': registro.juiz_conclusao or '41201',
         'pode_intimar': pode_intimar,
         'observacao_juntada': (
             f'Juntada da {template_nome}.'
@@ -301,6 +305,8 @@ def executar_juntada(registro, user, plano=None):
         url_processo=plano['processo_url'],
         codigo_movimentacao='581',
         descricao_movimentacao=plano['template_nome'],
+        tipo_localizador=plano.get('tipo_localizador') or '',
+        localizador=plano.get('localizador') or '',
     )
     service.criar_log(
         record,
@@ -315,6 +321,35 @@ def executar_juntada(registro, user, plano=None):
         record,
         certidao_html=plano['html_certidao'],
         certidao_titulo=plano['template_nome'],
+    )
+    return ok, record
+
+
+def executar_conclusao(registro, user, plano, tipo_conclusao='3',
+                       juiz_conclusao='41201'):
+    """Registra a conclusão ao juiz no Projudi (movimentação 11383).
+
+    O tipo segue o radio ``conclusao`` do Projudi: 1=Despacho,
+    2=Decisão, 3=Sentença, 18=Embargos de Execução, 19=Sentença
+    Extintiva, entre outros. O juiz padrão é o Dr. Martinho (41201).
+    """
+    from projudi.movimentacao_service import MovimentacaoService
+
+    service = MovimentacaoService(user)
+    record = service.importar(
+        processo_numero=registro.processo,
+        act_verb='conclusao',
+        observacao='Conclusão',
+        categoria='outro',
+        processo_cnj=registro.processo,
+        url_processo=plano.get('processo_url') or '',
+        codigo_movimentacao='11383',
+        descricao_movimentacao='Conclusão',
+    )
+    ok = service.executar_requests(
+        record,
+        conclusao=str(tipo_conclusao or '3'),
+        login_conclusao_pessoal=str(juiz_conclusao or '41201'),
     )
     return ok, record
 
@@ -353,6 +388,8 @@ def executar_juntada_e_intimacao(registro, user, plano=None):
             prazo_intimacao=plano.get('prazo_codigo') or '4',
             motivo_intimacao=plano.get('motivo_intimacao') or '3',
             polo_intimacao=plano.get('polo') or 'autores',
+            tipo_localizador=plano.get('tipo_localizador') or '',
+            localizador=plano.get('localizador') or '',
         )
         return True, record, bool(intimacao_ok), ''
     except Exception as exc:

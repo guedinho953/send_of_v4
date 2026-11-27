@@ -42,6 +42,7 @@
                     <th>Tipo</th>
                     <th>Data</th>
                     <th>Link</th>
+                    <th>Certidão sugerida (RAG)</th>
                     <th>Certidão</th>
                 </tr>
             </thead>
@@ -51,10 +52,20 @@
                     <td>{{ m.processo }}</td>
                     <td>{{ m.tipo }}</td>
                     <td>{{ m.data }}</td>
-                    <td><a href="{{ m.link }}" target="_blank">Abrir</a></td>
+                    <td>
+                        {% if m.link_processo %}
+                        <a href="{{ m.link_processo }}" target="_blank">Abrir</a>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        <span class="sugestao-certidao"
+                              data-processo="{{ m.processo }}"
+                              data-documento="{{ m.link_documento|default:'' }}"
+                              data-url="{{ m.link_processo|default:'' }}">analisando…</span>
+                    </td>
                     <td>
                         <a class="btn btn-sm"
-                           href="{% url 'projudi:certidao_impugnacao_embargos' %}?processo={{ m.processo|urlencode }}&url={{ m.link|urlencode }}">
+                           href="{% url 'projudi:certidao_impugnacao_embargos' %}?processo={{ m.processo|urlencode }}&url={{ m.link_processo|urlencode }}">
                             Gerar certidão
                         </a>
                     </td>
@@ -70,5 +81,65 @@
 
     <a href="{% url 'dashboard' %}" class="back">&larr; Dashboard</a>
 </div>
+<script>
+document.querySelectorAll('.sugestao-certidao').forEach(async function (el) {
+    const params = new URLSearchParams({
+        processo: el.dataset.processo || '',
+        documento: el.dataset.documento || '',
+        url: el.dataset.url || ''
+    });
+    try {
+        const resposta = await fetch(
+            "{% url 'projudi:certidao_sugestao_movimentacao' %}?" +
+            params.toString()
+        );
+        const dados = await resposta.json();
+        el.textContent = '';
+        if (!dados.tipo_label) {
+            el.textContent = dados.mensagem || '—';
+            return;
+        }
+        const nome = document.createElement('strong');
+        nome.textContent = dados.tipo_label;
+        el.appendChild(nome);
+        if (dados.rag_id) {
+            const rag = document.createElement('small');
+            rag.style.display = 'block';
+            rag.style.color = '#6b7280';
+            rag.textContent = 'RAG #' + dados.rag_id;
+            el.appendChild(rag);
+        }
+        const extras = [];
+        if (dados.tipo_localizador || dados.localizador) {
+            extras.push(
+                'Localizador: ' +
+                (dados.tipo_localizador || '—') +
+                (dados.localizador ? ' / ' + dados.localizador : '')
+            );
+        }
+        if (dados.tipo_conclusao_label) {
+            extras.push('Conclusão: ' + dados.tipo_conclusao_label);
+        }
+        if (extras.length) {
+            const detalhe = document.createElement('small');
+            detalhe.style.display = 'block';
+            detalhe.style.color = '#4f46e5';
+            detalhe.textContent = extras.join(' · ');
+            el.appendChild(detalhe);
+        }
+        if (dados.url_form) {
+            const link = document.createElement('a');
+            link.href = dados.url_form;
+            link.className = 'btn btn-sm';
+            link.style.marginTop = '5px';
+            link.textContent = 'Usar esta certidão';
+            el.appendChild(document.createElement('br'));
+            el.appendChild(link);
+        }
+    } catch (erro) {
+        el.textContent = 'não foi possível analisar';
+    }
+});
+</script>
 </body>
 </html>

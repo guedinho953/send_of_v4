@@ -35,7 +35,8 @@ class PrazoDjenRecordAdmin(admin.ModelAdmin):
         'data_publicacao', 'data_inicio_contagem', 'ultimo_dia',
         'data_decurso', 'data_protocolo', 'evento_recurso',
         'evento_origem', 'evento_intimacao', 'preparo_status',
-        'seguranca_juizo', 'habilitacao_regular',
+        'seguranca_juizo', 'tipo_localizador', 'localizador',
+        'tipo_conclusao', 'juiz_conclusao', 'habilitacao_regular',
         'texto_certidao', 'tempestivo', 'motivo',
         'prazo_info', 'certidao_path', 'servidor', 'created_at',
     ]

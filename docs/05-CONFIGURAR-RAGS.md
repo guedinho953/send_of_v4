@@ -15,6 +15,24 @@ Regra de ouro:
 
 > ⚠️ Se o RAG não deve expedir documento completo (ex: só solicitar mandado), SEMPRE dê uma sequência explícita. Sequência vazia cai no fluxo dinâmico.
 
+## 1b. Sugestão de certidão e conclusão (campos do RAGExample)
+
+Além dos passos, o `RAGExample` pode indicar o que a fila de movimentações
+deve sugerir para aquele despacho:
+
+| Campo | Uso |
+|---|---|
+| `tipo_certidao` | Tipo de certidão (`inominado`, `contrarrazoes_inominado`, `cumprimento_sentenca`, `pagamento_impugnacao_penhora`, `decurso_pagamento`, `impugnacao_embargos_execucao`) |
+| `tipo_localizador` | Código do tipo de localizador aplicado junto com a juntada |
+| `localizador` | Código do localizador (quando aplicável) |
+| `tipo_conclusao` | Radio `conclusao` da movimentação 11383: `1`=Despacho, `2`=Decisão, `3`=Sentença, `18`=Embargos de Execução, `19`=Sentença Extintiva etc. |
+| `juiz_conclusao` | Login do juiz em `loginConclusaoPessoal`; default da tela `41201` (Dr. Martinho) |
+
+A fila baixa o documento do despacho, faz o match RAG e mostra o tipo
+sugerido. O botão **Usar esta certidão** leva os campos para o formulário;
+o juntar/intimar permite alterar o localizador, o tipo de conclusão e o
+juiz antes de executar.
+
 ## 2. Campos comuns a todos os passos
 
 | Campo | Obrigatório | Default | Descrição |

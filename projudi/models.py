@@ -775,6 +775,14 @@ class PrazoDjenRecord(models.Model):
     seguranca_juizo = models.CharField(
         'Segurança do juízo', max_length=20,
         choices=SEGURANCA_CHOICES, blank=True)
+    tipo_localizador = models.CharField(
+        'Tipo de localizador', max_length=20, blank=True)
+    localizador = models.CharField(
+        'Localizador', max_length=20, blank=True)
+    tipo_conclusao = models.CharField(
+        'Tipo de conclusão', max_length=2, blank=True)
+    juiz_conclusao = models.CharField(
+        'Juiz da conclusão', max_length=20, blank=True)
     habilitacao_regular = models.BooleanField(
         'Habilitação regular', null=True, blank=True)
     texto_certidao = models.TextField(

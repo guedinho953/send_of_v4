@@ -146,7 +146,8 @@ class EhFluxoMovimentarFilter(admin.SimpleListFilter):
 
 @admin.register(RAGExample)
 class RAGExampleAdmin(admin.ModelAdmin):
-    list_display = ['process', 'evento_despacho', 'despacho_ato', 'active',
+    list_display = ['process', 'evento_despacho', 'despacho_ato',
+                    'tipo_certidao', 'active',
                     'resumo_bloqueio', 'resumo_fluxo', 'resumo_sequencia']
     list_filter = ['active', EhBloqueioFilter, EhFluxoMovimentarFilter]
     search_fields = ['process__number', 'despacho_ato']
@@ -155,6 +156,13 @@ class RAGExampleAdmin(admin.ModelAdmin):
         ('Processo', {'fields': ['process', 'oficio', 'evento_despacho']}),
         ('Decisão do Juiz', {'fields': ['despacho_ato', 'despacho_observacao',
                                          'despacho_data', 'despacho_autor']}),
+        ('Certidão, localizador e conclusão sugeridos',
+         {'fields': ['tipo_certidao', 'tipo_localizador', 'localizador',
+                     'tipo_conclusao', 'juiz_conclusao'],
+          'description':
+              'Usados na fila de movimentações para sugerir a certidão, '
+              'aplicar o localizador junto com a juntada e pré-selecionar '
+              'a conclusão ao juiz.'}),
         ('Cumprimentos', {'fields': ['cumprimentos', 'documentos']}),
         ('Sequência de Execução',
          {'fields': ['sequencia_cumprimento'],
@@ -195,6 +203,11 @@ class RAGExampleAdmin(admin.ModelAdmin):
                 cumprimentos=rag.cumprimentos,
                 documentos=rag.documentos,
                 sequencia_cumprimento=json.loads(json.dumps(rag.sequencia_cumprimento or [])),
+                tipo_certidao=rag.tipo_certidao,
+                tipo_localizador=rag.tipo_localizador,
+                localizador=rag.localizador,
+                tipo_conclusao=rag.tipo_conclusao,
+                juiz_conclusao=rag.juiz_conclusao,
                 active=rag.active,
             )
             nova.save()

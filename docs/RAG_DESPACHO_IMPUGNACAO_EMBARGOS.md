@@ -24,6 +24,13 @@ Sugestão de campos:
 - **despacho_ato**:
   `CERTIFIQUE-SE TEMPESTIVIDADE DOS EMBARGOS E SEGURANÇA DO JUÍZO - ART. 525 CPC - FONAJE 117 - INTIME-SE EMBARGADO - 15 DIAS`
 - **despacho_observacao**: apenas os dois primeiros parágrafos acima.
+- **tipo_certidao**: `impugnacao_embargos_execucao`.
+- **tipo_localizador** / **localizador**: códigos que a juntada deve aplicar
+  (ex.: `15286` / `1`, se for o caso do seu fluxo).
+- **tipo_conclusao**: normalmente `18` (Embargos de Execução) ou `3`
+  (Sentença); a tela permite trocar.
+- **juiz_conclusao**: `41201` (Dr. Martinho) por padrão; a tela permite
+  escolher outro.
 - **sequencia_cumprimento**: depende da decisão operacional. Para evitar
   intimação automática indevida (o despacho só intima “se for o caso”),
   **não** cadastre um passo `intimacao_eletronica` cego. O fluxo recomendado
@@ -35,7 +42,10 @@ Sugestão de campos:
 3. se a certidão concluir **TEMPESTIVA**, usa-se **Juntar + intimar** no
    detalhe da certidão. O sistema intima o embargado/exequente para
    manifestação em 15 dias;
-4. se **INTEMPESTIVA**, usa-se apenas **Juntar certidão**, sem intimação.
+4. se **INTEMPESTIVA**, usa-se apenas **Juntar certidão**, sem intimação;
+5. opcionalmente, marque **Fazer conclusão ao Juiz** para registrar a
+   movimentação 11383, com o tipo e o juiz sugeridos pela RAG (padrão do
+   juiz: `41201` — Dr. Martinho).
 
 Exemplo de passo de tarefa (não executa a certidão automaticamente):
 

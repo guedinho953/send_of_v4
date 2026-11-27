@@ -76,6 +76,20 @@
         {% if registro.seguranca_juizo %}
         <div><strong>Segurança do juízo</strong> {{ registro.get_seguranca_juizo_display }}</div>
         {% endif %}
+        {% if registro.tipo_localizador or registro.localizador %}
+        <div><strong>Localizador da juntada</strong>
+            {{ registro.tipo_localizador|default:"—" }}
+            {% if registro.localizador %}/ {{ registro.localizador }}{% endif %}
+        </div>
+        {% endif %}
+        {% if registro.tipo_prazo == 'impugnacao_embargos_execucao' and registro.tipo_conclusao %}
+        <div><strong>Conclusão sugerida</strong>
+            {{ registro.tipo_conclusao }}
+            {% if registro.juiz_conclusao %}
+            / juiz {{ registro.juiz_conclusao }}
+            {% endif %}
+        </div>
+        {% endif %}
         <div><strong>Habilitação</strong>
             {% if registro.habilitacao_regular is None %}—
             {% elif registro.habilitacao_regular %}regular

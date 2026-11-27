@@ -60,6 +60,10 @@ class CertidaoImpugnacaoEmbargosView(LoginRequiredMixin, View):
             'seguranca_juizo': '',
             'data_intimacao_manual': '',
             'evento_intimacao_manual': '',
+            'tipo_localizador': '',
+            'localizador': '',
+            'tipo_conclusao': '3',
+            'juiz_conclusao': '41201',
         }
         context.update(extra)
         return context
@@ -73,6 +77,13 @@ class CertidaoImpugnacaoEmbargosView(LoginRequiredMixin, View):
             processo=(request.GET.get('processo') or '').strip(),
             processo_url=(request.GET.get('url') or '').strip(),
             evento=(request.GET.get('evento') or '').strip(),
+            tipo_localizador=(
+                request.GET.get('tipo_localizador') or '').strip(),
+            localizador=(request.GET.get('localizador') or '').strip(),
+            tipo_conclusao=(
+                request.GET.get('tipo_conclusao') or '3').strip(),
+            juiz_conclusao=(
+                request.GET.get('juiz_conclusao') or '41201').strip(),
         )
 
     def post(self, request):
@@ -90,6 +101,14 @@ class CertidaoImpugnacaoEmbargosView(LoginRequiredMixin, View):
             request.POST.get('data_intimacao_manual') or '').strip()
         evento_intimacao_manual = (
             request.POST.get('evento_intimacao_manual') or '').strip()
+        tipo_localizador = (
+            request.POST.get('tipo_localizador') or '').strip()
+        localizador = (
+            request.POST.get('localizador') or '').strip()
+        tipo_conclusao = (
+            request.POST.get('tipo_conclusao') or '3').strip()
+        juiz_conclusao = (
+            request.POST.get('juiz_conclusao') or '41201').strip()
 
         dados = {
             'processo': processo,
@@ -101,6 +120,10 @@ class CertidaoImpugnacaoEmbargosView(LoginRequiredMixin, View):
             'seguranca_juizo': seguranca_juizo,
             'data_intimacao_manual': data_intimacao_manual,
             'evento_intimacao_manual': evento_intimacao_manual,
+            'tipo_localizador': tipo_localizador,
+            'localizador': localizador,
+            'tipo_conclusao': tipo_conclusao,
+            'juiz_conclusao': juiz_conclusao,
         }
 
         if not processo:
@@ -198,6 +221,10 @@ class CertidaoImpugnacaoEmbargosView(LoginRequiredMixin, View):
                     resultado.get('evento_despacho') or evento or ''),
                 evento_intimacao=evento_intimacao,
                 seguranca_juizo=seguranca_juizo,
+                tipo_localizador=tipo_localizador,
+                localizador=localizador,
+                tipo_conclusao=tipo_conclusao,
+                juiz_conclusao=juiz_conclusao,
                 servidor=servidor,
                 servidor_cargo=servidor_cargo,
             )

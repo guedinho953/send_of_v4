@@ -469,6 +469,51 @@ class RAGExample(TimeStampedModel):
     despacho_data = models.CharField('Data Despacho', max_length=20, blank=True)
     despacho_autor = models.CharField('Juiz', max_length=200, blank=True)
     evento_despacho = models.CharField('Evento Despacho', max_length=20, blank=True)
+    CERTIDAO_CHOICES = [
+        ('', 'Nenhuma'),
+        ('inominado', 'Recurso Inominado'),
+        ('contrarrazoes_inominado', 'Contrarrazões ao Recurso Inominado'),
+        ('cumprimento_sentenca', 'Impugnação/Cumprimento de Sentença'),
+        ('pagamento_impugnacao_penhora', 'Impugnação/Decurso da Penhora'),
+        ('decurso_pagamento', 'Decurso de Pagamento Voluntário'),
+        ('impugnacao_embargos_execucao',
+         'Impugnação/Embargos à Execução'),
+    ]
+    tipo_certidao = models.CharField(
+        'Certidão sugerida', max_length=40, blank=True,
+        choices=CERTIDAO_CHOICES,
+        help_text='Tipo de certidão que este despacho gera.',
+    )
+    tipo_localizador = models.CharField(
+        'Tipo de localizador', max_length=20, blank=True,
+        help_text='Código do localizador a aplicar junto com a juntada.',
+    )
+    localizador = models.CharField(
+        'Localizador', max_length=20, blank=True,
+        help_text='Código do localizador (quando aplicável).',
+    )
+    TIPO_CONCLUSAO_CHOICES = [
+        ('', 'Não informado'),
+        ('1', 'Despacho'),
+        ('2', 'Decisão'),
+        ('3', 'Sentença'),
+        ('5', 'Decisão Urgente'),
+        ('17', 'Embargos de Declaração'),
+        ('18', 'Embargos de Execução'),
+        ('19', 'Sentença Extintiva'),
+        ('22', 'Exceção de Pré-executividade'),
+    ]
+    tipo_conclusao = models.CharField(
+        'Tipo de conclusão', max_length=2, blank=True,
+        choices=TIPO_CONCLUSAO_CHOICES,
+        help_text='Tipo do radio conclusão (1=Despacho, 3=Sentença, '
+                  '18=Embargos de Execução etc.).',
+    )
+    juiz_conclusao = models.CharField(
+        'Juiz da conclusão', max_length=20, blank=True,
+        help_text='Login do juiz em loginConclusaoPessoal. '
+                  'Default da tela: 41201 (Dr. Martinho).',
+    )
     cumprimentos = models.JSONField('Atos de Cumprimento', default=list, blank=True,
         help_text='Lista de dicts com ato, observacao, data, autor, tipo')
     documentos = models.JSONField('Documentos do Despacho', default=list, blank=True,

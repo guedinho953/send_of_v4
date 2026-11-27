@@ -100,6 +100,11 @@ urlpatterns = [
         impugnacao_embargos_views.CertidaoImpugnacaoEmbargosView.as_view(),
         name='certidao_impugnacao_embargos',
     ),
+    path(
+        'certidoes/movimentacoes/sugerir/',
+        certidao_views.CertidaoSugestaoMovimentacaoView.as_view(),
+        name='certidao_sugestao_movimentacao',
+    ),
     path('certidoes/<int:pk>/', certidao_views.CertidaoDetailView.as_view(), name='certidao_detail'),
     path(
         'certidoes/<int:pk>/juntar-intimar/',

@@ -341,9 +341,21 @@ e a intimação correspondente. A certidão é registrada com
 
 A aba **Movimentações** do módulo de certidões também tem o atalho
 **📥 Fila de movimentações**, que abre `/projudi/movimentacoes/`. Nessa
-fila, cada linha tem o botão **Gerar certidão**: ele abre o formulário com
-o processo e a URL da movimentação já preenchidos; basta completar
-protocolo, segurança e eventos.
+fila, cada linha tem:
+
+- a coluna **Certidão sugerida (RAG)**, preenchida pelo match do documento
+  com a RAG. O tipo vem de `RAGExample.tipo_certidao`;
+- o botão **Usar esta certidão**, que abre o formulário já com processo,
+  URL, localizador e conclusão sugeridos pela RAG;
+- o botão direto **Gerar certidão**, para o fluxo manual.
+
+A RAG pode indicar:
+
+- `tipo_certidao`;
+- `tipo_localizador` e `localizador`, aplicados na mesma movimentação da
+  juntada;
+- `tipo_conclusao` (radio `conclusao`; ex.: 18 = Embargos de Execução) e
+  `juiz_conclusao` (padrão `41201` — Dr. Martinho).
 
 ## Fila de petições com escolha manual
 
@@ -422,6 +434,11 @@ intempestivos, não há intimação: apenas a juntada da certidão.
 O texto público da certidão segue o modelo base e incorpora o despacho:
 prazo de 15 dias para pagamento, art. 525, caput, do CPC e observação dos
 valores executado/depositado (Enunciado n. 117 do FONAJE).
+
+A tela também permite marcar **Fazer conclusão ao Juiz**. Nesse caso, após
+a juntada/intimação, o sistema registra a movimentação **11383** com o
+radio `conclusao` escolhido (ex.: 18 = Embargos de Execução) e o
+`loginConclusaoPessoal` do juiz (padrão `41201` — Dr. Martinho).
 
 ### Senha da assinatura
 
