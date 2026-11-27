@@ -647,14 +647,29 @@ Além do dashboard atual, existe uma visão em tabela:
 /projudi/certidoes/tabela/
 ```
 
-Ela reúne, sem alterar os fluxos existentes:
+Ela tem duas formas:
 
-- documentos de certidão gerados e ainda não juntados;
-- cumprimentos/RAG de certidão;
-- movimentações de certidão já registradas.
+- **Juntas** — petições e movimentações na mesma tabela;
+- **Separadas** — uma tabela de petições e outra de movimentações.
 
-A tabela tem abas **Todas / Petições / Movimentações**, filtros por status,
-busca por processo/parte/tipo e links para detalhe ou preview.
+Também existem telas dedicadas:
+
+```text
+/projudi/certidoes/peticoes/certificadas/
+/projudi/certidoes/movimentacoes/certificadas/
+```
+
+E um ponto de entrada:
+
+```text
+/projudi/certidoes/
+```
+
+com os fluxos de Petições e Movimentações separados.
+
+A tabela tem filtros por status, busca e opção
+**Ocultar geradas/processadas**, além de links para detalhe, preview e
+ações de juntada.
 
 O dashboard antigo continua funcionando em:
 

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Certidões — Send of v4{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:18px;">
+    <h1 class="section-title" style="margin:0; font-size:23px;">📄 Certidões</h1>
+    <p style="font-size:13px; color:#6b7280; margin:4px 0 0;">
+        Escolha o fluxo. Petições e movimentações têm processamento separado.
+    </p>
+</div>
+
+<div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px; margin-bottom:18px;">
+    <div style="background:#fff; border-radius:10px; padding:18px; box-shadow:0 1px 4px rgba(0,0,0,.07); border-left:5px solid #2563eb;">
+        <h2 style="margin:0 0 6px; font-size:18px; color:#1e3a5f;">📄 Petições</h2>
+        <p style="font-size:12px; color:#6b7280; line-height:1.5;">
+            Fila da JuntadaPeticao, recurso inominado, contrarrazões e
+            impugnações. A certidão é gerada a partir da petição.
+        </p>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;">
+            <a href="{% url 'projudi:certidao_peticoes' %}" class="btn" style="background:#2563eb; color:white;">📥 Fila de Petições</a>
+            <a href="{% url 'projudi:certidao_peticoes_tabela' %}" class="btn btn-outline">📊 Certidões de Petições</a>
+        </div>
+    </div>
+
+    <div style="background:#fff; border-radius:10px; padding:18px; box-shadow:0 1px 4px rgba(0,0,0,.07); border-left:5px solid #d97706;">
+        <h2 style="margin:0 0 6px; font-size:18px; color:#1e3a5f;">⚙️ Movimentações</h2>
+        <p style="font-size:12px; color:#6b7280; line-height:1.5;">
+            RAGs de despacho, decurso de pagamento, impugnação/embargos e
+            ações de juntada, localizador, conclusão e contadoria.
+        </p>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;">
+            <a href="{% url 'projudi:movimentacoes' %}" class="btn" style="background:#d97706; color:white;">📋 Movimentações Projudi</a>
+            <a href="{% url 'projudi:certidao_movimentacoes_tabela' %}" class="btn btn-outline">📊 Certidões de Movimentações</a>
+        </div>
+    </div>
+</div>
+
+<div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:9px; padding:12px 14px; font-size:12px; color:#475569;">
+    <strong>Visão unificada:</strong>
+    <a href="{% url 'projudi:certidao_tabela' %}">📊 Certidões em Tabela</a>
+    · <a href="{% url 'projudi:rag_certidoes' %}">🧠 RAGs de Certidão</a>
+    · <a href="{% url 'projudi:certidao_dashboard' %}">📄 Dashboard antigo</a>
+</div>
+{% endblock %}

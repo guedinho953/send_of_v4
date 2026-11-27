@@ -879,6 +879,8 @@ class CertidaoTabelaView(LoginRequiredMixin, TemplateView):
     """
 
     template_name = 'projudi/certidao_tabela.html'
+    origem_fixa = ''
+    titulo_visao = '📄 Certidões em Tabela'
 
     @staticmethod
     def _data_iso(valor):
@@ -1001,7 +1003,14 @@ class CertidaoTabelaView(LoginRequiredMixin, TemplateView):
                 'fonte_classe': 'mov',
             })
 
-        origem = (self.request.GET.get('origem') or '').strip()
+        modo = (self.request.GET.get('modo') or 'juntas').strip().lower()
+        if modo not in ('juntas', 'separadas'):
+            modo = 'juntas'
+
+        origem = self.origem_fixa or (
+            self.request.GET.get('origem') or '').strip()
+        if modo == 'separadas':
+            origem = ''
         if origem not in ('peticao', 'movimentacao'):
             origem = ''
         status = (self.request.GET.get('status') or '').strip()
@@ -1040,8 +1049,20 @@ class CertidaoTabelaView(LoginRequiredMixin, TemplateView):
             ]
         rows.sort(key=lambda r: r['data'], reverse=True)
 
+        registros_peticoes = [
+            r for r in rows if r['origem'] == 'peticao'
+        ]
+        registros_movimentacoes = [
+            r for r in rows if r['origem'] != 'peticao'
+        ]
+
         context.update({
             'registros': rows,
+            'registros_peticoes': registros_peticoes,
+            'registros_movimentacoes': registros_movimentacoes,
+            'modo': modo,
+            'origem_fixa': self.origem_fixa,
+            'titulo_visao': self.titulo_visao,
             'busca': self.request.GET.get('q', ''),
             'origem_filtro': origem,
             'status_filtro': status,
@@ -1056,6 +1077,16 @@ class CertidaoTabelaView(LoginRequiredMixin, TemplateView):
         return context
 
 
+class CertidaoPeticaoTabelaView(CertidaoTabelaView):
+    origem_fixa = 'peticao'
+    titulo_visao = '📄 Certidões de Petições'
+
+
+class CertidaoMovimentacaoTabelaView(CertidaoTabelaView):
+    origem_fixa = 'movimentacao'
+    titulo_visao = '⚙️ Certidões de Movimentações'
+
+
 class CertidaoRegistroDetailView(LoginRequiredMixin, DetailView):
     """Detalhe do registro unificado de certidão."""
 
@@ -1068,3 +1099,9 @@ class CertidaoRegistroDetailView(LoginRequiredMixin, DetailView):
             'generated_document', 'movimentacao', 'cumprimento',
             'rag_example', 'template_used',
         )
+
+
+class CertidaoHubView(LoginRequiredMixin, TemplateView):
+    """Ponto de entrada com os fluxos de petições e movimentações separados."""
+
+    template_name = 'projudi/certidao_hub.html'

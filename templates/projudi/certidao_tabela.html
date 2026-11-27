@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Certidões em Tabela — Send of v4{% endblock %}
+{% block title %}{{ titulo_visao|default:"Certidões em Tabela" }} — Send of v4{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -29,6 +29,9 @@
     .st-pendente { background:#fef3c7; color:#92400e; }
     .st-processando { background:#ede9fe; color:#5b21b6; }
     .st-cumprido { background:#d1fae5; color:#065f46; }
+    .st-juntada { background:#d1fae5; color:#065f46; }
+    .st-intimada { background:#dbeafe; color:#1e40af; }
+    .st-concluida { background:#dcfce7; color:#166534; }
     .st-falha { background:#fee2e2; color:#991b1b; }
     .st-dispensado { background:#f3e8ff; color:#6b21a8; }
     .acoes { display:flex; gap:5px; flex-wrap:wrap; }
@@ -37,26 +40,42 @@
     .acoes-inline form { display:flex; gap:4px; flex-wrap:wrap; margin-top:6px; }
     .acoes-inline select, .acoes-inline input { padding:4px 6px; border:1px solid #cbd5e1; border-radius:5px; font-size:11px; }
     .btn-sm { padding:5px 10px; font-size:11px; border-radius:5px; }
-    .empty-state { text-align:center; padding:44px 20px; color:#6b7280; background:#fff; border-radius:10px; }
-    .busca-form { display:flex; gap:6px; align-items:center; margin-left:auto; }
-    .busca-form input { padding:6px 9px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px; min-width:220px; }
+    .empty-state { text-align:center; padding:32px 20px; color:#6b7280; background:#fff; border-radius:10px; margin-bottom:14px; }
+    .busca-form { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
+    .busca-form input[type=text] { padding:6px 9px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px; min-width:220px; }
+    .busca-form select { padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px; }
+    .grupo-tabela { margin-bottom:22px; }
+    .grupo-tabela h3 { margin:0 0 8px; font-size:15px; color:#1e3a5f; }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="ct-top">
     <div>
-        <h1>📄 Certidões em Tabela</h1>
+        <h1>{{ titulo_visao|default:"📄 Certidões em Tabela" }}</h1>
         <p>
+            {% if origem_fixa == 'peticao' %}
+            Certidões geradas pela fila de petições.
+            {% elif origem_fixa == 'movimentacao' %}
+            Certidões geradas a partir de movimentações, RAGs e decursos.
+            {% else %}
             Visão unificada dos documentos gerados, RAGs e movimentações de
-            certidão. O dashboard atual continua disponível.
+            certidão. O processamento segue separado por origem.
+            {% endif %}
         </p>
     </div>
     <div class="ct-actions">
-        <a href="{% url 'projudi:certidao_dashboard' %}" class="btn btn-outline">← Dashboard atual</a>
-        <a href="{% url 'projudi:rag_certidoes' %}" class="btn btn-outline">🧠 RAGs de Certidão</a>
+        <a href="{% url 'projudi:certidao_dashboard' %}" class="btn btn-outline">← Dashboard</a>
+        {% if not origem_fixa %}
+        <a href="{% url 'projudi:certidao_peticoes_tabela' %}" class="btn btn-outline">📄 Petições</a>
+        <a href="{% url 'projudi:certidao_movimentacoes_tabela' %}" class="btn btn-outline">⚙️ Movimentações</a>
+        {% endif %}
+        <a href="{% url 'projudi:rag_certidoes' %}" class="btn btn-outline">🧠 RAGs</a>
+        {% if origem_fixa == 'movimentacao' %}
+        <a href="{% url 'projudi:movimentacoes' %}" class="btn btn-outline">📋 Fila Projudi</a>
+        {% elif origem_fixa == 'peticao' %}
         <a href="{% url 'projudi:certidao_peticoes' %}" class="btn btn-outline">📥 Fila de Petições</a>
-        <a href="{% url 'projudi:movimentacoes' %}" class="btn btn-outline">📋 Movimentações Projudi</a>
+        {% endif %}
     </div>
 </div>
 
@@ -68,131 +87,91 @@
     <div class="stat-card" style="border-left-color:#dc2626;"><h4>{{ total_pendentes }}</h4><p>Pendentes / falhas</p></div>
 </div>
 
-<div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:14px;">
-    <a href="?{% if status_filtro %}status={{ status_filtro }}{% endif %}{% if busca %}&q={{ busca|urlencode }}{% endif %}"
-       class="filtro-btn {% if not origem_filtro %}active{% endif %}">
-        Todas ({{ total }})
+{% if not origem_fixa %}
+<div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
+    <a href="?modo=juntas{% if status_filtro %}&status={{ status_filtro }}{% endif %}{% if busca %}&q={{ busca|urlencode }}{% endif %}{% if ocultar_processadas %}&ocultar=1{% endif %}"
+       class="filtro-btn {% if modo != 'separadas' %}active{% endif %}">
+        📄 Juntas
     </a>
-    <a href="?origem=peticao{% if status_filtro %}&status={{ status_filtro }}{% endif %}{% if busca %}&q={{ busca|urlencode }}{% endif %}"
-       class="filtro-btn {% if origem_filtro == 'peticao' %}active{% endif %}">
-        📄 Petições ({{ total_peticoes }})
+    <a href="?modo=separadas{% if status_filtro %}&status={{ status_filtro }}{% endif %}{% if busca %}&q={{ busca|urlencode }}{% endif %}{% if ocultar_processadas %}&ocultar=1{% endif %}"
+       class="filtro-btn {% if modo == 'separadas' %}active{% endif %}">
+        📑 Separadas
     </a>
-    <a href="?origem=movimentacao{% if status_filtro %}&status={{ status_filtro }}{% endif %}{% if busca %}&q={{ busca|urlencode }}{% endif %}"
-       class="filtro-btn {% if origem_filtro == 'movimentacao' %}active{% endif %}">
-        ⚙️ Movimentações ({{ total_movimentacoes }})
-    </a>
-    <form method="get" class="busca-form">
-        {% if origem_filtro %}<input type="hidden" name="origem" value="{{ origem_filtro }}">{% endif %}
-        <input name="q" value="{{ busca }}" placeholder="processo, parte ou tipo">
-        <select name="status" onchange="this.form.submit()"
-                style="padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px;">
-            <option value="">Todos os status</option>
-            <option value="gerada" {% if status_filtro == 'gerada' %}selected{% endif %}>Gerada / não juntada</option>
-            <option value="pendente" {% if status_filtro == 'pendente' %}selected{% endif %}>Pendente</option>
-            <option value="processando" {% if status_filtro == 'processando' %}selected{% endif %}>Processando</option>
-            <option value="cumprido" {% if status_filtro == 'cumprido' %}selected{% endif %}>Cumprida</option>
-            <option value="falha" {% if status_filtro == 'falha' %}selected{% endif %}>Falha</option>
-            <option value="dispensado" {% if status_filtro == 'dispensado' %}selected{% endif %}>Dispensada</option>
-        </select>
-        <label style="font-size:11px; color:#374151; display:flex; align-items:center; gap:4px; white-space:nowrap;">
-            <input type="checkbox" name="ocultar" value="1"
-                   {% if ocultar_processadas %}checked{% endif %}
-                   onchange="this.form.submit()">
-            Ocultar geradas/processadas
-        </label>
-        <button type="submit" class="btn btn-sm btn-outline">Filtrar</button>
-    </form>
+    <span style="font-size:11px; color:#6b7280;">
+        Juntas: mesma tabela. Separadas: cada origem na sua tabela.
+    </span>
 </div>
+{% endif %}
 
-{% if registros %}
-<div style="overflow-x:auto;">
-    <table class="tabela">
-        <thead>
-            <tr>
-                <th>Data</th>
-                <th>Processo</th>
-                <th>Origem</th>
-                <th>Parte</th>
-                <th>Tipo</th>
-                <th>Último dia</th>
-                <th>Status</th>
-                <th>Fonte</th>
-                <th>Ações</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for r in registros %}
-            <tr>
-                <td>{{ r.data|date:"d/m/Y H:i" }}</td>
-                <td><div class="processo">{{ r.processo }}</div></td>
-                <td>
-                    <span class="tag tag-{{ r.origem }}">
-                        {% if r.origem == 'peticao' %}Petição{% else %}Movimentação{% endif %}
-                    </span>
-                </td>
-                <td>{{ r.parte|default:"—"|truncatechars:40 }}</td>
-                <td><div class="tipo">{{ r.tipo }}</div></td>
-                <td>{{ r.ultimo_dia|date:"d/m/Y"|default:"—" }}</td>
-                <td><span class="tag st-{{ r.status_classe }}">{{ r.status }}</span></td>
-                <td><span class="meta">{{ r.fonte }}</span></td>
-                <td>
-                    <div class="acoes">
-                        {% if r.detail_url %}
-                        <a class="btn btn-sm btn-outline"
-                           href="{{ r.detail_url }}"
-                           {% if r.preview_url %}target="_blank"{% endif %}>
-                            {% if r.preview_url %}👁 Preview{% else %}🔍 Detalhe{% endif %}
-                        </a>
-                        {% endif %}
-                        {% if r.registro_id %}
-                        <a class="btn btn-sm btn-outline"
-                           href="{% url 'projudi:certidao_registro_detail' r.registro_id %}">
-                            📄 Registro
-                        </a>
-                        {% endif %}
-                        {% if r.doc_id %}
-                        <details class="acoes-inline">
-                            <summary>⚙️ Ações</summary>
-                            <form method="post"
-                                  action="{% url 'projudi:certidao_acoes' %}"
-                                  onsubmit="return confirm('Executar a ação selecionada no Projudi?');">
-                                {% csrf_token %}
-                                <input type="hidden" name="documento_id" value="{{ r.doc_id }}">
-                                <select name="acao" required>
-                                    <option value="so_gerar">Só gerar</option>
-                                    <option value="juntar">Juntar</option>
-                                    <option value="juntar_localizador">Juntar + localizador</option>
-                                    <option value="juntar_conclusao">Juntar + conclusão</option>
-                                    <option value="juntar_contadoria">Juntar + contadoria</option>
-                                </select>
-                                <input name="tipo_localizador" placeholder="tipo local." style="width:80px;">
-                                <input name="localizador" placeholder="local." style="width:65px;">
-                                <select name="tipo_conclusao">
-                                    <option value="1">Despacho</option>
-                                    <option value="2">Decisão</option>
-                                    <option value="3">Sentença</option>
-                                    <option value="18" selected>Embargos</option>
-                                    <option value="19">Sentença ext.</option>
-                                    <option value="22">Exceção</option>
-                                </select>
-                                <input name="juiz_conclusao" value="41201" style="width:70px;">
-                                <button type="submit" class="btn btn-sm btn-outline">Executar</button>
-                            </form>
-                        </details>
-                        {% endif %}
-                    </div>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-<div style="font-size:11px; color:#6b7280; margin-top:8px;">
-    Exibindo {{ total_visivel }} registro(s) após os filtros.
-</div>
+<form method="get" class="busca-form">
+    {% if not origem_fixa %}<input type="hidden" name="modo" value="{{ modo }}">{% endif %}
+    {% if modo != 'separadas' and origem_filtro %}
+    <input type="hidden" name="origem" value="{{ origem_filtro }}">
+    {% endif %}
+    <input type="text" name="q" value="{{ busca }}" placeholder="processo, parte ou tipo">
+    <select name="status" onchange="this.form.submit()">
+        <option value="">Todos os status</option>
+        <option value="gerada" {% if status_filtro == 'gerada' %}selected{% endif %}>Gerada / não juntada</option>
+        <option value="pendente" {% if status_filtro == 'pendente' %}selected{% endif %}>Pendente</option>
+        <option value="processando" {% if status_filtro == 'processando' %}selected{% endif %}>Processando</option>
+        <option value="cumprido" {% if status_filtro == 'cumprido' %}selected{% endif %}>Cumprida</option>
+        <option value="juntada" {% if status_filtro == 'juntada' %}selected{% endif %}>Juntada</option>
+        <option value="falha" {% if status_filtro == 'falha' %}selected{% endif %}>Falha</option>
+        <option value="dispensado" {% if status_filtro == 'dispensado' %}selected{% endif %}>Dispensada</option>
+    </select>
+    <label style="font-size:11px; color:#374151; display:flex; align-items:center; gap:4px; white-space:nowrap;">
+        <input type="checkbox" name="ocultar" value="1"
+               {% if ocultar_processadas %}checked{% endif %}
+               onchange="this.form.submit()">
+        Ocultar geradas/processadas
+    </label>
+    <button type="submit" class="btn btn-sm btn-outline">Filtrar</button>
+</form>
+
+{% if modo == 'separadas' and not origem_fixa %}
+    <div class="grupo-tabela">
+        <h3>📄 Certidões de Petições ({{ registros_peticoes|length }})</h3>
+        {% if registros_peticoes %}
+            {% include "projudi/_certidao_tabela_registros.html" with registros=registros_peticoes %}
+        {% else %}
+            <div class="empty-state">Nenhuma certidão de petição encontrada.</div>
+        {% endif %}
+    </div>
+    <div class="grupo-tabela">
+        <h3>⚙️ Certidões de Movimentações ({{ registros_movimentacoes|length }})</h3>
+        {% if registros_movimentacoes %}
+            {% include "projudi/_certidao_tabela_registros.html" with registros=registros_movimentacoes %}
+        {% else %}
+            <div class="empty-state">Nenhuma certidão de movimentação encontrada.</div>
+        {% endif %}
+    </div>
 {% else %}
-<div class="empty-state">
-    Nenhuma certidão encontrada para os filtros selecionados.
-</div>
+    {% if not origem_fixa %}
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:14px;">
+        <a href="?{% if status_filtro %}status={{ status_filtro }}{% endif %}{% if busca %}&q={{ busca|urlencode }}{% endif %}"
+           class="filtro-btn {% if not origem_filtro %}active{% endif %}">
+            Todas ({{ total }})
+        </a>
+        <a href="?origem=peticao{% if status_filtro %}&status={{ status_filtro }}{% endif %}{% if busca %}&q={{ busca|urlencode }}{% endif %}"
+           class="filtro-btn {% if origem_filtro == 'peticao' %}active{% endif %}">
+            📄 Petições ({{ total_peticoes }})
+        </a>
+        <a href="?origem=movimentacao{% if status_filtro %}&status={{ status_filtro }}{% endif %}{% if busca %}&q={{ busca|urlencode }}{% endif %}"
+           class="filtro-btn {% if origem_filtro == 'movimentacao' %}active{% endif %}">
+            ⚙️ Movimentações ({{ total_movimentacoes }})
+        </a>
+    </div>
+    {% endif %}
+
+    {% if registros %}
+        {% include "projudi/_certidao_tabela_registros.html" with registros=registros %}
+        <div style="font-size:11px; color:#6b7280; margin-top:8px;">
+            Exibindo {{ total_visivel }} registro(s) após os filtros.
+        </div>
+    {% else %}
+        <div class="empty-state">
+            Nenhuma certidão encontrada para os filtros selecionados.
+        </div>
+    {% endif %}
 {% endif %}
 {% endblock %}

@@ -1,0 +1,82 @@
+<div style="overflow-x:auto;">
+    <table class="tabela">
+        <thead>
+            <tr>
+                <th>Data</th>
+                <th>Processo</th>
+                <th>Origem</th>
+                <th>Parte</th>
+                <th>Tipo</th>
+                <th>Último dia</th>
+                <th>Status</th>
+                <th>Fonte</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in registros %}
+            <tr>
+                <td>{{ r.data|date:"d/m/Y H:i" }}</td>
+                <td><div class="processo">{{ r.processo }}</div></td>
+                <td>
+                    <span class="tag tag-{{ r.origem }}">
+                        {% if r.origem == 'peticao' %}Petição{% else %}Movimentação{% endif %}
+                    </span>
+                </td>
+                <td>{{ r.parte|default:"—"|truncatechars:40 }}</td>
+                <td><div class="tipo">{{ r.tipo }}</div></td>
+                <td>{{ r.ultimo_dia|date:"d/m/Y"|default:"—" }}</td>
+                <td><span class="tag st-{{ r.status_classe }}">{{ r.status }}</span></td>
+                <td><span class="meta">{{ r.fonte }}</span></td>
+                <td>
+                    <div class="acoes">
+                        {% if r.detail_url %}
+                        <a class="btn btn-sm btn-outline"
+                           href="{{ r.detail_url }}"
+                           {% if r.preview_url %}target="_blank"{% endif %}>
+                            {% if r.preview_url %}👁 Preview{% else %}🔍 Detalhe{% endif %}
+                        </a>
+                        {% endif %}
+                        {% if r.registro_id %}
+                        <a class="btn btn-sm btn-outline"
+                           href="{% url 'projudi:certidao_registro_detail' r.registro_id %}">
+                            📄 Registro
+                        </a>
+                        {% endif %}
+                        {% if r.doc_id %}
+                        <details class="acoes-inline">
+                            <summary>⚙️ Ações</summary>
+                            <form method="post"
+                                  action="{% url 'projudi:certidao_acoes' %}"
+                                  onsubmit="return confirm('Executar a ação selecionada no Projudi?');">
+                                {% csrf_token %}
+                                <input type="hidden" name="documento_id" value="{{ r.doc_id }}">
+                                <select name="acao" required>
+                                    <option value="so_gerar">Só gerar</option>
+                                    <option value="juntar">Juntar</option>
+                                    <option value="juntar_localizador">Juntar + localizador</option>
+                                    <option value="juntar_conclusao">Juntar + conclusão</option>
+                                    <option value="juntar_contadoria">Juntar + contadoria</option>
+                                </select>
+                                <input name="tipo_localizador" placeholder="tipo local." style="width:80px;">
+                                <input name="localizador" placeholder="local." style="width:65px;">
+                                <select name="tipo_conclusao">
+                                    <option value="1">Despacho</option>
+                                    <option value="2">Decisão</option>
+                                    <option value="3">Sentença</option>
+                                    <option value="18" selected>Embargos</option>
+                                    <option value="19">Sentença ext.</option>
+                                    <option value="22">Exceção</option>
+                                </select>
+                                <input name="juiz_conclusao" value="41201" style="width:70px;">
+                                <button type="submit" class="btn btn-sm btn-outline">Executar</button>
+                            </form>
+                        </details>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

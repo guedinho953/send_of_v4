@@ -76,6 +76,7 @@ urlpatterns = [
     path('cumprimentos/<int:pk>/logs/json/', cumprimento_views.CumprimentoLogsJsonView.as_view(), name='cumprimento_logs_json'),
 
     # Aba Certidões (separadas por origem: petição x movimentação)
+    path('certidoes/', certidao_views.CertidaoHubView.as_view(), name='certidao_hub'),
     path('certidoes/dashboard/', certidao_views.CertidaoDashboardView.as_view(), name='certidao_dashboard'),
     path('certidoes/rags/', certidao_views.RagCertidaoListView.as_view(), name='rag_certidoes'),
     path('certidoes/tabela/', certidao_views.CertidaoTabelaView.as_view(), name='certidao_tabela'),
@@ -93,6 +94,8 @@ urlpatterns = [
     path('certidoes/rag/<int:pk>/executar/', certidao_views.CertidaoExecutarRagView.as_view(), name='certidao_executar_rag'),
     path('certidoes/rag/executar-pendentes/', certidao_views.CertidaoExecutarRagPendentesView.as_view(), name='certidao_executar_rag_pendentes'),
     path('certidoes/peticoes/', certidao_peticao_views.CertidaoPeticaoQueueView.as_view(), name='certidao_peticoes'),
+    path('certidoes/peticoes/certificadas/', certidao_views.CertidaoPeticaoTabelaView.as_view(), name='certidao_peticoes_tabela'),
+    path('certidoes/movimentacoes/certificadas/', certidao_views.CertidaoMovimentacaoTabelaView.as_view(), name='certidao_movimentacoes_tabela'),
     path('certidoes/peticoes/gerar/', certidao_peticao_views.CertidaoPeticaoGerarView.as_view(), name='certidao_peticao_gerar'),
     path('certidoes/movimentacoes/custas/inexistencia/', certidao_peticao_views.CertidaoMovimentacaoCustasView.as_view(), name='certidao_movimentacao_custas'),
     path('certidoes/movimentacoes/decurso-pagamento/', certidao_peticao_views.CertidaoDecursoPagamentoView.as_view(), name='certidao_decurso_pagamento'),
