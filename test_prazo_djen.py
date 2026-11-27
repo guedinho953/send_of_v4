@@ -129,6 +129,8 @@ class PrazoDjenTest(unittest.TestCase):
         self.assertIn('TEMPESTIVA', parcial)
         self.assertIn('apresentada no evento 88', parcial)
         self.assertIn('evento 84', parcial)
+        self.assertIn('15 (quinze) dias úteis', parcial)
+        self.assertIn('art. 525', parcial)
         self.assertIn('Publicação em 03/11/2026', parcial)
         self.assertIn('início do prazo em 04/11/2026', parcial)
         self.assertIn('termo final em 25/11/2026', parcial)
@@ -136,6 +138,7 @@ class PrazoDjenTest(unittest.TestCase):
             'houve depósito parcial, não havendo segurança integral do juízo',
             parcial,
         )
+        self.assertIn('Enunciado n. 117 do FONAJE', parcial)
 
         integral = _texto_publico_prazo(
             res, info, {**base, 'seguranca_juizo': 'integral'},

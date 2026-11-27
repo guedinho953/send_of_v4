@@ -45,7 +45,7 @@ class JuntarIntimarPlanTest(TestCase):
             reverse('projudi:certidao_juntar_intimar',
                     args=[self.registro.id]))
         self.assertEqual(resposta.status_code, 200)
-        self.assertContains(resposta, 'SIMULAÇÃO')
+        self.assertContains(resposta, 'CONFIRMAÇÃO')
         self.assertContains(resposta, 'FULANO DE TAL')
         self.assertContains(resposta, 'Certidão de Recurso Inominado (COJE)')
 
@@ -86,6 +86,125 @@ class JuntarIntimarPlanTest(TestCase):
         self.assertEqual(resposta.status_code, 200)
         self.assertContains(resposta, 'Juntada concluída no Projudi')
         executar.assert_called_once()
+
+    @patch('projudi.juntar_views.executar_juntada_e_intimacao')
+    def test_embargos_tempestivos_junta_e_intima_embargado(self, executar):
+        registro = PrazoDjenRecord.objects.create(
+            processo='0000002-22.2026.8.05.0191',
+            origem='movimentacao',
+            tipo_prazo='impugnacao_embargos_execucao',
+            prazo_dias=15,
+            tempestivo=True,
+            seguranca_juizo='integral',
+            evento_recurso='88',
+            certidao_path=str(self.preview),
+        )
+        executar.return_value = (True, SimpleNamespace(id=123), True, '')
+        resposta = self.client.post(
+            reverse('projudi:certidao_juntar_intimar',
+                    args=[registro.id]),
+            {
+                'acao': 'juntar_intimar',
+                'processo_url': (
+                    'https://projudi.tjba.jus.br/projudi/listagens/'
+                    'DadosProcesso?numeroProcesso=12345678901234'),
+                'polo': 'autores',
+                'prazo': '15',
+                'confirmo': 'on',
+            },
+        )
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'embargado(a) intimado(a)')
+        executar.assert_called_once()
+
+    def test_plano_embargos_tempestivos_intima_embargado(self):
+        from projudi.juntar_service import montar_plano
+
+        registro = PrazoDjenRecord.objects.create(
+            processo='0000003-33.2026.8.05.0191',
+            origem='movimentacao',
+            tipo_prazo='impugnacao_embargos_execucao',
+            prazo_dias=15,
+            tempestivo=True,
+            seguranca_juizo='integral',
+            evento_recurso='88',
+            certidao_path=str(self.preview),
+        )
+        plano = montar_plano(
+            registro,
+            self.user,
+            processo_url=(
+                'https://projudi.tjba.jus.br/projudi/listagens/'
+                'DadosProcesso?numeroProcesso=12345678901234'),
+        )
+        self.assertEqual(plano['situacao'], 'embargos_tempestivos')
+        self.assertTrue(plano['pode_intimar'])
+        self.assertEqual(plano['polo'], 'autores')
+        self.assertEqual(plano['prazo'], '15')
+        self.assertEqual(plano['prazo_codigo'], '4')
+        self.assertIn('embargado(a)', plano['observacao_intimacao'])
+        self.assertIn('manifestação acerca dos embargos', plano['observacao_intimacao'])
+
+    def test_plano_embargos_intempestivos_nao_intima(self):
+        from projudi.juntar_service import montar_plano
+
+        registro = PrazoDjenRecord.objects.create(
+            processo='0000004-44.2026.8.05.0191',
+            origem='movimentacao',
+            tipo_prazo='impugnacao_embargos_execucao',
+            prazo_dias=15,
+            tempestivo=False,
+            seguranca_juizo='nenhuma',
+            certidao_path=str(self.preview),
+        )
+        plano = montar_plano(
+            registro,
+            self.user,
+            processo_url=(
+                'https://projudi.tjba.jus.br/projudi/listagens/'
+                'DadosProcesso?numeroProcesso=12345678901234'),
+        )
+        self.assertEqual(plano['situacao'], 'embargos_intempestivos')
+        self.assertFalse(plano['pode_intimar'])
+        self.assertEqual(plano['observacao_intimacao'], '')
+
+    @patch(
+        'projudi.movimentacao_service.MovimentacaoService.executar_com_intimacao',
+        return_value=True,
+    )
+    @patch(
+        'projudi.juntar_service.executar_juntada',
+        return_value=(True, SimpleNamespace(id=10)),
+    )
+    def test_executar_juntada_e_intimacao(self, juntar, intimar):
+        from projudi.juntar_service import executar_juntada_e_intimacao
+
+        registro = SimpleNamespace(
+            processo='0000005-55.2026.8.05.0191',
+            tipo_prazo='impugnacao_embargos_execucao',
+        )
+        plano = {
+            'pode_intimar': True,
+            'ja_juntada': False,
+            'observacao_intimacao': (
+                'Intime-se o(a) embargado(a) para manifestação.'),
+            'proc_projudi': '12345678901234',
+            'prazo_codigo': '4',
+            'motivo_intimacao': '3',
+            'polo': 'autores',
+        }
+        ok, record, intimacao_ok, erro = executar_juntada_e_intimacao(
+            registro, self.user, plano=plano)
+        self.assertTrue(ok)
+        self.assertEqual(record.id, 10)
+        self.assertTrue(intimacao_ok)
+        self.assertEqual(erro, '')
+        juntar.assert_called_once()
+        intimar.assert_called_once()
+        kwargs = intimar.call_args.kwargs
+        self.assertEqual(kwargs['prazo_intimacao'], '4')
+        self.assertEqual(kwargs['polo_intimacao'], 'autores')
+        self.assertEqual(kwargs['proc_projudi'], '12345678901234')
 
     @patch('projudi.juntar_views.executar_juntada')
     def test_juntar_sem_confirmacao_nao_executa(self, executar):

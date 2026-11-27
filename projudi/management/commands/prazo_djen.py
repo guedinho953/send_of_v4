@@ -78,11 +78,14 @@ def _texto_publico_prazo(res, info, options, tempestivo=None):
         return (
             'Certifico, para os devidos fins, que a Impugnação/Embargos à '
             f'Execução apresentada {evento_imp} é {conclusao}, referente à '
-            f'intimação eletrônica (DJEN){evento_int_txt}. Publicação em '
+            f'intimação eletrônica (DJEN){evento_int_txt}, que abriu o '
+            'prazo de 15 (quinze) dias úteis para pagamento (art. 525, '
+            'caput, do CPC). Publicação em '
             f'{_fmt_curta(res.data_publicacao)}; início do prazo em '
             f'{_fmt_curta(res.data_inicio_contagem)}; termo final em '
             f'{_fmt_curta(res.ultimo_dia)}. Certifico ainda que '
-            f'{seguranca_txt}.'
+            f'{seguranca_txt}, observados o valor executado e o valor '
+            'depositado/penhorado (Enunciado n. 117 do FONAJE).'
         )
 
     if tipo == 'contrarrazoes_inominado' and tempestivo is not None:
@@ -143,6 +146,11 @@ class Command(BaseCommand):
             help='Número do evento do recurso inominado (default: infra)')
         parser.add_argument('--evento-intimacao', default='',
                             help='Número do evento da intimação/comunicação')
+        parser.add_argument(
+            '--evento-origem', default='',
+            help=(
+                'Evento de origem (despacho/decisão/recurso) usado para '
+                'localizar a intimação'))
         parser.add_argument(
             '--preparo',
             choices=[
@@ -477,6 +485,7 @@ class Command(BaseCommand):
                 data_decurso=res.data_decurso,
                 data_protocolo=protocolo,
                 evento_recurso=options['evento_recurso'] or '',
+                evento_origem=options.get('evento_origem') or '',
                 evento_intimacao=options.get('evento_intimacao') or '',
                 preparo_status=preparo_status or '',
                 seguranca_juizo=options.get('seguranca_juizo') or '',
@@ -512,6 +521,7 @@ class Command(BaseCommand):
                 'prazo_dias': res.prazo_dias,
                 'tempestivo': tempestivo,
                 'evento_recurso': options['evento_recurso'] or '',
+                'evento_origem': options.get('evento_origem') or '',
                 'evento_intimacao': options.get('evento_intimacao') or '',
                 'preparo_status': preparo_status or '',
                 'seguranca_juizo': options.get('seguranca_juizo') or '',

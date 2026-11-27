@@ -250,6 +250,7 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
                         if tipo_prazo == 'impugnacao_embargos_execucao'
                         else evento_origem or 'infra'
                     ),
+                    evento_origem=evento_origem or '',
                     evento_intimacao=evento_intimacao_final,
                     seguranca_juizo=seguranca_juizo or None,
                 )

@@ -91,7 +91,9 @@ git switch -c integracao-certidoes FETCH_HEAD
 | Intimação por evento | `projudi/intimacao_service.py` | Reutilizar/adaptar ao serviço de intimação existente |
 | Modelo base de prazo | `projudi/management/commands/prazo_djen.py` (`_texto_publico_prazo`), `processes/0028...` | Contrarrazões/impugnação; recurso inominado continua no COJE |
 | Contrarrazões com tempestividade | `_texto_publico_prazo` | Texto público conclui TEMPESTIVIDADE/INTEMPESTIVIDADE e cita o evento do recurso |
-| Impugnação/Embargos à Execução | `_texto_publico_prazo`, `peticoes_views.py`, `certidao_peticoes_fila.html`, `models.py` | 15 dias a partir da intimação do pagamento; conclusão TEMPESTIVA/INTEMPESTIVA + segurança do juízo (integral/parcial/não houve); migration `projudi/0020` |
+| Impugnação/Embargos à Execução | `_texto_publico_prazo`, `peticoes_views.py`, `certidao_peticoes_fila.html`, `models.py` | 15 dias a partir da intimação do pagamento; conclusão TEMPESTIVA/INTEMPESTIVA + segurança do juízo (integral/parcial/não houve); texto cita art. 525 e FONAJE 117; migration `projudi/0020` |
+| Juntar + intimar embargado | `projudi/juntar_service.py`, `projudi/juntar_views.py` | Se TEMPESTIVA, intima o embargado/exequente para manifestação em 15 dias; se INTEMPESTIVA, apenas junta a certidão; usa `executar_com_intimacao` e deve ser validado no processo real |
+| Formulário na aba Movimentações | `impugnacao_embargos_views.py`, `certidao_impugnacao_embargos.html`, `urls.py`, `certidao_dashboard.html` | Mesma certidão sem depender da fila de petições; registra com `origem='movimentacao'` e usa o `DecursoPagamentoService` para localizar despacho/intimação |
 | Recorrente na linha `PARA` | `projudi/partes_inominado.py`, `projudi/management/commands/certidao_inominado.py` | Reforço por rótulos e trechos “já devidamente qualificado”, “nos autos”, “vem interpor” |
 | Juntar/intimar | `projudi/juntar_service.py`, `projudi/juntar_views.py`, `templates/projudi/certidao_juntar_intimar.html` | O outro PC já tem o fluxo completo; usar como referência, não duplicar |
 | Senha da assinatura | `accounts_user.projudi_password` | Campo no Admin em **Usuários → Projudi → Senha da assinatura**; vazio = assinatura manual |
@@ -135,7 +137,12 @@ git switch -c integracao-certidoes FETCH_HEAD
      `integral`, `depósito parcial` ou `não houve`;
    - persistir `seguranca_juizo` no controle e exibir no detalhe;
    - manter a segurança independente da tempestividade (a certidão pode ser
-     intempestiva e ainda assim informar a segurança).
+     intempestiva e ainda assim informar a segurança);
+   - disponibilizar também na aba **Movimentações**, com
+     `origem='movimentacao'`, sem depender da fila `JuntadaPeticao`;
+   - se **TEMPESTIVA**, habilitar **Juntar + intimar** para intimar o
+     embargado/exequente a manifestar em 15 dias; se **INTEMPESTIVA**, só
+     juntar a certidão.
 5. Recurso inominado:
    - **não alterar** o modelo COJE; apenas a linha `PARA` do recorrente.
 
@@ -261,7 +268,7 @@ Testes de referência desta branch:
 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest test_prazo_djen test_verificacao_inominado test_peticoes_inominado test_partes_inominado test_intimacao_evento
-.\.venv\Scripts\python.exe manage.py test test_certidao_origem test_decurso_pagamento test_peticoes_fila_views test_juntar_intimar
+.\.venv\Scripts\python.exe manage.py test test_certidao_origem test_decurso_pagamento test_peticoes_fila_views test_impugnacao_embargos_view test_juntar_intimar
 ```
 
 ## 8. Senha da assinatura
@@ -298,6 +305,11 @@ Testes de referência desta branch:
 - [ ] Modelo base de impugnação/cumprimento.
 - [ ] Impugnação/Embargos à Execução com segurança do juízo e campo
       persistido.
+- [ ] Formulário da mesma certidão na aba Movimentações, com
+      `origem='movimentacao'`.
+- [ ] Juntar + intimar do embargado somente se TEMPESTIVO, em 15 dias.
+- [ ] RAG do despacho revisada com foco nos dois primeiros parágrafos
+      (`docs/RAG_DESPACHO_IMPUGNACAO_EMBARGOS.md`).
 - [ ] Juntar/intimar do outro PC revisado (não duplicar).
 - [ ] Senha da assinatura configurada (ou manual assumido).
 - [ ] `manage.py check` e testes passando.

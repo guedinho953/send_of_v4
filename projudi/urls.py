@@ -6,6 +6,7 @@ from . import cumprimento_views
 from . import movimentacao_views
 from . import certidao_views
 from . import decurso_views
+from . import impugnacao_embargos_views
 from . import juntar_views
 from . import peticoes_views
 
@@ -93,6 +94,11 @@ urlpatterns = [
         'certidoes/movimentacoes/decurso-pagamento/',
         decurso_views.CertidaoDecursoPagamentoView.as_view(),
         name='certidao_decurso_pagamento',
+    ),
+    path(
+        'certidoes/movimentacoes/impugnacao-embargos/',
+        impugnacao_embargos_views.CertidaoImpugnacaoEmbargosView.as_view(),
+        name='certidao_impugnacao_embargos',
     ),
     path('certidoes/<int:pk>/', certidao_views.CertidaoDetailView.as_view(), name='certidao_detail'),
     path(

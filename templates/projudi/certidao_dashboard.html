@@ -59,6 +59,8 @@
     {% if origem_filtro == 'movimentacao' or not origem_filtro %}
     <a class="btn-sm" {% if origem_filtro == 'movimentacao' %}style="margin-left:auto;"{% endif %}
        href="{% url 'projudi:certidao_decurso_pagamento' %}">📄 Nova certidão de decurso (15 dias)</a>
+    <a class="btn-sm"
+       href="{% url 'projudi:certidao_impugnacao_embargos' %}">📄 Nova certidão de impugnação/embargos (15 dias)</a>
     {% endif %}
 </div>
 

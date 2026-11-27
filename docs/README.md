@@ -19,6 +19,7 @@
 | 08 | [PRAZO_DJEN](PRAZO_DJEN.md) | Contagem DJEN, certidão de tempestividade/trânsito e fila JuntadaPeticao (recurso inominado) | Conferir prazos e preparo |
 | 09 | [MANUAL_RECORRENTE_PARTES](MANUAL_RECORRENTE_PARTES.md) | Atualização: intimação do recorrente, partes e manual para o outro PC | Implementar no outro PC |
 | 10 | [MANUAL_IMPLEMENTACAO_CERTIDOES_OUTRO_PC](MANUAL_IMPLEMENTACAO_CERTIDOES_OUTRO_PC.md) | Manual atualizado: puxar a branch, portar certidões e evitar conflito de migrations | Implementar no outro PC |
+| 11 | [RAG_DESPACHO_IMPUGNACAO_EMBARGOS](RAG_DESPACHO_IMPUGNACAO_EMBARGOS.md) | Texto de referência do despacho (1º e 2º parágrafos) e fluxo de certificação/intimação | Cadastrar/ajustar a RAG |
 
 ---
 

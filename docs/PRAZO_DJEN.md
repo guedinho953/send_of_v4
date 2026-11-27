@@ -44,6 +44,7 @@ Opções:
 | `--prazo` | Sobrescreve os dias do tipo |
 | `--protocolo` | Data do protocolo do recurso/petição (calcula tempestividade) |
 | `--seguranca-juizo` | Para `impugnacao_embargos_execucao`: `integral`, `parcial` ou `nenhuma` (obrigatório) |
+| `--evento-origem` | Evento do despacho/decisão/recurso usado para localizar a intimação (registro interno) |
 | `--processo` | Número CNJ (para a certidão) |
 | `--parte` | Nome da parte (para a certidão) |
 | `--servidor` | Nome do servidor que assina |
@@ -183,6 +184,8 @@ As certidões são separadas em duas abas/dashboards:
 | `/projudi/certidoes/` | Todas as certidões (visão geral) |
 | `/projudi/certidoes/peticoes/` | Certidões vinculadas à fila de petições (`JuntadaPeticao`) |
 | `/projudi/certidoes/movimentacoes/` | Certidões vinculadas a movimentações/prazos do processo |
+| `/projudi/certidoes/movimentacoes/decurso-pagamento/` | Formulário da certidão de decurso |
+| `/projudi/certidoes/movimentacoes/impugnacao-embargos/` | Formulário da certidão de impugnação/embargos |
 
 O campo `PrazoDjenRecord.origem` guarda `peticao` ou `movimentacao`.
 
@@ -310,14 +313,31 @@ Exemplo de texto público:
 
 > Certifico, para os devidos fins, que a Impugnação/Embargos à Execução
 > apresentada no evento 88 é **INTEMPESTIVA**, referente à intimação
-> eletrônica (DJEN), evento 84. Publicação em 03/11/2026; início do prazo em
-> 04/11/2026; termo final em 25/11/2026. Certifico ainda que houve depósito
-> parcial, não havendo segurança integral do juízo.
+> eletrônica (DJEN), evento 84, que abriu o prazo de 15 (quinze) dias úteis
+> para pagamento (art. 525, caput, do CPC). Publicação em 03/11/2026; início
+> do prazo em 04/11/2026; termo final em 25/11/2026. Certifico ainda que houve
+> depósito parcial, não havendo segurança integral do juízo, observados o
+> valor executado e o valor depositado/penhorado (Enunciado n. 117 do FONAJE).
 
 O evento da petição é opcional (se ainda não juntada, o texto usa “nos
 autos”). O evento da intimação é incluído sempre que localizado. O campo
 `seguranca_juizo` fica registrado no controle e aparece no detalhe da
 certidão. A migration é `projudi/0020_prazodjenrecord_seguranca_juizo.py`.
+
+### Pela aba Movimentações
+
+Além da fila de petições, a certidão pode ser gerada em:
+
+```
+/projudi/certidoes/movimentacoes/impugnacao-embargos/
+```
+
+Nesse formulário, informe o processo, a data do protocolo, a segurança do
+juízo e, opcionalmente, o evento do despacho/pagamento, o evento da
+petição e os fallbacks da intimação. O sistema usa o
+`DecursoPagamentoService` para localizar o despacho de pagamento em 15 dias
+e a intimação correspondente. A certidão é registrada com
+`origem='movimentacao'` e aparece na aba **Movimentações**.
 
 ## Fila de petições com escolha manual
 
@@ -348,9 +368,8 @@ Opções da tela:
   (integral, depósito parcial ou não houve). O evento da petição é opcional;
 - **Parte a intimar**: opcional, ajuda a desambiguar quando há mais de uma
   intimação após o evento;
-- **Ação**: por ora **Gerar certidão**. As ações **Juntar** e
-  **Juntar + intimar** aparecem como “em breve” e serão habilitadas na
-  próxima etapa.
+- **Ação**: **Gerar certidão** na fila. No detalhe, a ação
+  **Juntar/Intimar** já executa a juntada real no Projudi.
 
 Ao escolher **Decurso de Pagamento** no seletor, aparecem no próprio card os
 campos **Evento do despacho (opcional)**, **Executado(a) (opcional)** e
@@ -360,7 +379,7 @@ certidão se o prazo já tiver decorrido. Se ainda não decorreu, mostra a data
 do decurso e não gera. Tudo na mesma página da fila.
 
 A tela gera a certidão, registra na aba **Petições** e abre o detalhe com o
-preview. Nada é juntado/movimentado no Projudi nesta etapa.
+preview. A juntada é feita na tela de **Juntar/Intimar**.
 
 ## Juntar/Intimar
 
@@ -374,19 +393,29 @@ A tela monta o **plano**:
 
 - certidão e template que serão juntados;
 - URL do processo e número interno do Projudi;
-- situação (preparo/gratuidade/intempestivo);
-- polo sugerido para intimação (Autoras/Réus);
-- prazo (5, 10 ou 15 dias);
+- situação (preparo/gratuidade/intempestivo ou embargos
+  tempestivos/intempestivos);
+- polo sugerido para intimação (Autoras/Réus, ou embargado/embargante);
+- prazo (5, 10 ou 15 dias; na impugnação/embargos, 15 dias);
 - observação da juntada e da intimação;
 - prévia da certidão.
 
-A ação **Juntar certidão** já executa no Projudi, com confirmação e via
+A ação **Juntar certidão** executa no Projudi, com confirmação e via
 `MovimentacaoService.executar_requests` (Mov581 + inserção/assinatura da
 certidão). Se a certidão já foi juntada, a tela mostra **já juntada** e
 bloqueia nova execução.
 
-A **intimação** (`Juntar + intimar`) será habilitada na próxima etapa; por
-ora use **Juntar certidão**.
+Para a **Impugnação/Embargos à Execução TEMPESTIVA**, a ação
+**Juntar + intimar** também intima o(a) **embargado(a)** (exequente) para,
+querendo, no prazo de 15 dias úteis, apresentar manifestação acerca dos
+embargos à execução. A intimação usa
+`MovimentacaoService.executar_com_intimacao` e só é oferecida quando a
+certidão é tempestiva e ainda não foi juntada. Se os embargos forem
+intempestivos, não há intimação: apenas a juntada da certidão.
+
+O texto público da certidão segue o modelo base e incorpora o despacho:
+prazo de 15 dias para pagamento, art. 525, caput, do CPC e observação dos
+valores executado/depositado (Enunciado n. 117 do FONAJE).
 
 ### Senha da assinatura
 
@@ -446,7 +475,7 @@ o texto público também nos tipos que não são recurso inominado.
 
 ```bat
 python -m unittest test_prazo_djen test_verificacao_inominado test_peticoes_inominado test_partes_inominado test_intimacao_evento
-python manage.py test test_certidao_origem test_decurso_pagamento test_peticoes_fila_views
+python manage.py test test_certidao_origem test_decurso_pagamento test_peticoes_fila_views test_impugnacao_embargos_view
 ```
 
 Casos cobertos:
@@ -475,7 +504,9 @@ Casos cobertos:
   manual apenas como fallback;
 - Impugnação/Embargos à Execução com tempestividade e segurança do juízo
   (integral, parcial ou não houve), inclusive texto público e persistência
-  do campo.
+  do campo;
+- geração da mesma certidão pela aba **Movimentações**, com origem
+  `movimentacao` e localização automática do despacho/intimação de pagamento.
 
 ## Limitações / próximos passos
 

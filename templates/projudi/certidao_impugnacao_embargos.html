@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block title %}Impugnação/Embargos à Execução — Send of v4{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:16px;">
+    <div>
+        <h1 class="section-title" style="font-size:20px; margin:0;">
+            📄 Certidão de Impugnação/Embargos à Execução
+        </h1>
+        <div style="font-size:13px; color:#6b7280; margin-top:4px;">
+            Tempestividade e segurança do juízo, com base na intimação que
+            abriu o prazo de 15 dias para pagamento.
+        </div>
+    </div>
+    <div style="display:flex; gap:8px;">
+        <a href="{% url 'projudi:certidao_movimentacoes' %}" class="btn btn-outline">← Movimentações</a>
+        <a href="{% url 'projudi:certidao_dashboard' %}" class="btn btn-outline">Certidões</a>
+    </div>
+</div>
+
+<div style="background:#ecfdf5; border-left:4px solid #10b981; border-radius:6px; padding:10px 12px; margin-bottom:16px; font-size:12px; color:#065f46; line-height:1.5;">
+    O sistema localiza o despacho que determinou o pagamento em 15 dias e a
+    intimação correspondente. Confira a intimação encontrada antes de gerar.
+    Se não localizar automaticamente, informe o evento do despacho e/ou os
+    campos de fallback da intimação. Informe também a data do protocolo da
+    impugnação/embargos e a segurança do juízo.
+</div>
+
+<div style="background:#fff; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,.08); padding:20px; max-width:900px;">
+    <form method="post">
+        {% csrf_token %}
+
+        <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:14px;">
+            <div style="flex:1; min-width:320px;">
+                <label for="processo" style="display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:4px;">Processo *</label>
+                <input id="processo" name="processo" required value="{{ processo }}"
+                       placeholder="0000000-00.0000.8.05.0191"
+                       style="width:100%; padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px;">
+            </div>
+            <div style="flex:1; min-width:300px;">
+                <label for="processo_url" style="display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:4px;">URL do processo (opcional)</label>
+                <input id="processo_url" name="processo_url" value="{{ processo_url }}"
+                       placeholder="https://projudi.tjba.jus.br/.../DadosProcesso?..."
+                       style="width:100%; padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px;">
+                <div style="font-size:11px; color:#6b7280; margin-top:4px;">
+                    Use se o processo não estiver cadastrado no sistema.
+                </div>
+            </div>
+        </div>
+
+        <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:14px;">
+            <div>
+                <label for="evento" style="display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:4px;">Evento do despacho/pagamento (opcional)</label>
+                <input id="evento" name="evento" value="{{ evento }}"
+                       placeholder="automático"
+                       style="width:140px; padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px;">
+                <div style="font-size:11px; color:#6b7280; margin-top:4px; max-width:280px;">
+                    Deixe vazio para localizar o despacho que abriu os 15 dias.
+                </div>
+            </div>
+            <div>
+                <label for="executado" style="display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:4px;">Executado(a) (opcional)</label>
+                <input id="executado" name="executado" value="{{ executado }}"
+                       placeholder="deixe vazio para usar o promovido"
+                       style="width:340px; padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px;">
+            </div>
+        </div>
+
+        <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:12px; margin-bottom:16px;">
+            <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
+                <div>
+                    <label for="data_protocolo" style="display:block; font-size:13px; font-weight:600; color:#166534; margin-bottom:4px;">Data do protocolo *</label>
+                    <input id="data_protocolo" name="data_protocolo" required value="{{ data_protocolo }}"
+                           placeholder="DD/MM/AAAA"
+                           style="width:130px; padding:8px 10px; border:1px solid #86efac; border-radius:6px; font-size:13px;">
+                    <div style="font-size:11px; color:#6b7280; margin-top:4px;">
+                        Data de protocolo da impugnação/embargos.
+                    </div>
+                </div>
+                <div>
+                    <label for="evento_impugnacao" style="display:block; font-size:13px; font-weight:600; color:#166534; margin-bottom:4px;">Evento da impugnação/embargos (opcional)</label>
+                    <input id="evento_impugnacao" name="evento_impugnacao" value="{{ evento_impugnacao }}"
+                           placeholder="ex.: 88"
+                           style="width:130px; padding:8px 10px; border:1px solid #86efac; border-radius:6px; font-size:13px;">
+                </div>
+                <div>
+                    <label for="seguranca_juizo" style="display:block; font-size:13px; font-weight:600; color:#166534; margin-bottom:4px;">Segurança do juízo *</label>
+                    <select id="seguranca_juizo" name="seguranca_juizo" required
+                            style="padding:8px 10px; border:1px solid #86efac; border-radius:6px; font-size:13px;">
+                        <option value="">Selecione...</option>
+                        {% for valor, label in seguranca_opcoes %}
+                        <option value="{{ valor }}" {% if seguranca_juizo == valor %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div style="display:flex; gap:12px; flex-wrap:wrap;">
+                <div>
+                    <label for="data_intimacao_manual" style="display:block; font-size:13px; font-weight:600; color:#166534; margin-bottom:4px;">Data da intimação (fallback)</label>
+                    <input id="data_intimacao_manual" name="data_intimacao_manual" value="{{ data_intimacao_manual }}"
+                           placeholder="DD/MM/AAAA"
+                           style="width:130px; padding:8px 10px; border:1px solid #86efac; border-radius:6px; font-size:13px;">
+                    <div style="font-size:11px; color:#6b7280; margin-top:4px;">
+                        Só use se não localizar pelo evento/despacho.
+                    </div>
+                </div>
+                <div>
+                    <label for="evento_intimacao_manual" style="display:block; font-size:13px; font-weight:600; color:#166534; margin-bottom:4px;">Evento da intimação (fallback)</label>
+                    <input id="evento_intimacao_manual" name="evento_intimacao_manual" value="{{ evento_intimacao_manual }}"
+                           placeholder="opcional"
+                           style="width:130px; padding:8px 10px; border:1px solid #86efac; border-radius:6px; font-size:13px;">
+                </div>
+            </div>
+        </div>
+
+        <div style="background:#f5f3ff; border:1px solid #ddd6fe; border-radius:8px; padding:10px 12px; margin-bottom:16px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <strong style="font-size:13px; color:#5b21b6;">Assinatura da certidão:</strong>
+            <select id="assinanteSelect" name="assinante" onchange="atualizarAssinatura()"
+                    style="padding:6px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px;">
+                {% for a in assinantes %}
+                <option value="{{ a.chave }}" {% if a.chave == assinante_padrao %}selected{% endif %}>{{ a.nome }} — {{ a.cargo }}</option>
+                {% endfor %}
+                <option value="outro">Outro (digitar)</option>
+            </select>
+            <input id="assinanteNome" name="assinante_nome" type="text" placeholder="Nome do assinante"
+                   style="display:none; padding:6px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px; min-width:220px;">
+            <input id="assinanteCargo" name="assinante_cargo" type="text" placeholder="Cargo"
+                   style="display:none; padding:6px 8px; border:1px solid #c4b5fd; border-radius:6px; font-size:12px; min-width:180px;">
+        </div>
+
+        <button type="submit" class="btn" style="background:#0891b2; color:white;">
+            📄 Analisar e gerar certidão
+        </button>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function atualizarAssinatura() {
+    const sel = document.getElementById('assinanteSelect');
+    if (!sel) return;
+    const outro = sel.value === 'outro';
+    const nome = document.getElementById('assinanteNome');
+    const cargo = document.getElementById('assinanteCargo');
+    if (nome) nome.style.display = outro ? 'inline-block' : 'none';
+    if (cargo) cargo.style.display = outro ? 'inline-block' : 'none';
+}
+document.addEventListener('DOMContentLoaded', atualizarAssinatura);
+</script>
+{% endblock %}

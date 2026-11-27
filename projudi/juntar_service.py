@@ -1,8 +1,9 @@
-"""Planejamento (dry-run) de juntada e intimação de certidões.
+"""Planejamento e execução de juntada/intimação de certidões.
 
-Nesta etapa o serviço monta o plano completo — certidão, processo, polo,
-prazo e observações — mas NÃO chama o Projudi. A execução real será feita
-pelo MovimentacaoService depois da validação do plano.
+O plano mostra certidão, processo, polo, prazo e observações. A juntada e a
+intimação são executadas pelo MovimentacaoService depois da confirmação do
+usuário. Para a impugnação/embargos à execução, a intimação do embargado só
+é oferecida quando os embargos são TEMPESTIVOS.
 """
 
 from __future__ import annotations
@@ -70,6 +71,12 @@ def _proc_projudi(url) -> str:
 
 
 def _situacao(registro) -> str:
+    if registro.tipo_prazo == 'impugnacao_embargos_execucao':
+        if registro.tempestivo is True:
+            return 'embargos_tempestivos'
+        if registro.tempestivo is False:
+            return 'embargos_intempestivos'
+        return 'outro'
     if registro.tipo_prazo != 'inominado':
         return 'outro'
     if registro.tempestivo is False:
@@ -107,9 +114,29 @@ def _polo_recorrente(registro) -> str:
     return ''
 
 
+def _nome_parte_por_polo(registro, polo):
+    """Nome da parte que será intimada, quando cadastrada no processo."""
+    from processes.models import Party, Process
+
+    proc = Process.objects.filter(number=registro.processo).first()
+    if not proc:
+        return ''
+    if polo == 'autores':
+        papeis = ('autor', 'exequente')
+    elif polo == 'res':
+        papeis = ('reu', 'executado')
+    else:
+        return ''
+    parte = Party.objects.filter(process=proc, role__in=papeis).first()
+    return parte.name if parte else ''
+
+
 def _polo_intimacao(registro, situacao, polo_informado='') -> str:
     if polo_informado in ('autores', 'res'):
         return polo_informado
+    if registro.tipo_prazo == 'impugnacao_embargos_execucao':
+        # O embargado é o exequente/credor (polo ativo).
+        return 'autores'
     recorrente = _polo_recorrente(registro)
     if situacao == 'intempestivo':
         return recorrente or 'autores'
@@ -119,6 +146,8 @@ def _polo_intimacao(registro, situacao, polo_informado='') -> str:
 
 
 def _prazo_intimacao(registro, situacao, prazo_informado='') -> str:
+    if registro.tipo_prazo == 'impugnacao_embargos_execucao':
+        return '15'
     if prazo_informado in ('5', '10', '15'):
         return prazo_informado
     return '5' if situacao == 'intempestivo' else '10'
@@ -127,6 +156,15 @@ def _prazo_intimacao(registro, situacao, prazo_informado='') -> str:
 def _observacao_intimacao(registro, situacao) -> str:
     evento = str(registro.evento_recurso or '').strip()
     texto_evento = f' (evento {evento})' if evento.isdigit() else ''
+    if registro.tipo_prazo == 'impugnacao_embargos_execucao':
+        if situacao != 'embargos_tempestivos':
+            return ''
+        return (
+            'Intime-se o(a) embargado(a) para, querendo, no prazo de 15 '
+            '(quinze) dias úteis, apresentar manifestação acerca dos '
+            'embargos à execução'
+            f'{texto_evento}, conforme certidão em anexo.'
+        )
     if situacao in ('preparo', 'gratuidade'):
         return (
             'Intime(m)-se o(s) recorrido(s) para que, querendo, '
@@ -179,11 +217,37 @@ def montar_plano(registro, user=None, processo_url='', polo='',
         .first()
     )
 
-    pode_intimar = (
-        registro.tipo_prazo == 'inominado'
-        and situacao in ('preparo', 'gratuidade', 'intempestivo')
-        and not ja_juntada
-    )
+    if registro.tipo_prazo == 'impugnacao_embargos_execucao':
+        pode_intimar = situacao == 'embargos_tempestivos' and not ja_juntada
+    else:
+        pode_intimar = (
+            registro.tipo_prazo == 'inominado'
+            and situacao in ('preparo', 'gratuidade', 'intempestivo')
+            and not ja_juntada
+        )
+
+    prazo_codigo = {
+        '5': '2', '10': '3', '15': '4',
+    }.get(prazo_final, '3')
+
+    parte_exibida = registro.parte
+    parte_label = 'Parte/recorrente'
+    if registro.tipo_prazo == 'impugnacao_embargos_execucao':
+        parte_exibida = _nome_parte_por_polo(registro, polo_final)
+        parte_label = (
+            'Embargado(a)' if polo_final == 'autores'
+            else 'Embargante/Executado(a)')
+        if not parte_exibida:
+            parte_exibida = registro.parte
+            parte_label = 'Parte nos autos'
+
+    situacao_label = {
+        'preparo': 'Preparo regular',
+        'gratuidade': 'Gratuidade',
+        'intempestivo': 'INTEMPESTIVO',
+        'embargos_tempestivos': 'EMBARGOS TEMPESTIVOS',
+        'embargos_intempestivos': 'EMBARGOS INTEMPESTIVOS',
+    }.get(situacao, situacao)
 
     return {
         'registro': registro,
@@ -193,10 +257,14 @@ def montar_plano(registro, user=None, processo_url='', polo='',
         'proc_projudi': interno,
         'html_certidao': html,
         'html_tamanho': len(html),
-        'parte': registro.parte,
+        'parte': parte_exibida,
+        'parte_label': parte_label,
         'situacao': situacao,
+        'situacao_label': situacao_label,
         'polo': polo_final,
         'prazo': prazo_final,
+        'prazo_codigo': prazo_codigo,
+        'motivo_intimacao': '3',
         'pode_intimar': pode_intimar,
         'observacao_juntada': (
             f'Juntada da {template_nome}.'
@@ -249,3 +317,43 @@ def executar_juntada(registro, user, plano=None):
         certidao_titulo=plano['template_nome'],
     )
     return ok, record
+
+
+def executar_juntada_e_intimacao(registro, user, plano=None):
+    """Junta a certidão e, se cabível, intima o embargado.
+
+    A juntada é executada primeiro. Só depois de confirmada a certidão no
+    Projudi é feita a intimação do embargado para manifestação (15 dias).
+    Retorna ``(juntada_ok, record, intimacao_ok, erro_intimacao)``.
+    """
+    plano = plano or montar_plano(registro, user)
+    if registro.tipo_prazo != 'impugnacao_embargos_execucao':
+        raise ValueError(
+            'A juntada com intimação automática está disponível apenas '
+            'para a impugnação/embargos à execução.')
+    if not plano.get('pode_intimar'):
+        raise ValueError(
+            'A intimação do embargado só é feita quando os embargos são '
+            'TEMPESTIVOS e a certidão ainda não foi juntada.')
+    if plano.get('ja_juntada'):
+        raise ValueError('Certidão já juntada no Projudi.')
+
+    ok, record = executar_juntada(registro, user, plano=plano)
+    if not ok:
+        return False, record, False, ''
+
+    from projudi.movimentacao_service import MovimentacaoService
+
+    try:
+        intimacao_ok = MovimentacaoService(user).executar_com_intimacao(
+            processo_numero=registro.processo,
+            observacao=plano['observacao_intimacao'],
+            descricao_mov='Intimação',
+            proc_projudi=plano['proc_projudi'],
+            prazo_intimacao=plano.get('prazo_codigo') or '4',
+            motivo_intimacao=plano.get('motivo_intimacao') or '3',
+            polo_intimacao=plano.get('polo') or 'autores',
+        )
+        return True, record, bool(intimacao_ok), ''
+    except Exception as exc:
+        return True, record, False, str(exc)
