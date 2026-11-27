@@ -51,12 +51,13 @@
 
         <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:14px;">
             <div>
-                <label for="evento" style="display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:4px;">Evento do despacho/pagamento (opcional)</label>
+                <label for="evento" style="display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:4px;">Evento do despacho de referência (opcional)</label>
                 <input id="evento" name="evento" value="{{ evento }}"
-                       placeholder="automático"
+                       placeholder="ex.: 80"
                        style="width:140px; padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px;">
                 <div style="font-size:11px; color:#6b7280; margin-top:4px; max-width:280px;">
-                    Deixe vazio para localizar o despacho que abriu os 15 dias.
+                    Despacho de pagamento. Se deixar vazio, o sistema tenta
+                    localizar; a intimação é buscada a partir dele.
                 </div>
             </div>
             <div>
@@ -70,12 +71,12 @@
         <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:12px; margin-bottom:16px;">
             <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
                 <div>
-                    <label for="data_protocolo" style="display:block; font-size:13px; font-weight:600; color:#166534; margin-bottom:4px;">Data do protocolo *</label>
-                    <input id="data_protocolo" name="data_protocolo" required value="{{ data_protocolo }}"
+                    <label for="data_protocolo" style="display:block; font-size:13px; font-weight:600; color:#166534; margin-bottom:4px;">Data do protocolo (opcional se informar o evento)</label>
+                    <input id="data_protocolo" name="data_protocolo" value="{{ data_protocolo }}"
                            placeholder="DD/MM/AAAA"
                            style="width:130px; padding:8px 10px; border:1px solid #86efac; border-radius:6px; font-size:13px;">
                     <div style="font-size:11px; color:#6b7280; margin-top:4px;">
-                        Data de protocolo da impugnação/embargos.
+                        Se informar o evento abaixo, o sistema busca a data do evento.
                     </div>
                 </div>
                 <div>

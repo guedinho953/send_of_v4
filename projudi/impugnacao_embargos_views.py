@@ -131,12 +131,42 @@ class CertidaoImpugnacaoEmbargosView(LoginRequiredMixin, View):
             messages.error(request, 'Informe o processo.')
             return self._render(request, **dados)
 
+        if evento_impugnacao and not evento_impugnacao.isdigit():
+            messages.error(
+                request,
+                'Evento da impugnação/embargos inválido. Informe apenas o '
+                'número do evento ou deixe em branco.',
+            )
+            return self._render(request, **dados)
+
         data_protocolo = _data(data_protocolo_txt)
+        if not data_protocolo and evento_impugnacao:
+            if not processo_url:
+                try:
+                    from projudi.processo_lookup import localizar_processo
+                    achado = localizar_processo(request.user, processo)
+                    if achado:
+                        processo_url = achado['url']
+                        dados['processo_url'] = processo_url
+                except Exception:
+                    pass
+            if processo_url:
+                try:
+                    from projudi.intimacao_service import data_evento_processo
+                    data_protocolo = data_evento_processo(
+                        request.user, processo_url, evento_impugnacao)
+                except Exception:
+                    data_protocolo = None
+                if data_protocolo:
+                    data_protocolo_txt = data_protocolo.strftime('%d/%m/%Y')
+                    dados['data_protocolo'] = data_protocolo_txt
+
         if not data_protocolo:
             messages.error(
                 request,
                 'Informe a data do protocolo da impugnação/embargos '
-                '(DD/MM/AAAA).',
+                '(DD/MM/AAAA ou o evento da petição para o sistema buscar '
+                'a data).',
             )
             return self._render(request, **dados)
 

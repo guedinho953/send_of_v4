@@ -163,6 +163,19 @@ def carregar_movimentacoes(user, processo_url):
         return []
 
 
+def data_evento_processo(user, processo_url, evento):
+    """Data do evento do processo (fallback para o protocolo da petição)."""
+    movs = carregar_movimentacoes(user, processo_url)
+    alvo = str(evento or '').strip()
+    if not movs or not alvo:
+        return None
+    for mov in movs:
+        if str(evento_mov(mov)) != alvo:
+            continue
+        return data_mov(mov) or data_djen(mov)
+    return None
+
+
 def localizar_intimacao_do_processo(user, processo_url, evento, parte=''):
     movs = carregar_movimentacoes(user, processo_url)
     if not movs:

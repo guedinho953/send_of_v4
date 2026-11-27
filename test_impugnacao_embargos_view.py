@@ -37,7 +37,7 @@ class ImpugnacaoEmbargosViewTest(TestCase):
         self.assertEqual(resposta.status_code, 200)
         self.assertContains(resposta, 'Segurança do juízo')
         self.assertContains(resposta, 'Data do protocolo')
-        self.assertContains(resposta, 'Evento do despacho/pagamento')
+        self.assertContains(resposta, 'Evento do despacho de referência')
 
     def test_detalhe_mostra_acoes_agendadas(self):
         from datetime import date
@@ -180,6 +180,42 @@ class ImpugnacaoEmbargosViewTest(TestCase):
         self.assertEqual(resposta.status_code, 200)
         self.assertContains(resposta, reverse('projudi:movimentacoes'))
         self.assertContains(resposta, 'Fila de movimentações')
+
+    @patch('projudi.intimacao_service.data_evento_processo')
+    @patch('projudi.impugnacao_embargos_views.call_command')
+    @patch('projudi.impugnacao_embargos_views.DecursoPagamentoService.analisar')
+    def test_data_protocolo_vem_do_evento_da_peticao(
+            self, analisar, comando, data_evento):
+        from datetime import date
+
+        analisar.return_value = resultado_analise()
+        data_evento.return_value = date(2026, 11, 24)
+        registro = PrazoDjenRecord.objects.create(
+            processo='0000001-11.2026.8.05.0191',
+            origem='movimentacao',
+            tipo_prazo='impugnacao_embargos_execucao',
+            prazo_dias=15,
+        )
+        resposta = self.client.post(
+            reverse('projudi:certidao_impugnacao_embargos'),
+            {
+                'processo': '0000001-11.2026.8.05.0191',
+                'processo_url': 'https://projudi/processo',
+                'evento': '80',
+                'data_protocolo': '',
+                'evento_impugnacao': '86',
+                'seguranca_juizo': 'parcial',
+            },
+        )
+        self.assertEqual(resposta.status_code, 302)
+        self.assertRedirects(
+            resposta,
+            reverse('projudi:certidao_detail', args=[registro.id]),
+            fetch_redirect_response=False,
+        )
+        data_evento.assert_called_once()
+        self.assertEqual(
+            comando.call_args.kwargs['protocolo'], '24/11/2026')
 
     @patch('projudi.impugnacao_embargos_views.call_command')
     @patch('projudi.impugnacao_embargos_views.DecursoPagamentoService.analisar')
