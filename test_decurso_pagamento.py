@@ -147,6 +147,31 @@ class DecursoPagamentoHelpersTest(TestCase):
         self.assertEqual(registro.evento_origem, '10')
         self.assertIsNone(registro.tempestivo)
 
+    def test_gerar_preview_sem_executado_omite_cabecalho(self):
+        resultado = resultado_fake()
+        resultado['executado'] = ''
+        saida = (
+            Path(settings.BASE_DIR) / 'var' / 'teste_decurso_sem_parte.html')
+        self.addCleanup(lambda: saida.unlink(missing_ok=True))
+
+        html, _caminho = gerar_preview(
+            resultado, 'Ivan Guedes da Silva', 'Servidor Secretaria 2',
+            saida=str(saida),
+        )
+        self.assertNotIn('EXECUTADO(A)', html)
+        self.assertIn('pelo(a)(s) executado(a)(s)', html)
+
+    def test_cabecalhos_de_partes_sao_condicionais(self):
+        from processes.models import DocumentTemplate
+
+        decurso = DocumentTemplate.objects.get(
+            name='Certidão de Decurso de Prazo para Pagamento Voluntário')
+        self.assertIn('{% if executado %}', decurso.html_template)
+
+        base = DocumentTemplate.objects.get(
+            name='Certidão de Prazo — Modelo Base')
+        self.assertIn('{% if parte %}', base.html_template)
+
 
 class CertidaoDecursoViewTest(TestCase):
     def setUp(self):
