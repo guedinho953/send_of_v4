@@ -65,6 +65,11 @@ def _texto_publico_prazo(res, info, options, tempestivo=None):
             f', evento {evento_int}' if evento_int.isdigit()
             else ', evento não informado'
         )
+        evento_origem = str(
+            options.get('evento_origem') or '').strip()
+        origem_txt = (
+            f', do despacho de evento {evento_origem}'
+            if evento_origem.isdigit() else '')
         seguranca = options.get('seguranca_juizo') or 'nenhuma'
         seguranca_txt = {
             'integral': 'o juízo está integralmente seguro',
@@ -78,8 +83,9 @@ def _texto_publico_prazo(res, info, options, tempestivo=None):
         return (
             'Certifico, para os devidos fins, que a Impugnação/Embargos à '
             f'Execução apresentada {evento_imp} é {conclusao}, referente à '
-            f'intimação eletrônica (DJEN){evento_int_txt}, que abriu o '
-            'prazo de 15 (quinze) dias úteis para pagamento (art. 525, '
+            f'intimação eletrônica (DJEN){evento_int_txt}{origem_txt}, '
+            'que abriu o prazo de 15 (quinze) dias úteis para pagamento '
+            '(art. 525, '
             'caput, do CPC). Publicação em '
             f'{_fmt_curta(res.data_publicacao)}; início do prazo em '
             f'{_fmt_curta(res.data_inicio_contagem)}; termo final em '

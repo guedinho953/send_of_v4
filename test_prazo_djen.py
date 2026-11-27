@@ -120,6 +120,7 @@ class PrazoDjenTest(unittest.TestCase):
             'tipo': 'impugnacao_embargos_execucao',
             'evento_recurso': '88',
             'evento_intimacao': '84',
+            'evento_origem': '80',
         }
 
         parcial = _texto_publico_prazo(
@@ -131,6 +132,7 @@ class PrazoDjenTest(unittest.TestCase):
         self.assertIn('evento 84', parcial)
         self.assertIn('15 (quinze) dias úteis', parcial)
         self.assertIn('art. 525', parcial)
+        self.assertIn('do despacho de evento 80', parcial)
         self.assertIn('Publicação em 03/11/2026', parcial)
         self.assertIn('início do prazo em 04/11/2026', parcial)
         self.assertIn('termo final em 25/11/2026', parcial)
