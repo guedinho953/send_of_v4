@@ -16,7 +16,8 @@ def _origem_documento(doc):
     return 'movimentacao'
 
 
-def registrar_decurso(user, resultado, doc, servidor='', servidor_cargo=''):
+def registrar_decurso(user, resultado, doc, servidor='', servidor_cargo='',
+                      tipo_prazo='decurso_pagamento'):
     """Cria o registro unificado para uma certidão de decurso."""
     existente = CertidaoRegistro.objects.filter(
         generated_document=doc).first()
@@ -29,7 +30,7 @@ def registrar_decurso(user, resultado, doc, servidor='', servidor_cargo=''):
         numero_processo_cnj=resultado.get('processo', ''),
         parte=resultado.get('executado', ''),
         origem='movimentacao',
-        tipo_prazo='decurso_pagamento',
+        tipo_prazo=tipo_prazo,
         prazo_dias=resultado.get('dias') or 15,
         evento_despacho=str(resultado.get('evento_despacho') or ''),
         evento_intimacao=str(resultado.get('evento_intimacao') or ''),

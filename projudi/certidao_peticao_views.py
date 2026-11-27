@@ -1131,10 +1131,29 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
 
     template_name = 'projudi/certidao_decurso_pagamento.html'
     nome_template = 'Certidão de Decurso de Prazo para Pagamento Voluntário'
+    MODELOS = {
+        'voluntario': {
+            'template': (
+                'Certidão de Decurso de Prazo para Pagamento Voluntário'
+            ),
+            'tipo': 'decurso_pagamento',
+            'label': 'Decurso de Prazo para Pagamento Voluntário',
+        },
+        'remanescente': {
+            'template': (
+                'Certidão de Decurso de Prazo para Pagamento de '
+                'Débito Remanescente'
+            ),
+            'tipo': 'decurso_debito_remanescente',
+            'label': 'Decurso de Prazo para Pagamento de Débito Remanescente',
+        },
+    }
 
     def _contexto(self, **extra):
         context = {
             'assinante_padrao': ASSINANTE_PADRAO,
+            'modelo': 'voluntario',
+            'modelos': self.MODELOS,
             'assinantes': [
                 {'chave': chave, 'nome': dados[0], 'cargo': dados[1]}
                 for chave, dados in ASSINANTES.items()
@@ -1148,6 +1167,7 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
             processo=(request.GET.get('processo') or '').strip(),
             evento=(request.GET.get('evento') or '').strip(),
             executado=(request.GET.get('executado') or '').strip(),
+            modelo=(request.GET.get('modelo') or 'voluntario').strip(),
             evento_requerimento=(
                 request.GET.get('evento_requerimento') or '').strip(),
         ))
@@ -1156,19 +1176,28 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
         processo = (request.POST.get('processo') or '').strip()
         evento = (request.POST.get('evento') or '').strip()
         executado = (request.POST.get('executado') or '').strip()
+        modelo = (request.POST.get('modelo') or 'voluntario').strip()
         evento_requerimento = (
             request.POST.get('evento_requerimento') or '').strip()
         return self.processar(
-            request, processo, evento, executado, evento_requerimento)
+            request, processo, evento, executado, evento_requerimento,
+            modelo)
 
     def processar(self, request, processo, evento='', executado='',
-                  evento_requerimento=''):
+                  evento_requerimento='', modelo='voluntario'):
         from django.template import Context, Template
         from base.utils import normalize_process_number
         from processes.models import (
             DocumentTemplate, GeneratedDocument, Process,
         )
         from .decurso_pagamento_service import DecursoPagamentoService
+
+        info_modelo = self.MODELOS.get(modelo) or self.MODELOS['voluntario']
+        modelo = next(
+            (chave for chave, valor in self.MODELOS.items()
+             if valor['template'] == info_modelo['template']),
+            'voluntario',
+        )
 
         if not processo:
             messages.error(request, 'Informe o processo.')
@@ -1184,6 +1213,7 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
             return render(request, self.template_name, self._contexto(
                 processo=processo, evento=evento, executado=executado,
                 evento_requerimento=evento_requerimento,
+                modelo=modelo,
             ))
         if evento_requerimento and not evento_requerimento.isdigit():
             messages.error(
@@ -1194,6 +1224,7 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
             return render(request, self.template_name, self._contexto(
                 processo=processo, evento=evento, executado=executado,
                 evento_requerimento=evento_requerimento,
+                modelo=modelo,
             ))
 
         assinante = (
@@ -1220,6 +1251,7 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
             return render(request, self.template_name, self._contexto(
                 processo=processo, evento=evento, executado=executado,
                 evento_requerimento=evento_requerimento,
+                modelo=modelo,
             ))
 
         # Enquanto o prazo não decorrer, não há certidão de decurso:
@@ -1274,7 +1306,7 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
 
         try:
             template = DocumentTemplate.objects.get(
-                name=self.nome_template, active=True
+                name=info_modelo['template'], active=True
             )
             proc = Process.objects.filter(
                 number_normalized=normalize_process_number(
@@ -1304,6 +1336,11 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
                 'executado': resultado['executado'],
                 'evento_despacho': resultado['evento_despacho'],
                 'evento_intimacao': resultado['evento_intimacao'],
+                'data_despacho': (
+                    resultado['data_despacho'].strftime('%d/%m/%Y')
+                    if resultado.get('data_despacho') else ''
+                ),
+                'meio_label': resultado.get('meio_label') or '',
                 'evento_requerimento': (
                     resultado.get('evento_requerimento') or ''),
                 'data_requerimento': (
@@ -1336,7 +1373,7 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
                 sequential_number=seq,
                 year=date.today().year,
                 recipient_name=(
-                    'Certidão: Decurso de Pagamento Voluntário'
+                    f'Certidão: {info_modelo["label"]}'
                 ),
                 html_content=html,
             )
@@ -1345,6 +1382,7 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
                 registrar_decurso(
                     request.user, resultado, doc,
                     servidor=servidor, servidor_cargo=servidor_cargo,
+                    tipo_prazo=info_modelo['tipo'],
                 )
             except Exception:
                 pass
@@ -1355,7 +1393,7 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
             )
 
         observacao = (
-            'Certidão de Decurso de Pagamento Voluntário — '
+            f'Certidão — {info_modelo["label"]} — '
             f'despacho evento {resultado["evento_despacho"]}'
             f'{origem_despacho}; '
             f'evento da intimação: {resultado["evento_intimacao"]}; '
@@ -1375,10 +1413,10 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
             'item': {
                 'processo': resultado['processo'],
                 'processo_url': resultado['url'],
-                'tipo': 'decurso_pagamento',
+                'tipo': info_modelo['tipo'],
                 'eh_recurso': False,
                 'pode_intimar': False,
-                'tipo_label': 'Decurso de Prazo para Pagamento Voluntário',
+                'tipo_label': info_modelo['label'],
                 'situacao_recurso': '',
                 'situacao_label': '',
                 'recorrente': '',

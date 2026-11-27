@@ -155,6 +155,7 @@ class DecursoPagamentoService:
             'numero_interno': localizado['numero_interno'],
             'url': localizado['url'],
             'evento_despacho': evento,
+            'data_despacho': despacho.get('data'),
             'despacho_texto': despacho['texto'][:500],
             'despacho_auto': despacho_auto,
             'despacho_trecho': (despacho.get('trecho') or '')[:500],

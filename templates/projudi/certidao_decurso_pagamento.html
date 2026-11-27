@@ -40,6 +40,16 @@
                    style="width:100%; padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px;">
         </div>
 
+        <div style="margin-bottom:14px;">
+            <label for="modelo" style="display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:4px;">Modelo da certidão</label>
+            <select id="modelo" name="modelo"
+                    style="width:100%; padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px;">
+                {% for chave, info in modelos.items %}
+                <option value="{{ chave }}" {% if modelo == chave %}selected{% endif %}>{{ info.label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
         <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:14px;">
             <div>
                 <label for="evento" style="display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:4px;">Evento do despacho (opcional)</label>
