@@ -151,7 +151,9 @@ class JuntarIntimarPlanTest(TestCase):
         self.assertEqual(plano['prazo'], '15')
         self.assertEqual(plano['prazo_codigo'], '4')
         self.assertIn('embargado(a)', plano['observacao_intimacao'])
-        self.assertIn('manifestação acerca dos embargos', plano['observacao_intimacao'])
+        self.assertIn(
+            'impugnação/manifestação/contrarrazões aos embargos',
+            plano['observacao_intimacao'])
 
     def test_plano_embargos_intempestivos_nao_intima(self):
         from projudi.juntar_service import montar_plano

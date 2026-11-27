@@ -161,8 +161,8 @@ def _observacao_intimacao(registro, situacao) -> str:
             return ''
         return (
             'Intime-se o(a) embargado(a) para, querendo, no prazo de 15 '
-            '(quinze) dias úteis, apresentar manifestação acerca dos '
-            'embargos à execução'
+            '(quinze) dias úteis, apresentar impugnação/manifestação/'
+            'contrarrazões aos embargos à execução'
             f'{texto_evento}, conforme certidão em anexo.'
         )
     if situacao in ('preparo', 'gratuidade'):
