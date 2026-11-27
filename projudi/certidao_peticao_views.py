@@ -69,10 +69,17 @@ def _texto_impugnacao_embargos(
     def _evento(valor):
         return f' (evento {valor})' if str(valor or '').isdigit() else ''
 
+    publicacao = (
+        getattr(resultado, 'data_publicacao', None)
+        or resultado.data_inicio
+    )
     inicio = (
-        resultado.dias_contados[0]
-        if getattr(resultado, 'dias_contados', None)
-        else resultado.data_inicio
+        getattr(resultado, 'data_inicio_contagem', None)
+        or (
+            resultado.dias_contados[0]
+            if getattr(resultado, 'dias_contados', None)
+            else resultado.data_inicio
+        )
     )
     texto = (
         'Certifico, para os devidos fins, a '
@@ -80,7 +87,7 @@ def _texto_impugnacao_embargos(
         f'{_evento(evento_impugnacao)} (prazo de 15 (quinze) dias), '
         f'referente ao despacho{_evento(evento_despacho)} e à '
         f'intimação {meio_label}{_evento(evento_intimacao)}. '
-        f'Publicação em {resultado.data_inicio.strftime("%d/%m/%Y")}; '
+        f'Publicação em {publicacao.strftime("%d/%m/%Y")}; '
         f'início do prazo em {inicio.strftime("%d/%m/%Y")}; '
         f'termo final em {resultado.ultimo_dia.strftime("%d/%m/%Y")}.'
     )

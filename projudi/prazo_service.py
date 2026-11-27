@@ -53,6 +53,10 @@ class ResultadoPrazo:
     dias_excluidos: List[date] = field(default_factory=list)
     modo: str = 'uteis'
     djen: bool = False
+    # DJEN: disponibilização → publicação (1º útil seguinte) →
+    # início da contagem (1º útil seguinte à publicação).
+    data_publicacao: Optional[date] = None
+    data_inicio_contagem: Optional[date] = None
 
     @property
     def vencido(self) -> bool:
@@ -76,6 +80,14 @@ class ResultadoPrazo:
             'prazo_dias': self.prazo_dias,
             'modo': self.modo,
             'djen': self.djen,
+            'data_publicacao': (
+                self.data_publicacao.isoformat()
+                if self.data_publicacao else None
+            ),
+            'data_inicio_contagem': (
+                self.data_inicio_contagem.isoformat()
+                if self.data_inicio_contagem else None
+            ),
             'ultimo_dia': self.ultimo_dia.isoformat(),
             'data_decurso': self.data_decurso.isoformat(),
             'dias_contados': [d.isoformat() for d in self.dias_contados],
@@ -91,6 +103,16 @@ class ResultadoPrazo:
         elif self.modo == 'decadencial':
             modo_txt = 'decadencial (conta todos os dias, sem suspensão)'
         linhas = [f'Prazo contado {len(self.dias_contados)} dias ({modo_txt})']
+        if self.djen and self.data_publicacao:
+            linhas.append(
+                'Publicação DJEN: '
+                f'{self.data_publicacao.strftime("%d/%m/%Y")}'
+            )
+        if self.djen and self.data_inicio_contagem:
+            linhas.append(
+                'Início da contagem: '
+                f'{self.data_inicio_contagem.strftime("%d/%m/%Y")}'
+            )
         for i, d in enumerate(self.dias_contados, 1):
             linhas.append(f' {i}º - dia, {d.strftime("%d/%m/%Y")}')
         if self.dias_excluidos:
@@ -187,6 +209,13 @@ class PrazoService:
             return False
         return True
 
+    def _proximo_dia_util(self, data: date, incluir: bool = False) -> date:
+        """Próximo dia útil (ou a própria data, se incluir=True e útil)."""
+        d = data if incluir else data + timedelta(days=1)
+        while not self.is_dia_util(d):
+            d += timedelta(days=1)
+        return d
+
     def dias_uteis_entre(self, inicio: date, fim: date,
                          inclusive_fim: bool = True) -> List[date]:
         """Dias úteis no intervalo [inicio, fim] (inclusive por default)."""
@@ -237,6 +266,16 @@ class PrazoService:
 
         contados: List[date] = []
         excluidos: List[date] = []
+        data_publicacao = None
+        data_inicio_contagem = None
+        if djen:
+            # Lei 11.419/2006, art. 5º, §3º: publicação é o 1º dia útil
+            # seguinte à disponibilização; o prazo começa no 1º dia útil
+            # seguinte à publicação.
+            data_publicacao = self._proximo_dia_util(
+                data_inicio, incluir=False)
+            data_inicio_contagem = self._proximo_dia_util(
+                data_publicacao, incluir=False)
         # Dia da intimação: por padrão não conta (começa no dia + 1).
         atual = data_inicio if incluir_dia_inicio else data_inicio + timedelta(days=1)
         if not incluir_dia_inicio:
@@ -282,6 +321,8 @@ class PrazoService:
             dias_excluidos=excluidos,
             modo=modo,
             djen=djen,
+            data_publicacao=data_publicacao,
+            data_inicio_contagem=data_inicio_contagem,
         )
 
     # ------------------------------------------------------------------
