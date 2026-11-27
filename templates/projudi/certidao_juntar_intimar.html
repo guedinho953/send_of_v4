@@ -167,15 +167,16 @@
         {% endif %}
 
         <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:#374151; margin-bottom:12px;">
-            <input type="checkbox" name="confirmo">
+            <input type="checkbox" name="confirmo" id="confirmo-juntar">
             Confirmo que conferi a certidão, o processo, o polo e o prazo.
         </label>
         <button type="submit" class="btn btn-acao" style="background:#0891b2; color:#fff;">
             Simular plano
         </button>
         <div style="font-size:11px; color:#6b7280; margin-top:6px;">
-            O botão muda para <strong>Executar ação</strong> quando você
-            escolher uma ação real.
+            Escolher a ação no campo acima <strong>não executa nada</strong>.
+            Para executar, marque a confirmação e clique em
+            <strong>Executar ação</strong>.
         </div>
     </form>
 </div>
@@ -188,6 +189,7 @@
     if (!form) return;
     const acao = document.getElementById('acao-juntar');
     const botao = form.querySelector('.btn-acao');
+    const confirmo = document.getElementById('confirmo-juntar');
     if (!acao || !botao) return;
 
     function atualizarBotao() {
@@ -200,6 +202,15 @@
         }
     }
     acao.addEventListener('change', atualizarBotao);
+    form.addEventListener('submit', function (evento) {
+        const acaoReal = acao.value !== 'simular'
+            && acao.value !== 'so_certificar';
+        if (acaoReal && confirmo && !confirmo.checked) {
+            evento.preventDefault();
+            alert('Marque a confirmação antes de executar a ação real.');
+            confirmo.focus();
+        }
+    });
     atualizarBotao();
 })();
 </script>
