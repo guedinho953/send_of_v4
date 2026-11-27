@@ -64,7 +64,11 @@
         📄 Dashboard de Certidões
     </a>
 </div>
-<div style="margin-bottom:20px;"></div>
+<form method="get" action="{% url 'projudi:oficio_list' %}" style="display:flex; gap:8px; flex-wrap:wrap; margin:12px 0 20px;">
+    <input type="text" name="q" placeholder="Pesquisar ofício por número, processo, destinatário ou assunto"
+           style="flex:1; min-width:300px; padding:9px 12px; border:1px solid #cbd5e1; border-radius:7px; font-size:13px;">
+    <button type="submit" class="btn" style="background:#2563eb; color:white;">🔎 Pesquisar</button>
+</form>
 
 {% if messages %}
     {% for message in messages %}

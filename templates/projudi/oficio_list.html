@@ -51,15 +51,26 @@
     </form>
 </div>
 
+<form method="get" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
+    <input type="hidden" name="status" value="{{ status_atual }}">
+    <input type="text" name="q" value="{{ busca }}"
+           placeholder="Nº do ofício, processo, destinatário, assunto ou texto"
+           style="flex:1; min-width:280px; padding:9px 12px; border:1px solid #cbd5e1; border-radius:7px; font-size:13px;">
+    <button type="submit" class="btn" style="background:#2563eb; color:white;">🔎 Pesquisar</button>
+    {% if busca %}
+    <a href="?{% if status_atual %}status={{ status_atual }}{% endif %}" class="btn btn-outline">Limpar busca</a>
+    {% endif %}
+</form>
+
 <div class="filtro-bar">
-    <a href="?status=" class="filtro-btn {% if not status_atual %}active{% endif %}">Todos</a>
-    <a href="?status=pendente" class="filtro-btn {% if status_atual == 'pendente' %}active{% endif %}">Pendentes</a>
-    <a href="?status=expedido" class="filtro-btn {% if status_atual == 'expedido' %}active{% endif %}">Expedidos</a>
-    <a href="?status=enviado" class="filtro-btn {% if status_atual == 'enviado' %}active{% endif %}">Enviados</a>
-    <a href="?status=juntado" class="filtro-btn {% if status_atual == 'juntado' %}active{% endif %}">Juntados</a>
-    <a href="?status=baixado" class="filtro-btn {% if status_atual == 'baixado' %}active{% endif %}">Baixados</a>
-    <a href="?status=falhas" class="filtro-btn {% if status_atual == 'falhas' %}active{% endif %}">Falhas</a>
-    <a href="?status=dispensado" class="filtro-btn {% if status_atual == 'dispensado' %}active{% endif %}">Dispensados</a>
+    <a href="?status={% if busca %}&q={{ busca|urlencode }}{% endif %}" class="filtro-btn {% if not status_atual %}active{% endif %}">Todos</a>
+    <a href="?status=pendente{% if busca %}&q={{ busca|urlencode }}{% endif %}" class="filtro-btn {% if status_atual == 'pendente' %}active{% endif %}">Pendentes</a>
+    <a href="?status=expedido{% if busca %}&q={{ busca|urlencode }}{% endif %}" class="filtro-btn {% if status_atual == 'expedido' %}active{% endif %}">Expedidos</a>
+    <a href="?status=enviado{% if busca %}&q={{ busca|urlencode }}{% endif %}" class="filtro-btn {% if status_atual == 'enviado' %}active{% endif %}">Enviados</a>
+    <a href="?status=juntado{% if busca %}&q={{ busca|urlencode }}{% endif %}" class="filtro-btn {% if status_atual == 'juntado' %}active{% endif %}">Juntados</a>
+    <a href="?status=baixado{% if busca %}&q={{ busca|urlencode }}{% endif %}" class="filtro-btn {% if status_atual == 'baixado' %}active{% endif %}">Baixados</a>
+    <a href="?status=falhas{% if busca %}&q={{ busca|urlencode }}{% endif %}" class="filtro-btn {% if status_atual == 'falhas' %}active{% endif %}">Falhas</a>
+    <a href="?status=dispensado{% if busca %}&q={{ busca|urlencode }}{% endif %}" class="filtro-btn {% if status_atual == 'dispensado' %}active{% endif %}">Dispensados</a>
 </div>
 
 <div class="card">
@@ -70,6 +81,7 @@
                 <th>Processo</th>
                 <th>Destino</th>
                 <th>Status</th>
+                <th>Retorno</th>
                 <th>Baixado em</th>
                 <th>Data Importacao</th>
                 <th>Acao</th>
@@ -91,10 +103,25 @@
                     <span class="tag-status tag-{{ o.status }}">{{ o.get_status_display }}</span>
                     {% if o.baixado_em %}<span class="tag-status tag-baixado">Baixado</span>{% endif %}
                 </td>
+                <td>
+                    {% if o.status_retorno != 'sem_retorno' %}
+                        <span style="display:inline-block; padding:2px 8px; border-radius:9px; background:#ede9fe; color:#5b21b6; font-size:11px; font-weight:700;">
+                            {{ o.get_status_retorno_display }}
+                        </span>
+                        {% if o.data_retorno %}
+                        <div style="font-size:11px; color:#6b7280; margin-top:2px;">{{ o.data_retorno|date:"d/m/Y H:i" }}</div>
+                        {% endif %}
+                    {% else %}
+                        <span style="color:#9ca3af; font-size:12px;">—</span>
+                    {% endif %}
+                </td>
                 <td>{{ o.baixado_em|date:"d/m/Y H:i"|default:"-" }}</td>
                 <td>{{ o.created_at|date:"d/m/Y H:i" }}</td>
                 <td>
                     <a href="{% url 'projudi:oficio_detail' o.pk %}" class="btn btn-sm btn-outline">Abrir</a>
+                    {% if o.status_retorno != 'sem_retorno' %}
+                    <a href="{% url 'projudi:retorno_detail' o.pk %}" class="btn btn-sm btn-outline">📬 Retorno</a>
+                    {% endif %}
                     {% if o.pode_enviar %}
                         <form method="post" action="{% url 'projudi:oficio_send' o.pk %}" style="display:inline;">
                             {% csrf_token %}
@@ -105,7 +132,7 @@
             </tr>
             {% empty %}
             <tr>
-                <td colspan="7" style="text-align:center; color:#6b7280; padding:30px;">
+                <td colspan="8" style="text-align:center; color:#6b7280; padding:30px;">
                     Nenhum oficio encontrado.
                 </td>
             </tr>
@@ -117,13 +144,13 @@
 {% if is_paginated %}
 <div class="paginacao">
     {% if page_obj.has_previous %}
-        <a href="?page=1{% if status_atual %}&status={{ status_atual }}{% endif %}">Primeira</a>
-        <a href="?page={{ page_obj.previous_page_number }}{% if status_atual %}&status={{ status_atual }}{% endif %}">Anterior</a>
+        <a href="?page=1{% if status_atual %}&status={{ status_atual }}{% endif %}{% if busca %}&q={{ busca|urlencode }}{% endif %}">Primeira</a>
+        <a href="?page={{ page_obj.previous_page_number }}{% if status_atual %}&status={{ status_atual }}{% endif %}{% if busca %}&q={{ busca|urlencode }}{% endif %}">Anterior</a>
     {% endif %}
     <span class="atual">Pagina {{ page_obj.number }} de {{ paginator.num_pages }}</span>
     {% if page_obj.has_next %}
-        <a href="?page={{ page_obj.next_page_number }}{% if status_atual %}&status={{ status_atual }}{% endif %}">Proxima</a>
-        <a href="?page={{ paginator.num_pages }}{% if status_atual %}&status={{ status_atual }}{% endif %}">Ultima</a>
+        <a href="?page={{ page_obj.next_page_number }}{% if status_atual %}&status={{ status_atual }}{% endif %}{% if busca %}&q={{ busca|urlencode }}{% endif %}">Proxima</a>
+        <a href="?page={{ paginator.num_pages }}{% if status_atual %}&status={{ status_atual }}{% endif %}{% if busca %}&q={{ busca|urlencode }}{% endif %}">Ultima</a>
     {% endif %}
 </div>
 {% endif %}

@@ -9,6 +9,7 @@ from django.views import View
 from django.views.generic import ListView, DetailView, TemplateView
 from django.contrib import messages
 from django.conf import settings
+from django.db.models import Q
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 
@@ -110,6 +111,19 @@ class OficioListView(LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         qs = OficioRecord.objects.filter(user=self.request.user)
+        busca = (self.request.GET.get('q') or '').strip()
+        if busca:
+            qs = qs.filter(
+                Q(numero_oficio__icontains=busca)
+                | Q(processo__icontains=busca)
+                | Q(numero_processo_cnj__icontains=busca)
+                | Q(email_destino__icontains=busca)
+                | Q(assunto__icontains=busca)
+                | Q(remetente_retorno__icontains=busca)
+                | Q(assunto_retorno__icontains=busca)
+                | Q(conteudo_retorno__icontains=busca)
+                | Q(texto_html__icontains=busca)
+            )
         status_filter = self.request.GET.get('status', '')
         if status_filter == 'expedido':
             qs = qs.filter(status__in=['enviado', 'juntado'])
@@ -125,6 +139,7 @@ class OficioListView(LoginRequiredMixin, ListView):
         context = super().get_context_data(**kwargs)
         context['session_active'] = self._session_ativa()
         context['status_atual'] = self.request.GET.get('status', '')
+        context['busca'] = (self.request.GET.get('q') or '').strip()
         return context
 
     def _session_ativa(self):

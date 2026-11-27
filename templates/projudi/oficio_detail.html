@@ -99,6 +99,16 @@
         <div class="info-value">{{ oficio.get_status_retorno_display }}</div>
     </div>
     <div class="info-card">
+        <div class="info-label">Data do Retorno</div>
+        <div class="info-value">
+            {% if oficio.data_retorno %}{{ oficio.data_retorno|date:"d/m/Y H:i" }}{% else %}Sem retorno{% endif %}
+        </div>
+    </div>
+    <div class="info-card">
+        <div class="info-label">Remetente do Retorno</div>
+        <div class="info-value">{{ oficio.remetente_retorno|default:"—" }}</div>
+    </div>
+    <div class="info-card">
         <div class="info-label">Baixado em</div>
         <div class="info-value">
             {% if oficio.baixado_em %}{{ oficio.baixado_em|date:"d/m/Y H:i" }}{% else %}Nao baixado{% endif %}
@@ -124,6 +134,52 @@
         {% endif %}
     </div>
 </div>
+
+<!-- Retorno / resposta -->
+{% if oficio.status_retorno != 'sem_retorno' or oficio.conteudo_retorno or oficio.observacao_retorno %}
+<div class="card" style="margin-top:16px;">
+    <h3 style="margin-top:0;">📬 Retorno / Resposta</h3>
+    <div class="info-grid" style="margin-bottom:12px;">
+        <div class="info-card">
+            <div class="info-label">Status</div>
+            <div class="info-value">{{ oficio.get_status_retorno_display }}</div>
+        </div>
+        <div class="info-card">
+            <div class="info-label">Recebido em</div>
+            <div class="info-value">{{ oficio.data_retorno|date:"d/m/Y H:i"|default:"—" }}</div>
+        </div>
+        <div class="info-card">
+            <div class="info-label">Remetente</div>
+            <div class="info-value">{{ oficio.remetente_retorno|default:"—" }}</div>
+        </div>
+        <div class="info-card">
+            <div class="info-label">Assunto</div>
+            <div class="info-value">{{ oficio.assunto_retorno|default:"—" }}</div>
+        </div>
+    </div>
+
+    {% if oficio.conteudo_retorno %}
+    <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px; margin-bottom:10px; font-size:13px; color:#374151; white-space:pre-wrap;">{{ oficio.conteudo_retorno }}</div>
+    {% endif %}
+
+    {% if oficio.anexos_retorno %}
+    <div style="font-size:12px; color:#374151; margin-bottom:10px;">
+        <strong>Anexos:</strong>
+        <ul style="margin:6px 0 0 18px;">
+            {% for a in oficio.anexos_retorno %}
+            <li>{{ a.nome|default:a }}{% if a.tipo %} — {{ a.tipo }}{% endif %}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    {% if oficio.observacao_retorno %}
+    <div style="background:#fffbeb; border-left:4px solid #f59e0b; border-radius:6px; padding:10px 12px; font-size:12px; color:#92400e; white-space:pre-wrap; margin-bottom:10px;">{{ oficio.observacao_retorno }}</div>
+    {% endif %}
+
+    <a href="{% url 'projudi:retorno_detail' oficio.pk %}" class="btn btn-outline">📬 Abrir tela de Retorno</a>
+</div>
+{% endif %}
 
 <!-- Logs -->
 <div class="card">
