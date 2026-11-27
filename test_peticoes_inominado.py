@@ -122,6 +122,24 @@ class PeticoesInominadoTest(unittest.TestCase):
             '0002222-22.2026.8.05.0191',
         ])
 
+    def test_sugere_tipo_de_certidao(self):
+        peticoes = ler_peticoes(HTML)
+        por_processo = {p['processo']: p for p in peticoes}
+        self.assertEqual(
+            por_processo['0002888-28.2026.8.05.0191']
+            ['tipo_prazo_sugerido'],
+            'inominado',
+        )
+        self.assertEqual(
+            por_processo['0002876-14.2026.8.05.0191']
+            ['tipo_prazo_sugerido'],
+            'contrarrazoes_inominado',
+        )
+        self.assertFalse(
+            por_processo['0001111-11.2026.8.05.0191']
+            ['tipo_prazo_sugerido'],
+        )
+
     def test_exclui_contrarrazoes(self):
         peticoes = listar_peticoes_inominado(HTML)
         processos = [p['processo'] for p in peticoes]

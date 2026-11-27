@@ -223,6 +223,34 @@ o evento do despacho em `evento_origem`. O template é
 `Certidão de Decurso de Prazo para Pagamento Voluntário`, criado pela
 migração `processes/0024`.
 
+## Fila de petições com escolha manual
+
+A fila `JuntadaPeticao` também pode ser aberta pela tela:
+
+```
+/projudi/certidoes/peticoes/fila/
+```
+
+Cada linha mostra processo, data de envio, PDF da petição, comprovantes e a
+**sugestão** de certidão. A sugestão vem do tipo/nome do PDF, mas **não é
+automática**: você escolhe a certidão no seletor.
+
+Opções da tela:
+
+- **Certidão**: Recurso Inominado (10), Contrarrazões (10),
+  Impugnação/Cumprimento (15), Impugnação/Penhora (15) ou Decurso de
+  Pagamento (15);
+- **Preparo**: para recurso inominado (gratuidade, completo,
+  incompleto/insuficiente ou não pagou);
+- **Intimação**: para contrarrazões/impugnação, informe a data que abriu o
+  prazo;
+- **Ação**: por ora **Gerar certidão**. As ações **Juntar** e
+  **Juntar + intimar** aparecem como “em breve” e serão habilitadas na
+  próxima etapa.
+
+A tela gera a certidão, registra na aba **Petições** e abre o detalhe com o
+preview. Nada é juntado/movimentado no Projudi nesta etapa.
+
 ## Dashboard de certidões
 
 Acesse **Certidões** no menu ou:
@@ -234,6 +262,8 @@ http://127.0.0.1:8000/projudi/certidoes/
 O dashboard mostra:
 
 - abas **Todas / Petições / Movimentações**, com contadores por origem;
+- atalho **Fila de petições** na aba Petições e **Nova certidão de decurso**
+  na aba Movimentações;
 - cards de **Total / Tempestivas / Intempestivas / Sem protocolo**;
 - filtros por status, tipo e busca (processo, parte ou motivo);
 - tabela com processo, parte, tipo, último dia, protocolo, preparo,
@@ -256,7 +286,7 @@ ficam registradas em:
 
 ```bat
 python -m unittest test_prazo_djen test_verificacao_inominado test_peticoes_inominado test_partes_inominado
-python manage.py test test_certidao_origem test_decurso_pagamento
+python manage.py test test_certidao_origem test_decurso_pagamento test_peticoes_fila_views
 ```
 
 Casos cobertos:
@@ -278,7 +308,9 @@ Casos cobertos:
   e nos comandos;
 - localização do despacho de pagamento, intimação do executado e cálculo do
   decurso de 15 dias;
-- geração do HTML e registro da certidão de decurso em Movimentações.
+- geração do HTML e registro da certidão de decurso em Movimentações;
+- fila de petições com sugestão de certidão e escolha manual do tipo,
+  preparo e ação.
 
 ## Limitações / próximos passos
 

@@ -127,6 +127,53 @@ def _classificar_por_nome(nome):
     return 'anexo'
 
 
+TIPOS_CERTIDAO = [
+    {'valor': 'inominado', 'label': 'Recurso Inominado', 'dias': 10},
+    {
+        'valor': 'contrarrazoes_inominado',
+        'label': 'Contrarrazões ao Recurso Inominado',
+        'dias': 10,
+    },
+    {
+        'valor': 'cumprimento_sentenca',
+        'label': 'Impugnação/Cumprimento de Sentença',
+        'dias': 15,
+    },
+    {
+        'valor': 'pagamento_impugnacao_penhora',
+        'label': 'Impugnação/Decurso da Penhora',
+        'dias': 15,
+    },
+    {
+        'valor': 'decurso_pagamento',
+        'label': 'Decurso de Pagamento Voluntário',
+        'dias': 15,
+    },
+]
+
+
+def _sugerir_tipo(tipo, documentos):
+    """Sugere o tipo de certidão; o usuário pode trocar na tela."""
+    alvo = _normalizar(
+        f'{tipo or ""} '
+        + ' '.join(d.get('nome') or '' for d in documentos)
+    )
+    if 'CONTRARRAZOES' in alvo:
+        return 'contrarrazoes_inominado'
+    if 'RECURSO INOMINADO' in alvo:
+        return 'inominado'
+    if 'DECURSO' in alvo and (
+            'PAGAMENTO' in alvo or 'PAGAR' in alvo):
+        return 'decurso_pagamento'
+    if 'IMPUGNACAO' in alvo and (
+            'PENHORA' in alvo or 'DECURSO' in alvo):
+        return 'pagamento_impugnacao_penhora'
+    if ('IMPUGNACAO' in alvo or 'CUMPRIMENTO' in alvo
+            or 'EXECUCAO' in alvo):
+        return 'cumprimento_sentenca'
+    return ''
+
+
 def _finalizar(grupo, http=None, verificar_pdf=False):
     """Monta o dicionário da petição a partir das linhas coletadas."""
     documento_peticao = None
@@ -184,6 +231,15 @@ def _finalizar(grupo, http=None, verificar_pdf=False):
         and d['categoria'] != 'preparo'
     ]
 
+    tipo_prazo_sugerido = _sugerir_tipo(tipo, documentos)
+    tipo_sugerido_label = next(
+        (
+            t['label'] for t in TIPOS_CERTIDAO
+            if t['valor'] == tipo_prazo_sugerido
+        ),
+        'Não classificada — escolha a certidão',
+    )
+
     return {
         'processo': grupo['processo'],
         'processo_url': grupo['processo_url'],
@@ -196,6 +252,8 @@ def _finalizar(grupo, http=None, verificar_pdf=False):
         'anexos': anexos,
         'eh_recurso_inominado': confirmado,
         'origem_deteccao': origem,
+        'tipo_prazo_sugerido': tipo_prazo_sugerido,
+        'tipo_sugerido_label': tipo_sugerido_label,
     }
 
 
@@ -257,6 +315,43 @@ def ler_peticoes(html, http=None, verificar_pdf=False):
         _finalizar(g, http=http, verificar_pdf=verificar_pdf)
         for g in grupos
     ]
+
+
+def listar_peticoes(html, http=None, verificar_pdf=False):
+    """Lista todas as petições da fila (para escolha manual da certidão)."""
+    return ler_peticoes(html, http=http, verificar_pdf=verificar_pdf)
+
+
+def carregar_fila(user, url=URL_JUNTADA_PETICAO, verificar_pdf=False,
+                  somente_peticoes=True):
+    """Abre a fila JuntadaPeticao com a sessão do usuário e devolve as linhas."""
+    from projudi.services import ProjudiService
+
+    resultado = ProjudiService(user)._get_session_from_cookies()
+    if not resultado:
+        raise RuntimeError(
+            'Sessão do Projudi não disponível. Sincronize a sessão.')
+    sessao = resultado[0]
+    resposta = sessao.get(url, timeout=40)
+    if resposta.status_code != 200 or 'expirou' in resposta.text.lower():
+        raise RuntimeError(
+            'Não foi possível abrir a fila de petições ou a sessão expirou.')
+    peticoes = listar_peticoes(
+        resposta.text, http=sessao, verificar_pdf=verificar_pdf)
+    if somente_peticoes:
+        peticoes = [p for p in peticoes if _eh_peticao(p)]
+    return peticoes
+
+
+def _eh_peticao(peticao):
+    """Filtra a fila para linhas de petição/requerimento com PDF."""
+    if not peticao.get('peticao'):
+        return False
+    tipo = _normalizar(peticao.get('tipo'))
+    return any(k in tipo for k in (
+        'PETICAO', 'RECURSO', 'IMPUGNACAO', 'CONTRARRAZOES',
+        'CUMPRIMENTO', 'DECURSO', 'REQUERIMENTO',
+    ))
 
 
 def listar_peticoes_inominado(

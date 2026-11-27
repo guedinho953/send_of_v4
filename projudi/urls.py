@@ -6,6 +6,7 @@ from . import cumprimento_views
 from . import movimentacao_views
 from . import certidao_views
 from . import decurso_views
+from . import peticoes_views
 
 app_name = 'projudi'
 
@@ -76,6 +77,16 @@ urlpatterns = [
     # Dashboard de certidões/prazos DJEN (controle interno)
     path('certidoes/', certidao_views.CertidaoDashboardView.as_view(), name='certidao_dashboard'),
     path('certidoes/peticoes/', certidao_views.CertidaoPeticaoView.as_view(), name='certidao_peticoes'),
+    path(
+        'certidoes/peticoes/fila/',
+        peticoes_views.CertidaoPeticaoFilaView.as_view(),
+        name='certidao_peticoes_fila',
+    ),
+    path(
+        'certidoes/peticoes/fila/gerar/',
+        peticoes_views.CertidaoPeticaoFilaGerarView.as_view(),
+        name='certidao_peticoes_fila_gerar',
+    ),
     path('certidoes/movimentacoes/', certidao_views.CertidaoMovimentacaoView.as_view(), name='certidao_movimentacoes'),
     path(
         'certidoes/movimentacoes/decurso-pagamento/',

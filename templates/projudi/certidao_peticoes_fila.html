@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block title %}Fila de Petições — Send of v4{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:16px;">
+    <div>
+        <h1 class="section-title" style="font-size:20px; margin:0;">📥 Fila de Petições</h1>
+        <div style="font-size:13px; color:#6b7280; margin-top:4px;">
+            O tipo/nome detectado é apenas uma <strong>sugestão</strong>.
+            Escolha a certidão, o preparo e a ação antes de gerar.
+        </div>
+    </div>
+    <div style="display:flex; gap:8px;">
+        <a href="{% url 'projudi:certidao_peticoes' %}" class="btn btn-outline">← Petições</a>
+        <a href="{% url 'projudi:certidao_dashboard' %}" class="btn btn-outline">Certidões</a>
+    </div>
+</div>
+
+{% if erro %}
+<div style="background:#fef2f2; border:1px solid #fecaca; color:#991b1b; padding:12px 14px; border-radius:8px; margin-bottom:16px; font-size:13px;">
+    {{ erro }}
+    <div style="margin-top:6px;">
+        <a href="{% url 'projudi:sync_session' %}">Sincronizar sessão do Projudi</a>
+    </div>
+</div>
+{% endif %}
+
+<div style="background:#eff6ff; border:1px solid #bfdbfe; color:#1e3a8a; padding:10px 14px; border-radius:8px; margin-bottom:16px; font-size:12px; line-height:1.5;">
+    Para <strong>recurso inominado</strong>, informe o preparo e o sistema
+    calcula automaticamente a intimação do recorrente. Para
+    <strong>contrarrazões/impugnação</strong>, informe a data da intimação que
+    abriu o prazo. A ação <strong>Juntar/Intimar</strong> será habilitada na
+    próxima etapa; por ora use <strong>Gerar certidão</strong>.
+</div>
+
+{% if peticoes %}
+    <div style="display:flex; flex-direction:column; gap:14px;">
+    {% for p in peticoes %}
+        <div style="background:#fff; border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,.08); padding:16px;">
+            <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:flex-start;">
+                <div>
+                    <div style="font-size:15px; font-weight:700; color:#1e3a5f;">{{ p.processo }}</div>
+                    <div style="font-size:12px; color:#6b7280;">
+                        Envio: {{ p.data_envio|date:"d/m/Y"|default:"?" }}
+                        · {{ p.tipo|default:"Tipo não informado" }}
+                    </div>
+                    <div style="margin-top:6px; font-size:12px;">
+                        <strong>Sugestão:</strong>
+                        <span style="background:#fef3c7; color:#92400e; border-radius:10px; padding:2px 8px;">
+                            {{ p.tipo_sugerido_label }}
+                        </span>
+                    </div>
+                </div>
+                <div style="font-size:12px; text-align:right;">
+                    {% if p.peticao %}
+                        <div><strong>Petição:</strong>
+                            <a href="{{ p.peticao.url }}" target="_blank" rel="noopener">
+                                {{ p.peticao.nome|truncatechars:70 }}
+                            </a>
+                        </div>
+                    {% endif %}
+                    <div style="margin-top:4px;">
+                        <a href="{{ p.processo_url }}" target="_blank" rel="noopener">Abrir processo no Projudi</a>
+                    </div>
+                </div>
+            </div>
+
+            {% if p.preparo_docs %}
+            <div style="margin-top:10px; font-size:12px; color:#374151;">
+                <strong>Comprovantes/guias (conferir manualmente):</strong>
+                <ul style="margin:4px 0 0 18px; padding:0;">
+                    {% for d in p.preparo_docs %}
+                        <li><a href="{{ d.url }}" target="_blank" rel="noopener">{{ d.nome }}</a></li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
+            <form method="post" action="{% url 'projudi:certidao_peticoes_fila_gerar' %}"
+                  style="margin-top:12px; padding-top:12px; border-top:1px solid #f1f5f9;">
+                {% csrf_token %}
+                <input type="hidden" name="processo" value="{{ p.processo }}">
+                <input type="hidden" name="processo_url" value="{{ p.processo_url }}">
+                <input type="hidden" name="data_envio" value="{{ p.data_envio|date:'d/m/Y' }}">
+                <input type="hidden" name="peticao_documento" value="{{ p.peticao.nome|default:'' }}">
+                <input type="hidden" name="peticao_url" value="{{ p.peticao.url|default:'' }}">
+
+                <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+                    <div>
+                        <label style="display:block; font-size:11px; font-weight:600; color:#374151; margin-bottom:3px;">Certidão</label>
+                        <select name="tipo_prazo" style="padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px;">
+                            <option value="">Selecione...</option>
+                            {% for t in tipos_certidao %}
+                                <option value="{{ t.valor }}" {% if p.tipo_prazo_sugerido == t.valor %}selected{% endif %}>
+                                    {{ t.label }} ({{ t.dias }} dias)
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:11px; font-weight:600; color:#374151; margin-bottom:3px;">Preparo (inominado)</label>
+                        <select name="preparo" style="padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px;">
+                            {% for valor, label in preparos %}
+                                <option value="{{ valor }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:11px; font-weight:600; color:#374151; margin-bottom:3px;">Intimação (demais tipos)</label>
+                        <input name="data_intimacao" placeholder="DD/MM/AAAA"
+                               style="width:110px; padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:11px; font-weight:600; color:#374151; margin-bottom:3px;">Evento da intimação</label>
+                        <input name="evento_intimacao" placeholder="opcional"
+                               style="width:100px; padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:11px; font-weight:600; color:#374151; margin-bottom:3px;">Ação</label>
+                        <select name="acao" style="padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px;">
+                            {% for valor, label in acoes %}
+                                <option value="{{ valor }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <button type="submit" class="btn" style="background:#0891b2; color:#fff; padding:7px 12px; font-size:12px;">
+                        Executar
+                    </button>
+                </div>
+            </form>
+        </div>
+    {% endfor %}
+    </div>
+{% else %}
+    {% if not erro %}
+    <div style="background:#fff; border-radius:10px; padding:36px; text-align:center; color:#6b7280;">
+        Nenhuma petição na fila.
+    </div>
+    {% endif %}
+{% endif %}
+{% endblock %}
