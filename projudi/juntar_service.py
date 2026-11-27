@@ -166,9 +166,23 @@ def montar_plano(registro, user=None, processo_url='', polo='',
             'Número interno do Projudi (numeroProcesso=...) não encontrado '
             'na URL.')
 
+    from projudi.models import MovimentacaoRecord
+
+    ja_juntada = (
+        MovimentacaoRecord.objects
+        .filter(
+            processo=registro.processo,
+            descricao_movimentacao=template_nome,
+            status='cumprido',
+        )
+        .order_by('-created_at')
+        .first()
+    )
+
     pode_intimar = (
         registro.tipo_prazo == 'inominado'
         and situacao in ('preparo', 'gratuidade', 'intempestivo')
+        and not ja_juntada
     )
 
     return {
@@ -190,5 +204,48 @@ def montar_plano(registro, user=None, processo_url='', polo='',
         'observacao_intimacao': observacao_intimacao,
         'erros': erros,
         'preview_disponivel': bool(registro.certidao_path),
-        'pode_juntar': bool(html and url and interno),
+        'pode_juntar': bool(html and url and interno) and not ja_juntada,
+        'ja_juntada': bool(ja_juntada),
+        'movimentacao_id': ja_juntada.id if ja_juntada else None,
+        'assinatura_manual': not bool(
+            getattr(user, 'projudi_password', '') if user else ''),
     }
+
+
+def executar_juntada(registro, user, plano=None):
+    """Executa a juntada real no Projudi via MovimentacaoService."""
+    from projudi.movimentacao_service import MovimentacaoService
+
+    plano = plano or montar_plano(registro, user)
+    if plano.get('ja_juntada'):
+        raise ValueError('Certidão já juntada no Projudi.')
+    if plano.get('erros'):
+        raise ValueError('; '.join(plano['erros']))
+
+    service = MovimentacaoService(user)
+    record = service.importar(
+        processo_numero=registro.processo,
+        act_verb='certifique-se',
+        observacao=plano['observacao_juntada'],
+        categoria='certidao',
+        processo_cnj=registro.processo,
+        parte_nome=registro.parte or '',
+        url_processo=plano['processo_url'],
+        codigo_movimentacao='581',
+        descricao_movimentacao=plano['template_nome'],
+    )
+    service.criar_log(
+        record,
+        'info',
+        f'Dados internos da certidão: {registro.motivo}',
+        {
+            'prazo_djen_id': registro.id,
+            'evento_intimacao': registro.evento_intimacao,
+        },
+    )
+    ok = service.executar_requests(
+        record,
+        certidao_html=plano['html_certidao'],
+        certidao_titulo=plano['template_nome'],
+    )
+    return ok, record

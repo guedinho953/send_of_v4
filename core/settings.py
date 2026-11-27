@@ -3,6 +3,10 @@ from pathlib import Path
 
 import environ
 
+# Playwright síncrono roda dentro de um event loop; permite que o fluxo de
+# juntada/assinatura grave os logs e o status no banco sem SynchronousOnlyOperation.
+os.environ.setdefault('DJANGO_ALLOW_ASYNC_UNSAFE', '1')
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 env = environ.Env(

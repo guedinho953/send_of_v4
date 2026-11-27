@@ -7,7 +7,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import get_object_or_404, render
 from django.views import View
 
-from projudi.juntar_service import montar_plano
+from projudi.juntar_service import executar_juntada, montar_plano
 from projudi.models import PrazoDjenRecord
 
 
@@ -89,17 +89,91 @@ class CertidaoJuntarIntimarView(LoginRequiredMixin, View):
                     processo_url=processo_url, polo=polo, prazo=prazo),
             )
 
-        # A execução real será habilitada na próxima etapa, após validar o
-        # plano com um processo de teste.
-        messages.warning(
-            request,
-            'Execução real ainda não habilitada nesta etapa. '
-            'O plano está validado; nada foi enviado ao Projudi.',
-        )
+        if acao == 'juntar_intimar':
+            messages.info(
+                request,
+                'A intimação será habilitada na próxima etapa. '
+                'Use "Juntar certidão" por enquanto. Nada foi enviado.',
+            )
+            return render(
+                request,
+                self.template_name,
+                self._contexto(
+                    registro, plano, acao=acao,
+                    processo_url=processo_url, polo=polo, prazo=prazo),
+            )
+
+        if acao == 'juntar':
+            if plano.get('ja_juntada'):
+                messages.info(
+                    request,
+                    f'Certidão já juntada (movimentação '
+                    f'#{plano.get("movimentacao_id")}). '
+                    'Nada foi enviado novamente.',
+                )
+                return render(
+                    request,
+                    self.template_name,
+                    self._contexto(
+                        registro, plano, acao=acao,
+                        processo_url=processo_url, polo=polo, prazo=prazo),
+                )
+            if plano.get('erros'):
+                messages.error(request, '; '.join(plano['erros']))
+                return render(
+                    request,
+                    self.template_name,
+                    self._contexto(
+                        registro, plano, acao=acao,
+                        processo_url=processo_url, polo=polo, prazo=prazo),
+                )
+            try:
+                ok, record = executar_juntada(
+                    registro, request.user, plano=plano)
+            except Exception as exc:
+                messages.error(
+                    request, f'Erro ao juntar a certidão: {exc}')
+                return render(
+                    request,
+                    self.template_name,
+                    self._contexto(
+                        registro, plano, acao=acao,
+                        processo_url=processo_url, polo=polo, prazo=prazo),
+                )
+
+            if ok:
+                messages.success(
+                    request,
+                    f'✅ Juntada concluída no Projudi '
+                    f'(movimentação #{record.id}).',
+                )
+            else:
+                messages.error(
+                    request,
+                    f'A juntada não foi confirmada. Confira a movimentação '
+                    f'#{record.id} e os logs.',
+                )
+
+            novo_plano = montar_plano(
+                registro,
+                request.user,
+                processo_url=processo_url,
+                polo=polo,
+                prazo=prazo,
+            )
+            return render(
+                request,
+                self.template_name,
+                self._contexto(
+                    registro, novo_plano, acao=acao,
+                    processo_url=processo_url, polo=polo, prazo=prazo),
+            )
+
+        messages.info(request, 'Ação não reconhecida. Nada foi enviado.')
         return render(
             request,
             self.template_name,
             self._contexto(
-                registro, plano, acao=acao,
+                registro, plano, acao='simular',
                 processo_url=processo_url, polo=polo, prazo=prazo),
         )

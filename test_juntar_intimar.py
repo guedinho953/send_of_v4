@@ -1,13 +1,15 @@
 """Testes do plano (dry-run) de juntar/intimar."""
 
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from projudi.models import PrazoDjenRecord
+from projudi.models import MovimentacaoRecord, PrazoDjenRecord
 
 
 class JuntarIntimarPlanTest(TestCase):
@@ -65,7 +67,9 @@ class JuntarIntimarPlanTest(TestCase):
         self.assertContains(resposta, 'Intime(m)-se')
         self.assertContains(resposta, '12345678901234')
 
-    def test_execucao_real_ainda_bloqueada(self):
+    @patch('projudi.juntar_views.executar_juntada')
+    def test_juntar_executa_com_confirmacao(self, executar):
+        executar.return_value = (True, SimpleNamespace(id=99))
         resposta = self.client.post(
             reverse('projudi:certidao_juntar_intimar',
                     args=[self.registro.id]),
@@ -80,5 +84,47 @@ class JuntarIntimarPlanTest(TestCase):
             },
         )
         self.assertEqual(resposta.status_code, 200)
-        self.assertContains(
-            resposta, 'Execução real ainda não habilitada')
+        self.assertContains(resposta, 'Juntada concluída no Projudi')
+        executar.assert_called_once()
+
+    @patch('projudi.juntar_views.executar_juntada')
+    def test_juntar_sem_confirmacao_nao_executa(self, executar):
+        resposta = self.client.post(
+            reverse('projudi:certidao_juntar_intimar',
+                    args=[self.registro.id]),
+            {
+                'acao': 'juntar',
+                'processo_url': (
+                    'https://projudi.tjba.jus.br/projudi/listagens/'
+                    'DadosProcesso?numeroProcesso=12345678901234'),
+                'polo': 'res',
+                'prazo': '10',
+            },
+        )
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'Marque a confirmação')
+        executar.assert_not_called()
+
+    @patch('projudi.juntar_views.executar_juntada')
+    def test_ja_juntada_bloqueia_nova_execucao(self, executar):
+        MovimentacaoRecord.objects.create(
+            processo=self.registro.processo,
+            descricao_movimentacao='Certidão de Recurso Inominado (COJE)',
+            status='cumprido',
+        )
+        resposta = self.client.post(
+            reverse('projudi:certidao_juntar_intimar',
+                    args=[self.registro.id]),
+            {
+                'acao': 'juntar',
+                'processo_url': (
+                    'https://projudi.tjba.jus.br/projudi/listagens/'
+                    'DadosProcesso?numeroProcesso=12345678901234'),
+                'polo': 'res',
+                'prazo': '10',
+                'confirmo': 'on',
+            },
+        )
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'já juntada')
+        executar.assert_not_called()

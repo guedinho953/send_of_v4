@@ -24,6 +24,12 @@
 
 <div style="background:#fff; border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,.08); padding:16px; margin-bottom:16px;">
     <h3 style="margin-top:0; color:#1e3a5f;">Plano</h3>
+    {% if plano.ja_juntada %}
+    <div style="background:#d1fae5; border:1px solid #6ee7b7; color:#065f46; padding:10px 12px; border-radius:6px; font-size:13px; margin-bottom:12px;">
+        ✅ Certidão já juntada no Projudi — movimentação #{{ plano.movimentacao_id }}.
+        Não juntar novamente.
+    </div>
+    {% endif %}
     <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:8px 20px; font-size:13px;">
         <div><strong>Processo:</strong> {{ plano.processo }}</div>
         <div><strong>Certidão:</strong> {{ plano.template_nome }}</div>
@@ -33,6 +39,13 @@
         <div><strong>Prazo:</strong> {{ plano.prazo }} dias úteis</div>
         <div><strong>Número interno:</strong> {{ plano.proc_projudi|default:"—" }}</div>
         <div><strong>HTML da certidão:</strong> {{ plano.html_tamanho }} caracteres</div>
+        <div><strong>Assinatura:</strong>
+            {% if plano.assinatura_manual %}
+                manual — o sistema aguarda você digitar a senha
+            {% else %}
+                automática (senha salva no usuário)
+            {% endif %}
+        </div>
     </div>
 
     {% if plano.erros %}

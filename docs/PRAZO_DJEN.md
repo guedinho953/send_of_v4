@@ -323,7 +323,7 @@ do decurso e não gera. Tudo na mesma página da fila.
 A tela gera a certidão, registra na aba **Petições** e abre o detalhe com o
 preview. Nada é juntado/movimentado no Projudi nesta etapa.
 
-## Juntar/Intimar — primeira etapa (simulação)
+## Juntar/Intimar
 
 No detalhe de uma certidão com preview há o botão **🔗 Juntar/Intimar**:
 
@@ -331,7 +331,7 @@ No detalhe de uma certidão com preview há o botão **🔗 Juntar/Intimar**:
 /projudi/certidoes/<id>/juntar-intimar/
 ```
 
-Nesta etapa a tela monta o **plano** e **não escreve no Projudi**:
+A tela monta o **plano**:
 
 - certidão e template que serão juntados;
 - URL do processo e número interno do Projudi;
@@ -341,15 +341,33 @@ Nesta etapa a tela monta o **plano** e **não escreve no Projudi**:
 - observação da juntada e da intimação;
 - prévia da certidão.
 
-A execução real será habilitada depois de validar o plano com um processo de
-teste. Quando habilitada, usará os métodos já existentes do
-`MovimentacaoService`:
+A ação **Juntar certidão** já executa no Projudi, com confirmação e via
+`MovimentacaoService.executar_requests` (Mov581 + inserção/assinatura da
+certidão). Se a certidão já foi juntada, a tela mostra **já juntada** e
+bloqueia nova execução.
 
-- `executar_requests` — Mov581 + inserção/assinatura da certidão;
-- `executar_com_intimacao` — intimação do polo e prazo escolhidos.
+A **intimação** (`Juntar + intimar`) será habilitada na próxima etapa; por
+ora use **Juntar certidão**.
 
-Por enquanto a tela informa que a execução real está bloqueada e nada é
-enviado.
+### Senha da assinatura
+
+A senha da assinatura eletrônica do Projudi fica no usuário:
+
+- campo `User.projudi_password` (tabela `accounts_user`, coluna
+  `projudi_password`);
+- no Admin: **Usuários → usuário → Projudi → Senha da assinatura**;
+- via shell:
+  ```python
+  from django.contrib.auth import get_user_model
+  u = get_user_model().objects.get(email='igusilva@tjba.jus.br')
+  u.projudi_password = 'SUA_SENHA'
+  u.save(update_fields=['projudi_password'])
+  ```
+
+Se o campo estiver **vazio**, o sistema tenta a assinatura salva no Projudi
+e, se aparecer o campo de senha, **aguarda a assinatura manual** no
+navegador. Se estiver preenchido, preenche automaticamente. O campo é texto
+simples no banco; proteja o acesso ao Admin e ao banco.
 
 ## Dashboard de certidões
 
