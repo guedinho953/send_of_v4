@@ -694,21 +694,60 @@ class CriarRagMovimentacaoView(LoginRequiredMixin, View):
                 projudi_url=link_processo,
             )
 
+        template_por_tipo = {
+            'inominado': 'Certidão de Recurso Inominado',
+            'decurso_pagamento': (
+                'Certidão de Decurso de Prazo para Pagamento Voluntário'
+            ),
+            'cumprimento_sentenca': 'Certidão de Prazo',
+            'pagamento_impugnacao_penhora': 'Certidão de Prazo',
+            'impugnacao_embargos_execucao': 'Certidão de Prazo',
+            'contrarrazoes_inominado': 'Certidão de Prazo',
+        }
+
+        def _template_do_tipo(valor):
+            return DocumentTemplate.objects.filter(
+                name=template_por_tipo.get(valor, ''),
+                template_type='certidao',
+                active=True,
+            ).first()
+
+        def _voltar_fila(processo):
+            from urllib.parse import urlencode
+            return HttpResponseRedirect(
+                reverse('projudi:movimentacoes')
+                + '?' + urlencode({'q': processo})
+            )
+
+        def _limpar_cache(processo, documento):
+            from django.core.cache import cache
+            cache.delete(
+                f'certidao_sugestao_v1:{processo}:{documento}'
+            )
+
         existente = RAGExample.objects.filter(
             process=proc,
             despacho_observacao=texto,
         ).first()
         if existente:
+            template = _template_do_tipo(
+                existente.tipo_certidao
+                or _tipo_por_texto(existente.despacho_observacao or '')
+            )
+            if (template and not existente.suggested_templates.filter(
+                    template_type='certidao').exists()):
+                existente.suggested_templates.add(template)
+            _limpar_cache(processo, link_documento)
             messages.info(
                 request,
-                f'Essa movimentação já tem uma RAG cadastrada (#{existente.id}).',
+                f'RAG #{existente.id} já existia. '
+                + (
+                    f'Template "{template.name}" vinculado; '
+                    if template else ''
+                )
+                + 'Use os botões da própria linha para gerar a certidão.'
             )
-            if request.user.is_staff:
-                return HttpResponseRedirect(reverse(
-                    'admin:processes_ragexample_change',
-                    args=[existente.id],
-                ))
-            return HttpResponseRedirect(reverse('projudi:movimentacoes'))
+            return _voltar_fila(processo)
 
         tipo_certidao = _tipo_por_texto(texto)
         documentos = []
@@ -727,23 +766,10 @@ class CriarRagMovimentacaoView(LoginRequiredMixin, View):
             tipo_certidao=tipo_certidao,
             active=True,
         )
-        template_por_tipo = {
-            'inominado': 'Certidão de Recurso Inominado',
-            'decurso_pagamento': (
-                'Certidão de Decurso de Prazo para Pagamento Voluntário'
-            ),
-            'cumprimento_sentenca': 'Certidão de Prazo',
-            'pagamento_impugnacao_penhora': 'Certidão de Prazo',
-            'impugnacao_embargos_execucao': 'Certidão de Prazo',
-            'contrarrazoes_inominado': 'Certidão de Prazo',
-        }
-        template = DocumentTemplate.objects.filter(
-            name=template_por_tipo.get(tipo_certidao, ''),
-            template_type='certidao',
-            active=True,
-        ).first()
+        template = _template_do_tipo(tipo_certidao)
         if template:
             rag.suggested_templates.add(template)
+        _limpar_cache(processo, link_documento)
         messages.success(
             request,
             f'✅ RAG #{rag.id} criada a partir '
@@ -752,12 +778,9 @@ class CriarRagMovimentacaoView(LoginRequiredMixin, View):
                 if usou_texto_movimentacao else 'do documento'
             )
             + (f' com template "{template.name}" vinculado.' if template else '.')
-            + ' Revise o tipo de certidão e os parâmetros no admin.',
+            + ' Use os botões da própria linha para gerar a certidão.',
         )
-        if request.user.is_staff:
-            return HttpResponseRedirect(reverse(
-                'admin:processes_ragexample_change', args=[rag.id]))
-        return HttpResponseRedirect(reverse('projudi:movimentacoes'))
+        return _voltar_fila(processo)
 
 
 class RagCertidaoListView(LoginRequiredMixin, TemplateView):
