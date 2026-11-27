@@ -330,6 +330,11 @@ class Command(BaseCommand):
 
         if tempestivo is None:
             tempestivo = (protocolo <= res.ultimo_dia) if protocolo else None
+        # Nos tipos que não são recurso inominado, o corpo público da certidão
+        # é a observação de prazo. Guarda esse texto no controle para o
+        # detalhe não ficar vazio.
+        texto_registro = texto_certidao or self._observacao(
+            res, protocolo, info)
         motivo = self._motivo(
             res, protocolo, info,
             preparo_status=preparo_status,
@@ -359,7 +364,7 @@ class Command(BaseCommand):
                 evento_intimacao=options.get('evento_intimacao') or '',
                 preparo_status=preparo_status or '',
                 habilitacao_regular=habilitacao_regular,
-                texto_certidao=texto_certidao or '',
+                texto_certidao=texto_registro,
                 tempestivo=tempestivo,
                 motivo=motivo,
                 prazo_info=res.to_dict(),
@@ -393,7 +398,7 @@ class Command(BaseCommand):
                 'evento_intimacao': options.get('evento_intimacao') or '',
                 'preparo_status': preparo_status or '',
                 'habilitacao_regular': habilitacao_regular,
-                'texto_certidao': texto_certidao or '',
+                'texto_certidao': texto_registro,
                 'motivo': motivo,
                 'prazo_info': res.to_dict(),
                 'certidao_path': certidao_path,

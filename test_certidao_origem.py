@@ -1,5 +1,8 @@
 """Separação das certidões por origem: petição x movimentação."""
 
+from pathlib import Path
+
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
@@ -60,3 +63,20 @@ class CertidaoOrigemTest(TestCase):
         self.assertEqual(resposta.status_code, 200)
         self.assertContains(resposta, 'Petição')
         self.assertContains(resposta, 'recurso-inominado.pdf')
+
+    def test_detalhe_embute_preview_da_certidao(self):
+        caminho = (
+            Path(settings.BASE_DIR) / 'var' / 'teste_preview_detail.html')
+        caminho.write_text('<html>ok</html>', encoding='utf-8')
+        self.addCleanup(lambda: caminho.unlink(missing_ok=True))
+        self.peticao.certidao_path = str(caminho)
+        self.peticao.save(update_fields=['certidao_path'])
+
+        resposta = self.client.get(
+            reverse('projudi:certidao_detail', args=[self.peticao.id])
+        )
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(
+            resposta,
+            reverse('projudi:certidao_preview', args=[self.peticao.id]),
+        )

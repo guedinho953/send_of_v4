@@ -289,6 +289,9 @@ ficam registradas em:
 - `PrazoDjenRecord` (banco) — visível no dashboard e no admin;
 - `var/prazo_djen.jsonl` (uma linha JSON por cálculo).
 
+O detalhe da certidão agora **embute o preview** no próprio painel e preenche
+o texto público também nos tipos que não são recurso inominado.
+
 ## Template
 
 `Certidão de Tempestividade / Trânsito (DJEN)`, criado pela migração

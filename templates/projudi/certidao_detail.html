@@ -31,6 +31,20 @@
 </div>
 
 <div class="box">
+    <h3 style="margin-top:0; color:#1e3a5f;">Certidão gerada</h3>
+    {% if preview_disponivel %}
+        <iframe src="{% url 'projudi:certidao_preview' registro.id %}"
+                title="Certidão #{{ registro.id }}"
+                style="width:100%; height:900px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;"></iframe>
+        <div style="margin-top:8px;">
+            <a class="btn-sm" href="{% url 'projudi:certidao_preview' registro.id %}" target="_blank">Abrir em nova aba</a>
+        </div>
+    {% else %}
+        <p style="color:#6b7280;">Esta certidão não tem preview salvo.</p>
+    {% endif %}
+</div>
+
+<div class="box">
     <h3 style="margin-top:0; color:#1e3a5f;">Dados</h3>
     <div class="grid">
         <div><strong>Processo</strong> {{ registro.processo|default:"—" }}</div>
@@ -67,7 +81,11 @@
 
 <div class="box">
     <h3 style="margin-top:0; color:#1e3a5f;">Texto da certidão</h3>
-    <div class="motivo">{{ registro.texto_certidao|default:"—"|linebreaksbr }}</div>
+    {% if registro.texto_certidao %}
+        <div class="motivo">{{ registro.texto_certidao|linebreaksbr }}</div>
+    {% else %}
+        <p style="color:#6b7280;">A certidão está no preview acima.</p>
+    {% endif %}
 </div>
 
 <div class="box">
