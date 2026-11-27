@@ -4,7 +4,7 @@ import unittest
 from datetime import date
 
 from projudi.peticoes_inominado import (
-    ler_peticoes, listar_peticoes_inominado,
+    _sugerir_tipo, ler_peticoes, listar_peticoes_inominado,
 )
 
 HTML = """
@@ -138,6 +138,25 @@ class PeticoesInominadoTest(unittest.TestCase):
         self.assertFalse(
             por_processo['0001111-11.2026.8.05.0191']
             ['tipo_prazo_sugerido'],
+        )
+
+    def test_sugere_impugnacao_embargos_execucao(self):
+        self.assertEqual(
+            _sugerir_tipo(
+                'Juntada de Petição de Embargos à Execução', []),
+            'impugnacao_embargos_execucao',
+        )
+        self.assertEqual(
+            _sugerir_tipo(
+                'Juntada de Petição de Impugnação à Execução', []),
+            'impugnacao_embargos_execucao',
+        )
+        self.assertEqual(
+            _sugerir_tipo(
+                'Juntada de Petição de Impugnação/Cumprimento de Sentença',
+                [],
+            ),
+            'cumprimento_sentenca',
         )
 
     def test_exclui_contrarrazoes(self):

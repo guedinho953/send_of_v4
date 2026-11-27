@@ -21,7 +21,8 @@ class PrazoDjenRecordAdmin(admin.ModelAdmin):
         'status', 'servidor',
     ]
     list_filter = [
-        'origem', 'tipo_prazo', 'tempestivo', 'preparo_status', 'created_at',
+        'origem', 'tipo_prazo', 'tempestivo', 'preparo_status',
+        'seguranca_juizo', 'created_at',
     ]
     search_fields = [
         'processo', 'parte', 'peticao_documento', 'motivo',
@@ -34,7 +35,7 @@ class PrazoDjenRecordAdmin(admin.ModelAdmin):
         'data_publicacao', 'data_inicio_contagem', 'ultimo_dia',
         'data_decurso', 'data_protocolo', 'evento_recurso',
         'evento_origem', 'evento_intimacao', 'preparo_status',
-        'habilitacao_regular',
+        'seguranca_juizo', 'habilitacao_regular',
         'texto_certidao', 'tempestivo', 'motivo',
         'prazo_info', 'certidao_path', 'servidor', 'created_at',
     ]

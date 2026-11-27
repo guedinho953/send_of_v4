@@ -149,6 +149,11 @@ TIPOS_CERTIDAO = [
         'label': 'Decurso de Pagamento Voluntário',
         'dias': 15,
     },
+    {
+        'valor': 'impugnacao_embargos_execucao',
+        'label': 'Impugnação/Embargos à Execução',
+        'dias': 15,
+    },
 ]
 
 
@@ -165,6 +170,10 @@ def _sugerir_tipo(tipo, documentos):
     if 'DECURSO' in alvo and (
             'PAGAMENTO' in alvo or 'PAGAR' in alvo):
         return 'decurso_pagamento'
+    if 'EMBARGOS' in alvo and 'EXECUCAO' in alvo:
+        return 'impugnacao_embargos_execucao'
+    if 'IMPUGNACAO' in alvo and 'EXECUCAO' in alvo:
+        return 'impugnacao_embargos_execucao'
     if 'IMPUGNACAO' in alvo and (
             'PENHORA' in alvo or 'DECURSO' in alvo):
         return 'pagamento_impugnacao_penhora'

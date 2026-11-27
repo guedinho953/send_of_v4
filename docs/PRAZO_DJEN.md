@@ -26,6 +26,8 @@ sem deslocar a disponibilização.
 | `contrarrazoes_inominado` | **10 dias úteis** | Prazo |
 | `cumprimento_sentenca` | **15 dias úteis** | Prazo |
 | `pagamento_impugnacao_penhora` | **15 dias úteis** | Prazo |
+| `decurso_pagamento` | **15 dias úteis** | Decurso |
+| `impugnacao_embargos_execucao` | **15 dias úteis** | Tempestividade + segurança do juízo |
 
 ## Comando
 
@@ -40,14 +42,15 @@ Opções:
 | `--disponibilizacao` | Data bruta da disponibilização (obrigatória) |
 | `--tipo` | Tipo da tabela acima (default `inominado`) |
 | `--prazo` | Sobrescreve os dias do tipo |
-| `--protocolo` | Data do protocolo do recurso (calcula tempestividade) |
+| `--protocolo` | Data do protocolo do recurso/petição (calcula tempestividade) |
+| `--seguranca-juizo` | Para `impugnacao_embargos_execucao`: `integral`, `parcial` ou `nenhuma` (obrigatório) |
 | `--processo` | Número CNJ (para a certidão) |
 | `--parte` | Nome da parte (para a certidão) |
 | `--servidor` | Nome do servidor que assina |
 | `--servidor-cargo` | Cargo do servidor (default `Servidor Secretaria 2`) |
 | `--saida` | Caminho do HTML (default `var/certidao_prazo_<data>.html`) |
 | `--sem-html` | Só calcula e mostra a memória de contagem |
-| `--origem` | `peticao` ou `movimentacao` (default: petição para recurso/contrarrazões) |
+| `--origem` | `peticao` ou `movimentacao` (default: petição para recurso/contrarrazões/embargos) |
 | `--peticao-documento` | Nome do PDF da petição (para a aba Petições) |
 | `--peticao-url` | URL do PDF da petição (para a aba Petições) |
 | `--nao-registrar` | Teste: não grava no dashboard |
@@ -69,6 +72,13 @@ REM Protocolo no dia seguinte → INTEMPESTIVO
 REM Cumprimento de sentença (15 dias úteis)
 .venv\Scripts\python.exe manage.py prazo_djen ^
   --tipo cumprimento_sentenca --disponibilizacao 28/11/2026
+
+REM Impugnação/Embargos à Execução: tempestividade + segurança do juízo
+.venv\Scripts\python.exe manage.py prazo_djen ^
+  --tipo impugnacao_embargos_execucao --disponibilizacao 02/11/2026 ^
+  --protocolo 26/11/2026 --seguranca-juizo parcial ^
+  --evento-recurso 88 --evento-intimacao 84 ^
+  --processo 0000000-00.0000.8.05.0191 --parte "FULANO DE TAL"
 ```
 
 O comando gera um **preview HTML** da certidão em `var/`; ele **não expede** nada
@@ -283,6 +293,32 @@ o protocolo e a tempestividade também ficam na **memória interna** sem
 repetir no corpo público. O template usa o subscritor escolhido
 (`IVAN GUEDES DA SILVA / Servidor Secretaria 2` por padrão).
 
+### Impugnação/Embargos à Execução + segurança do juízo
+
+Este tipo usa como base a **intimação que abriu o prazo de 15 dias para
+pagamento** (art. 523 do CPC). O sistema compara a data de protocolo da
+impugnação/embargos com o termo final e conclui pela **TEMPESTIVIDADE** ou
+**INTEMPESTIVIDADE**. A segurança do juízo é escolhida manualmente na fila:
+
+| Segurança | Texto público |
+|-----------|---------------|
+| Integral | `o juízo está integralmente seguro` |
+| Depósito parcial | `houve depósito parcial, não havendo segurança integral do juízo` |
+| Não houve | `não houve segurança do juízo` |
+
+Exemplo de texto público:
+
+> Certifico, para os devidos fins, que a Impugnação/Embargos à Execução
+> apresentada no evento 88 é **INTEMPESTIVA**, referente à intimação
+> eletrônica (DJEN), evento 84. Publicação em 03/11/2026; início do prazo em
+> 04/11/2026; termo final em 25/11/2026. Certifico ainda que houve depósito
+> parcial, não havendo segurança integral do juízo.
+
+O evento da petição é opcional (se ainda não juntada, o texto usa “nos
+autos”). O evento da intimação é incluído sempre que localizado. O campo
+`seguranca_juizo` fica registrado no controle e aparece no detalhe da
+certidão. A migration é `projudi/0020_prazodjenrecord_seguranca_juizo.py`.
+
 ## Fila de petições com escolha manual
 
 A fila `JuntadaPeticao` também pode ser aberta pela tela:
@@ -298,8 +334,8 @@ automática**: você escolhe a certidão no seletor.
 Opções da tela:
 
 - **Certidão**: Recurso Inominado (10), Contrarrazões (10),
-  Impugnação/Cumprimento (15), Impugnação/Penhora (15) ou Decurso de
-  Pagamento (15);
+  Impugnação/Cumprimento (15), Impugnação/Penhora (15), Decurso de
+  Pagamento (15) ou Impugnação/Embargos à Execução (15);
 - **Preparo**: para recurso inominado (gratuidade, completo,
   incompleto/insuficiente ou não pagou);
 - **Intimação**: para contrarrazões/impugnação, informe o **evento da
@@ -307,6 +343,9 @@ Opções da tela:
   posterior (ou usa o próprio evento, se ele já for a intimação). A data
   manual fica como **fallback**, para quando a localização automática não
   encontrar. Para decurso, a data também é automática, com fallback manual;
+- **Impugnação/Embargos à Execução**: informe o **evento do
+  despacho/pagamento** no campo de evento e a **segurança do juízo**
+  (integral, depósito parcial ou não houve). O evento da petição é opcional;
 - **Parte a intimar**: opcional, ajuda a desambiguar quando há mais de uma
   intimação após o evento;
 - **Ação**: por ora **Gerar certidão**. As ações **Juntar** e
@@ -433,7 +472,10 @@ Casos cobertos:
 - fila de petições com sugestão de certidão e escolha manual do tipo,
   preparo e ação;
 - localização da intimação por evento (contrarrazões/impugnação), com data
-  manual apenas como fallback.
+  manual apenas como fallback;
+- Impugnação/Embargos à Execução com tempestividade e segurança do juízo
+  (integral, parcial ou não houve), inclusive texto público e persistência
+  do campo.
 
 ## Limitações / próximos passos
 

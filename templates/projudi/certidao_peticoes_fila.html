@@ -31,7 +31,9 @@
     calcula automaticamente a intimação do recorrente. Para
     <strong>contrarrazões/impugnação</strong>, informe o <strong>evento da
     decisão/recurso</strong>; o sistema procura a intimação automaticamente e
-    só usa a data manual como fallback. Ao escolher <strong>Decurso de
+    só usa a data manual como fallback. Para <strong>Impugnação/Embargos à
+    Execução</strong>, informe também a <strong>segurança do juízo</strong>
+    (integral, depósito parcial ou não houve). Ao escolher <strong>Decurso de
     Pagamento</strong>, os campos <strong>Evento do despacho</strong>,
     <strong>Executado(a)</strong> e <strong>Assinatura</strong> aparecem no
     próprio card; não precisa sair da fila. A ação
@@ -147,6 +149,30 @@
                     </button>
                 </div>
 
+                <div class="embargos-campos" style="display:none; margin-top:10px; padding:10px; background:#ecfdf5; border:1px solid #a7f3d0; border-radius:8px; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+                    <div>
+                        <label style="display:block; font-size:11px; font-weight:600; color:#047857; margin-bottom:3px;">Evento da impugnação/embargos (opcional)</label>
+                        <input name="evento_impugnacao" placeholder="ex.: 88"
+                               style="width:110px; padding:6px 8px; border:1px solid #6ee7b7; border-radius:6px; font-size:12px;">
+                        <div style="font-size:11px; color:#6b7280;">Evento da petição, se já juntada.</div>
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:11px; font-weight:600; color:#047857; margin-bottom:3px;">Segurança do juízo</label>
+                        <select name="seguranca_juizo" style="padding:6px 8px; border:1px solid #6ee7b7; border-radius:6px; font-size:12px;">
+                            <option value="">Selecione...</option>
+                            <option value="integral">Integral</option>
+                            <option value="parcial">Depósito parcial</option>
+                            <option value="nenhuma">Não houve</option>
+                        </select>
+                    </div>
+                    <div style="font-size:11px; color:#047857; max-width:320px; align-self:flex-end;">
+                        A certidão usa a intimação que abriu o prazo de 15 dias
+                        para pagar. Informe o evento do despacho/pagamento em
+                        <strong>Evento da decisão/recurso</strong>; o sistema
+                        localiza a intimação automaticamente.
+                    </div>
+                </div>
+
                 <div class="decurso-campos" style="display:none; margin-top:10px; padding:10px; background:#f5f3ff; border:1px solid #ddd6fe; border-radius:8px; gap:10px; flex-wrap:wrap; align-items:flex-end;">
                     <div>
                         <label style="display:block; font-size:11px; font-weight:600; color:#5b21b6; margin-bottom:3px;">Evento do despacho (opcional)</label>
@@ -219,6 +245,7 @@
 document.querySelectorAll('form.fila-peticao-form').forEach(function (form) {
     const tipo = form.querySelector('[name="tipo_prazo"]');
     const bloco = form.querySelector('.decurso-campos');
+    const embargos = form.querySelector('.embargos-campos');
     const preparo = form.querySelector('.campo-preparo');
     const intimacao = form.querySelectorAll('.campo-intimacao');
     const sel = form.querySelector('.assinante-select');
@@ -229,10 +256,14 @@ document.querySelectorAll('form.fila-peticao-form').forEach(function (form) {
         const valor = tipo ? tipo.value : '';
         const decurso = valor === 'decurso_pagamento';
         const inominado = valor === 'inominado';
+        const impugnacao = valor === 'impugnacao_embargos_execucao';
         const semTipo = !valor;
 
         if (bloco) {
             bloco.style.display = decurso ? 'flex' : 'none';
+        }
+        if (embargos) {
+            embargos.style.display = impugnacao ? 'flex' : 'none';
         }
         if (preparo) {
             preparo.style.display = (inominado || semTipo) ? 'block' : 'none';

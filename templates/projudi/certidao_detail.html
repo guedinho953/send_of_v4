@@ -65,9 +65,12 @@
         <div><strong>Último dia</strong> {{ registro.ultimo_dia|date:"d/m/Y"|default:"—" }}</div>
         <div><strong>Decurso/trânsito</strong> {{ registro.data_decurso|date:"d/m/Y"|default:"—" }}</div>
         <div><strong>Protocolo</strong> {{ registro.data_protocolo|date:"d/m/Y"|default:"não informado" }}</div>
-        <div><strong>{% if registro.origem == 'peticao' %}Evento do recurso{% else %}Evento de origem{% endif %}</strong> {{ registro.evento_origem|default:registro.evento_recurso|default:"—" }}</div>
+        <div><strong>{% if registro.tipo_prazo == 'impugnacao_embargos_execucao' %}Evento da impugnação/embargos{% elif registro.origem == 'peticao' %}Evento do recurso{% else %}Evento de origem{% endif %}</strong> {{ registro.evento_origem|default:registro.evento_recurso|default:"—" }}</div>
         <div><strong>Evento da intimação</strong> {{ registro.evento_intimacao|default:"—" }}</div>
         <div><strong>Preparo</strong> {{ registro.get_preparo_status_display|default:"—" }}</div>
+        {% if registro.seguranca_juizo %}
+        <div><strong>Segurança do juízo</strong> {{ registro.get_seguranca_juizo_display }}</div>
+        {% endif %}
         <div><strong>Habilitação</strong>
             {% if registro.habilitacao_regular is None %}—
             {% elif registro.habilitacao_regular %}regular

@@ -65,6 +65,13 @@ TIPOS_PRAZO: Dict[str, Dict[str, object]] = {
         'ato': 'decurso de pagamento',
         'protocolo_frase': 'O prazo de pagamento decorreu',
     },
+    'impugnacao_embargos_execucao': {
+        'dias': 15,
+        'label': 'Impugnação/Embargos à Execução',
+        'transito': False,
+        'ato': 'impugnação/embargos à execução',
+        'protocolo_frase': 'A impugnação/embargos foi protocolada',
+    },
 }
 
 # Feriados nacionais fixos (mês, dia). Móveis (carnaval, sexta santa,

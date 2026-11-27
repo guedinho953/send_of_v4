@@ -60,6 +60,8 @@ class PrazoDjenTest(unittest.TestCase):
         self.assertEqual(TIPOS_PRAZO['cumprimento_sentenca']['dias'], 15)
         self.assertEqual(
             TIPOS_PRAZO['pagamento_impugnacao_penhora']['dias'], 15)
+        self.assertEqual(
+            TIPOS_PRAZO['impugnacao_embargos_execucao']['dias'], 15)
 
         r10 = self.svc.contar_prazo_tipo(date(2026, 11, 27), 'inominado')
         self.assertEqual(r10.prazo_dias, 10)
@@ -110,6 +112,54 @@ class PrazoDjenTest(unittest.TestCase):
             tempestivo=False,
         )
         self.assertIn('INTEMPESTIVIDADE', texto10_int)
+
+    def test_texto_impugnacao_embargos_execucao(self):
+        res = self.svc.contar_prazo_djen(date(2026, 11, 2), 15)
+        info = TIPOS_PRAZO['impugnacao_embargos_execucao']
+        base = {
+            'tipo': 'impugnacao_embargos_execucao',
+            'evento_recurso': '88',
+            'evento_intimacao': '84',
+        }
+
+        parcial = _texto_publico_prazo(
+            res, info, {**base, 'seguranca_juizo': 'parcial'},
+            tempestivo=True,
+        )
+        self.assertIn('TEMPESTIVA', parcial)
+        self.assertIn('apresentada no evento 88', parcial)
+        self.assertIn('evento 84', parcial)
+        self.assertIn('Publicação em 03/11/2026', parcial)
+        self.assertIn('início do prazo em 04/11/2026', parcial)
+        self.assertIn('termo final em 25/11/2026', parcial)
+        self.assertIn(
+            'houve depósito parcial, não havendo segurança integral do juízo',
+            parcial,
+        )
+
+        integral = _texto_publico_prazo(
+            res, info, {**base, 'seguranca_juizo': 'integral'},
+            tempestivo=False,
+        )
+        self.assertIn('INTEMPESTIVA', integral)
+        self.assertIn('o juízo está integralmente seguro', integral)
+
+        nenhuma = _texto_publico_prazo(
+            res, info, {**base, 'seguranca_juizo': 'nenhuma'},
+            tempestivo=True,
+        )
+        self.assertIn('não houve segurança do juízo', nenhuma)
+
+        sem_evento = _texto_publico_prazo(
+            res, info,
+            {
+                'tipo': 'impugnacao_embargos_execucao',
+                'evento_recurso': 'infra',
+                'seguranca_juizo': 'integral',
+            },
+            tempestivo=True,
+        )
+        self.assertIn('apresentada nos autos', sem_evento)
 
     def test_texto_certidao_inominado(self):
         grat = texto_certidao_inominado(

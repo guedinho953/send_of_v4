@@ -81,6 +81,10 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
             request.POST.get('evento_intimacao') or '').strip()
         evento_origem = (
             request.POST.get('evento_origem') or '').strip()
+        evento_impugnacao = (
+            request.POST.get('evento_impugnacao') or '').strip()
+        seguranca_juizo = (
+            request.POST.get('seguranca_juizo') or '').strip()
         parte = (request.POST.get('parte') or '').strip()
         processo_url = (request.POST.get('processo_url') or '').strip()
         peticao_url = (request.POST.get('peticao_url') or '').strip()
@@ -107,6 +111,22 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
             return voltar
         if tipo_prazo not in TIPOS_VALIDOS:
             messages.error(request, 'Escolha a certidão que será gerada.')
+            return voltar
+        if (tipo_prazo == 'impugnacao_embargos_execucao'
+                and seguranca_juizo not in ('integral', 'parcial', 'nenhuma')):
+            messages.error(
+                request,
+                'Para a Impugnação/Embargos à Execução, informe a '
+                'segurança do juízo: integral, depósito parcial ou não houve.',
+            )
+            return voltar
+        if (tipo_prazo == 'impugnacao_embargos_execucao'
+                and evento_impugnacao and not evento_impugnacao.isdigit()):
+            messages.error(
+                request,
+                'Evento da impugnação/embargos inválido. Informe apenas o '
+                'número do evento ou deixe em branco.',
+            )
             return voltar
 
         if acao != 'gerar':
@@ -225,8 +245,13 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
                     origem='peticao',
                     peticao_documento=peticao_documento,
                     peticao_url=peticao_url,
-                    evento_recurso=evento_origem or 'infra',
+                    evento_recurso=(
+                        evento_impugnacao or 'infra'
+                        if tipo_prazo == 'impugnacao_embargos_execucao'
+                        else evento_origem or 'infra'
+                    ),
                     evento_intimacao=evento_intimacao_final,
+                    seguranca_juizo=seguranca_juizo or None,
                 )
         except CommandError as exc:
             messages.error(request, str(exc))

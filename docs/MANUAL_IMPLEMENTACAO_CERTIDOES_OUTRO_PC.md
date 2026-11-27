@@ -2,7 +2,8 @@
 
 > Atualização: 2026-11-27
 > Branch de referência: **`feature/fila-peticoes-acoes`**
-> Último commit antes deste manual: **`7506672`**
+> Esta versão inclui a certidão de **Impugnação/Embargos à Execução** com
+> segurança do juízo. Consulte o HEAD da branch para o commit exato.
 > Repositório: `https://github.com/guedinho953/send_of_v4`
 
 ## 1. Leia primeiro: os dois projetos divergiram
@@ -24,10 +25,10 @@ Consequências:
 
 | App | Neste PC (branch) | No outro PC (`origin/master`) | O que fazer |
 |-----|-------------------|-------------------------------|-------------|
-| `projudi` | `0018` e `0019` | já tem `0019` (e anteriores) | criar novas migrations a partir de **`0020`** |
+| `projudi` | `0018` a `0020` | já tem `0019` (e anteriores) | criar novas migrations a partir de **`0020`**; a nossa `0020` é só referência |
 | `processes` | `0024` a `0029` | já tem `0020` a `0031` | criar novas migrations a partir de **`0032`** |
 
-Nunca copie `projudi/0018*`, `projudi/0019*` nem `processes/0024*`–`0029*`
+Nunca copie `projudi/0018*`–`0020*` nem `processes/0024*`–`0029*`
 para o outro PC. Use o conteúdo delas como referência e crie migrations
 novas depois da última de lá.
 
@@ -90,6 +91,7 @@ git switch -c integracao-certidoes FETCH_HEAD
 | Intimação por evento | `projudi/intimacao_service.py` | Reutilizar/adaptar ao serviço de intimação existente |
 | Modelo base de prazo | `projudi/management/commands/prazo_djen.py` (`_texto_publico_prazo`), `processes/0028...` | Contrarrazões/impugnação; recurso inominado continua no COJE |
 | Contrarrazões com tempestividade | `_texto_publico_prazo` | Texto público conclui TEMPESTIVIDADE/INTEMPESTIVIDADE e cita o evento do recurso |
+| Impugnação/Embargos à Execução | `_texto_publico_prazo`, `peticoes_views.py`, `certidao_peticoes_fila.html`, `models.py` | 15 dias a partir da intimação do pagamento; conclusão TEMPESTIVA/INTEMPESTIVA + segurança do juízo (integral/parcial/não houve); migration `projudi/0020` |
 | Recorrente na linha `PARA` | `projudi/partes_inominado.py`, `projudi/management/commands/certidao_inominado.py` | Reforço por rótulos e trechos “já devidamente qualificado”, “nos autos”, “vem interpor” |
 | Juntar/intimar | `projudi/juntar_service.py`, `projudi/juntar_views.py`, `templates/projudi/certidao_juntar_intimar.html` | O outro PC já tem o fluxo completo; usar como referência, não duplicar |
 | Senha da assinatura | `accounts_user.projudi_password` | Campo no Admin em **Usuários → Projudi → Senha da assinatura**; vazio = assinatura manual |
@@ -126,7 +128,15 @@ git switch -c integracao-certidoes FETCH_HEAD
 3. Impugnação/cumprimento/penhora:
    - texto público com prazo, evento da intimação e termo final;
    - protocolo/tempestividade na memória interna.
-4. Recurso inominado:
+4. Impugnação/Embargos à Execução:
+   - mesma base da intimação de pagamento em 15 dias;
+   - texto público conclui **TEMPESTIVA/INTEMPESTIVA** e informa a
+     **segurança do juízo** escolhida manualmente:
+     `integral`, `depósito parcial` ou `não houve`;
+   - persistir `seguranca_juizo` no controle e exibir no detalhe;
+   - manter a segurança independente da tempestividade (a certidão pode ser
+     intempestiva e ainda assim informar a segurança).
+5. Recurso inominado:
    - **não alterar** o modelo COJE; apenas a linha `PARA` do recorrente.
 
 ### Etapa 3 — juntar/intimar
@@ -193,6 +203,16 @@ class Migration(migrations.Migration):
             field=models.CharField(
                 blank=True, max_length=20,
                 verbose_name='Evento de origem'),
+        ),
+        migrations.AddField(
+            model_name='prazodjenrecord',
+            name='seguranca_juizo',
+            field=models.CharField(
+                blank=True,
+                choices=[('integral', 'Integral'),
+                         ('parcial', 'Depósito parcial'),
+                         ('nenhuma', 'Não houve')],
+                max_length=20, verbose_name='Segurança do juízo'),
         ),
     ]
 ```
@@ -269,13 +289,15 @@ Testes de referência desta branch:
 - [ ] Backup do `pg_send_of` e do código.
 - [ ] `DJANGO_ALLOW_ASYNC_UNSAFE=1` no `settings.py`.
 - [ ] Migrations novas criadas depois das últimas do outro PC (não copiar
-      `projudi/0018-0019` nem `processes/0024-0029`).
+      `projudi/0018-0020` nem `processes/0024-0029`).
 - [ ] Contagem DJEN corrigida.
 - [ ] Decurso com texto/evento/assinatura revisados.
 - [ ] Cabeçalho de parte condicional.
 - [ ] `PARA` do inominado com o recorrente.
 - [ ] Contrarrazões com TEMPESTIVIDADE/INTEMPESTIVIDADE.
 - [ ] Modelo base de impugnação/cumprimento.
+- [ ] Impugnação/Embargos à Execução com segurança do juízo e campo
+      persistido.
 - [ ] Juntar/intimar do outro PC revisado (não duplicar).
 - [ ] Senha da assinatura configurada (ou manual assumido).
 - [ ] `manage.py check` e testes passando.

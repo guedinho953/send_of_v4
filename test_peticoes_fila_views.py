@@ -64,6 +64,8 @@ class PeticaoFilaViewsTest(TestCase):
         self.assertEqual(resposta.status_code, 200)
         self.assertContains(resposta, '0000001-11.2026.8.05.0191')
         self.assertContains(resposta, 'Recurso Inominado')
+        self.assertContains(resposta, 'Impugnação/Embargos à Execução')
+        self.assertContains(resposta, 'Segurança do juízo')
 
     @patch('projudi.peticoes_views.call_command')
     def test_gerar_inominado_chama_comando(self, comando):
@@ -142,6 +144,60 @@ class PeticaoFilaViewsTest(TestCase):
         self.assertEqual(kwargs['evento_intimacao'], '56')
         self.assertEqual(kwargs['evento_recurso'], '55')
         localizar.assert_called_once()
+
+    @patch('projudi.peticoes_views.call_command')
+    def test_impugnacao_embargos_passa_seguranca_e_evento(self, comando):
+        registro = PrazoDjenRecord.objects.create(
+            processo='0000001-11.2026.8.05.0191',
+            origem='peticao',
+            tipo_prazo='impugnacao_embargos_execucao',
+            prazo_dias=15,
+        )
+        resposta = self.client.post(
+            reverse('projudi:certidao_peticoes_fila_gerar'),
+            {
+                'processo': '0000001-11.2026.8.05.0191',
+                'processo_url': 'https://projudi/processo',
+                'data_envio': '10/12/2026',
+                'tipo_prazo': 'impugnacao_embargos_execucao',
+                'data_intimacao': '05/12/2026',
+                'evento_impugnacao': '88',
+                'seguranca_juizo': 'parcial',
+                'parte': 'FULANO DE TAL',
+                'acao': 'gerar',
+            },
+        )
+        self.assertEqual(resposta.status_code, 302)
+        self.assertRedirects(
+            resposta,
+            reverse('projudi:certidao_detail', args=[registro.id]),
+            fetch_redirect_response=False,
+        )
+        comando.assert_called_once()
+        args, kwargs = comando.call_args
+        self.assertEqual(args[0], 'prazo_djen')
+        self.assertEqual(
+            kwargs['tipo'], 'impugnacao_embargos_execucao')
+        self.assertEqual(kwargs['disponibilizacao'], '05/12/2026')
+        self.assertEqual(kwargs['protocolo'], '10/12/2026')
+        self.assertEqual(kwargs['evento_recurso'], '88')
+        self.assertEqual(kwargs['seguranca_juizo'], 'parcial')
+
+    @patch('projudi.peticoes_views.call_command')
+    def test_impugnacao_embargos_sem_seguranca_nao_gera(self, comando):
+        resposta = self.client.post(
+            reverse('projudi:certidao_peticoes_fila_gerar'),
+            {
+                'processo': '0000001-11.2026.8.05.0191',
+                'data_envio': '10/12/2026',
+                'tipo_prazo': 'impugnacao_embargos_execucao',
+                'data_intimacao': '05/12/2026',
+                'seguranca_juizo': '',
+                'acao': 'gerar',
+            },
+        )
+        self.assertEqual(resposta.status_code, 302)
+        comando.assert_not_called()
 
     @patch('projudi.peticoes_views.localizar_intimacao_do_processo',
            return_value=None)

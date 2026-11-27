@@ -55,6 +55,36 @@ def _texto_publico_prazo(res, info, options, tempestivo=None):
         evento_recurso if evento_recurso.isdigit() else 'não informado'
     )
 
+    if tipo == 'impugnacao_embargos_execucao' and tempestivo is not None:
+        evento_imp = (
+            f'no evento {evento_recurso}'
+            if evento_recurso.isdigit() else 'nos autos'
+        )
+        evento_int = str(options.get('evento_intimacao') or '').strip()
+        evento_int_txt = (
+            f', evento {evento_int}' if evento_int.isdigit()
+            else ', evento não informado'
+        )
+        seguranca = options.get('seguranca_juizo') or 'nenhuma'
+        seguranca_txt = {
+            'integral': 'o juízo está integralmente seguro',
+            'parcial': (
+                'houve depósito parcial, não havendo segurança integral '
+                'do juízo'),
+            'nenhuma': 'não houve segurança do juízo',
+        }.get(seguranca, 'não houve segurança do juízo')
+        conclusao = (
+            'TEMPESTIVA' if tempestivo else 'INTEMPESTIVA')
+        return (
+            'Certifico, para os devidos fins, que a Impugnação/Embargos à '
+            f'Execução apresentada {evento_imp} é {conclusao}, referente à '
+            f'intimação eletrônica (DJEN){evento_int_txt}. Publicação em '
+            f'{_fmt_curta(res.data_publicacao)}; início do prazo em '
+            f'{_fmt_curta(res.data_inicio_contagem)}; termo final em '
+            f'{_fmt_curta(res.ultimo_dia)}. Certifico ainda que '
+            f'{seguranca_txt}.'
+        )
+
     if tipo == 'contrarrazoes_inominado' and tempestivo is not None:
         conclusao = (
             'TEMPESTIVIDADE' if tempestivo else 'INTEMPESTIVIDADE')
@@ -123,6 +153,12 @@ class Command(BaseCommand):
                 'Preparo do recurso inominado. Obrigatório se TEMPESTIVO; '
                 'se INTEMPESTIVO, não é verificado.'))
         parser.add_argument(
+            '--seguranca-juizo',
+            choices=['integral', 'parcial', 'nenhuma'],
+            help=(
+                'Segurança do juízo na impugnação/embargos à execução: '
+                'integral, depósito parcial ou não houve.'))
+        parser.add_argument(
             '--habilitacao', choices=['regular', 'omitir'], default='regular',
             help='Cláusula de habilitação dos advogados (default: regular)')
         parser.add_argument('--processo', help='Número CNJ')
@@ -156,14 +192,25 @@ class Command(BaseCommand):
             options['origem'] = (
                 'peticao'
                 if options.get('tipo') in (
-                    'inominado', 'contrarrazoes_inominado')
+                    'inominado', 'contrarrazoes_inominado',
+                    'impugnacao_embargos_execucao')
                 else 'movimentacao'
             )
+        if (options['tipo'] == 'impugnacao_embargos_execucao'
+                and not options.get('seguranca_juizo')):
+            raise CommandError(
+                'Informe --seguranca-juizo (integral, parcial ou nenhuma) '
+                'para a Impugnação/Embargos à Execução.')
         dispo = _parse_data(options['disponibilizacao'])
         protocolo = (
             _parse_data(options['protocolo'])
             if options['protocolo'] else None
         )
+        if (options['tipo'] == 'impugnacao_embargos_execucao'
+                and not protocolo):
+            raise CommandError(
+                'Informe --protocolo (data do protocolo da '
+                'impugnação/embargos) para a certidão de tempestividade.')
 
         info = TIPOS_PRAZO[options['tipo']]
         prazo = options['prazo'] or int(info['dias'])
@@ -253,6 +300,10 @@ class Command(BaseCommand):
                 self.stdout.write(
                     f'Habilitação ..............: '
                     f'{"regular" if habilitacao_regular else "omitida"}')
+            if options.get('seguranca_juizo'):
+                self.stdout.write(
+                    f'Segurança do juízo .......: '
+                    f'{options["seguranca_juizo"]}')
         else:
             tipo_certidao = (
                 'certidão de trânsito' if info['transito']
@@ -335,7 +386,8 @@ class Command(BaseCommand):
         return texto
 
     def _motivo(self, res, protocolo, info, preparo_status='',
-                habilitacao_regular=None, evento_recurso='', tipo=''):
+                habilitacao_regular=None, evento_recurso='', tipo='',
+                seguranca_juizo=''):
         """Memória completa, só para controle (não vai na certidão)."""
         linhas = [
             f'Disponibilização: {_fmt(res.data_disponibilizacao)}',
@@ -366,6 +418,16 @@ class Command(BaseCommand):
                 'Habilitação dos advogados: '
                 f'{"regular" if habilitacao_regular else "omitida"}')
 
+        if seguranca_juizo:
+            rotulos = {
+                'integral': 'Integral',
+                'parcial': 'Depósito parcial',
+                'nenhuma': 'Não houve',
+            }
+            linhas.append(
+                f'Segurança do juízo: '
+                f'{rotulos.get(seguranca_juizo, seguranca_juizo)}')
+
         linhas.append(
             'Dias contados: ' + ', '.join(
                 d.strftime('%d/%m/%Y') for d in res.dias_contados))
@@ -394,6 +456,7 @@ class Command(BaseCommand):
             habilitacao_regular=habilitacao_regular,
             evento_recurso=options['evento_recurso'],
             tipo=options['tipo'],
+            seguranca_juizo=options.get('seguranca_juizo') or '',
         )
         registro_id = None
         try:
@@ -416,6 +479,7 @@ class Command(BaseCommand):
                 evento_recurso=options['evento_recurso'] or '',
                 evento_intimacao=options.get('evento_intimacao') or '',
                 preparo_status=preparo_status or '',
+                seguranca_juizo=options.get('seguranca_juizo') or '',
                 habilitacao_regular=habilitacao_regular,
                 texto_certidao=texto_registro,
                 tempestivo=tempestivo,
@@ -450,6 +514,7 @@ class Command(BaseCommand):
                 'evento_recurso': options['evento_recurso'] or '',
                 'evento_intimacao': options.get('evento_intimacao') or '',
                 'preparo_status': preparo_status or '',
+                'seguranca_juizo': options.get('seguranca_juizo') or '',
                 'habilitacao_regular': habilitacao_regular,
                 'texto_certidao': texto_registro,
                 'motivo': motivo,

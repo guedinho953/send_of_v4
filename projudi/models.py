@@ -733,6 +733,12 @@ class PrazoDjenRecord(models.Model):
         ('movimentacao', 'Movimentação'),
     ]
 
+    SEGURANCA_CHOICES = [
+        ('integral', 'Integral'),
+        ('parcial', 'Depósito parcial'),
+        ('nenhuma', 'Não houve'),
+    ]
+
     processo = models.CharField(
         'Processo (CNJ)', max_length=25, blank=True, db_index=True)
     parte = models.CharField('Parte', max_length=300, blank=True)
@@ -766,6 +772,9 @@ class PrazoDjenRecord(models.Model):
         'Evento da intimação', max_length=20, blank=True)
     preparo_status = models.CharField(
         'Preparo', max_length=20, choices=PREPARO_CHOICES, blank=True)
+    seguranca_juizo = models.CharField(
+        'Segurança do juízo', max_length=20,
+        choices=SEGURANCA_CHOICES, blank=True)
     habilitacao_regular = models.BooleanField(
         'Habilitação regular', null=True, blank=True)
     texto_certidao = models.TextField(
