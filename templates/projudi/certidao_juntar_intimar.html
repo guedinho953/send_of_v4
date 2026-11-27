@@ -78,7 +78,7 @@
 
 <div style="background:#fff; border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,.08); padding:16px;">
     <h3 style="margin-top:0; color:#1e3a5f;">Ajustar e executar</h3>
-    <form method="post">
+    <form method="post" id="form-juntar-intimar">
         {% csrf_token %}
         <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
             <div style="flex:1; min-width:320px;">
@@ -105,7 +105,8 @@
             </div>
             <div>
                 <label style="display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:4px;">Ação</label>
-                <select name="acao" style="padding:7px 9px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px;">
+                <select name="acao" id="acao-juntar"
+                        style="padding:7px 9px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px;">
                     {% for valor, label in acoes %}
                     <option value="{{ valor }}" {% if valor == acao %}selected{% endif %}>{{ label }}</option>
                     {% endfor %}
@@ -183,9 +184,9 @@
 {% block extra_js %}
 <script>
 (function () {
-    const form = document.querySelector('form');
+    const form = document.getElementById('form-juntar-intimar');
     if (!form) return;
-    const acao = form.querySelector('[name="acao"]');
+    const acao = document.getElementById('acao-juntar');
     const botao = form.querySelector('.btn-acao');
     if (!acao || !botao) return;
 
