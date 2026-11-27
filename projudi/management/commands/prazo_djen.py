@@ -72,12 +72,13 @@ def _texto_publico_prazo(res, info, options, tempestivo=None):
             if evento_origem.isdigit() else '(evento não informado)')
         seguranca = options.get('seguranca_juizo') or 'nenhuma'
         seguranca_txt = {
-            'integral': 'o juízo está INTEGRALMENTE SEGURO',
+            'integral': 'a SEGURANÇA INTEGRAL DO JUÍZO',
             'parcial': (
                 'houve depósito PARCIAL, NÃO HAVENDO SEGURANÇA '
                 'INTEGRAL DO JUÍZO'),
             'nenhuma': 'NÃO HOUVE SEGURANÇA DO JUÍZO',
         }.get(seguranca, 'NÃO HOUVE SEGURANÇA DO JUÍZO')
+        seguranca_prefixo = '' if seguranca == 'integral' else 'que '
         conclusao = (
             'TEMPESTIVIDADE' if tempestivo else 'INTEMPESTIVIDADE')
         return (
@@ -88,8 +89,8 @@ def _texto_publico_prazo(res, info, options, tempestivo=None):
             f'{evento_int_txt}. publicação em '
             f'{_fmt_curta(res.data_publicacao)}; início do prazo em '
             f'{_fmt_curta(res.data_inicio_contagem)}; termo final em '
-            f'{_fmt_curta(res.ultimo_dia)}. Certifico ainda que '
-            f'{seguranca_txt}, observados o valor executado '
+            f'{_fmt_curta(res.ultimo_dia)}. Certifico ainda '
+            f'{seguranca_prefixo}{seguranca_txt}, observados o valor executado '
             '(considerando o valor da execução) e o valor '
             'depositado/penhorado (Enunciado n. 117 do FONAJE).'
         )

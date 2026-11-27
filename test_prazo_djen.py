@@ -147,7 +147,8 @@ class PrazoDjenTest(unittest.TestCase):
             tempestivo=False,
         )
         self.assertIn('INTEMPESTIVIDADE', integral)
-        self.assertIn('o juízo está INTEGRALMENTE SEGURO', integral)
+        self.assertIn('Certifico ainda a SEGURANÇA INTEGRAL DO JUÍZO',
+                      integral)
 
         nenhuma = _texto_publico_prazo(
             res, info, {**base, 'seguranca_juizo': 'nenhuma'},
