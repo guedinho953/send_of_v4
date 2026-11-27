@@ -246,7 +246,7 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
                     peticao_documento=peticao_documento,
                     peticao_url=peticao_url,
                     evento_recurso=(
-                        evento_impugnacao or 'infra'
+                        evento_impugnacao
                         if tipo_prazo == 'impugnacao_embargos_execucao'
                         else evento_origem or 'infra'
                     ),
