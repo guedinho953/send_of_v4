@@ -536,11 +536,13 @@ class CriarRagMovimentacaoView(LoginRequiredMixin, View):
         data = (request.POST.get('data') or '').strip()
         link_processo = (request.POST.get('link_processo') or '').strip()
         link_documento = (request.POST.get('link_documento') or '').strip()
+        texto_movimentacao = (
+            request.POST.get('texto_movimentacao') or '').strip()
 
-        if not processo or not link_documento:
+        if not processo:
             messages.error(
                 request,
-                'Movimentação sem processo ou documento para criar a RAG.',
+                'Movimentação sem processo para gerar a RAG.',
             )
             return HttpResponseRedirect(reverse('projudi:movimentacoes'))
 
@@ -550,11 +552,15 @@ class CriarRagMovimentacaoView(LoginRequiredMixin, View):
             return HttpResponseRedirect(reverse('projudi:movimentacoes'))
         session, _ = resultado
 
-        texto = _texto_documento(session, link_documento)
-        if len(texto.strip()) < 30:
+        texto = _texto_documento(session, link_documento) if link_documento else ''
+        usou_texto_movimentacao = False
+        if len(texto.strip()) < 30 and texto_movimentacao:
+            texto = texto_movimentacao
+            usou_texto_movimentacao = True
+        if not texto.strip():
             messages.error(
                 request,
-                'Não foi possível extrair texto suficiente do documento.',
+                'Não há documento nem texto da movimentação para gerar a RAG.',
             )
             return HttpResponseRedirect(reverse('projudi:movimentacoes'))
 
@@ -586,16 +592,19 @@ class CriarRagMovimentacaoView(LoginRequiredMixin, View):
             return HttpResponseRedirect(reverse('projudi:movimentacoes'))
 
         tipo_certidao = _tipo_por_texto(texto)
+        documentos = []
+        if link_documento:
+            documentos.append({
+                'nome': f'Documento — {data or tipo or "movimentação"}',
+                'url': link_documento,
+            })
         rag = RAGExample.objects.create(
             process=proc,
             tenant=getattr(request.user, 'tenant', None),
             despacho_ato=(tipo or 'Movimentação')[:200],
             despacho_observacao=texto,
             despacho_data=data,
-            documentos=[{
-                'nome': f'Documento — {data or tipo or "movimentação"}',
-                'url': link_documento,
-            }],
+            documentos=documentos,
             tipo_certidao=tipo_certidao,
             active=True,
         )
@@ -618,7 +627,11 @@ class CriarRagMovimentacaoView(LoginRequiredMixin, View):
             rag.suggested_templates.add(template)
         messages.success(
             request,
-            f'✅ RAG #{rag.id} criada a partir da movimentação'
+            f'✅ RAG #{rag.id} criada a partir '
+            + (
+                'do texto da movimentação'
+                if usou_texto_movimentacao else 'do documento'
+            )
             + (f' com template "{template.name}" vinculado.' if template else '.')
             + ' Revise o tipo de certidão e os parâmetros no admin.',
         )

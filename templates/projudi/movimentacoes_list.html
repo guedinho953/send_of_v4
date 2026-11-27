@@ -120,6 +120,19 @@
                            href="#" target="_blank" style="display:none;">
                             📄 Gerar certidão
                         </a>
+                        <form method="post"
+                              action="{% url 'projudi:certidao_gerar_rag' %}"
+                              class="fila-gerar-rag"
+                              style="margin:0; display:none;"
+                              onsubmit="return confirm('Gerar e assinar a certidão no Projudi com esta RAG?');">
+                            {% csrf_token %}
+                            <input type="hidden" name="processo" value="{{ m.processo }}">
+                            <input type="hidden" name="processo_url" value="{{ m.link_processo|default:'' }}">
+                            <input type="hidden" name="rag_id" value="">
+                            <button type="submit" class="btn btn-sm btn-outline">
+                                📄 Gerar certidão
+                            </button>
+                        </form>
                         {% if request.user.is_staff %}
                         <a class="btn btn-sm btn-outline btn-config-rag"
                            href="#" target="_blank" style="display:none;">
@@ -137,22 +150,23 @@
                            href="{{ m.link_documento }}" target="_blank">
                             📎 Documento
                         </a>
+                        {% endif %}
                         <form method="post"
                               action="{% url 'projudi:movimentacao_criar_rag' %}"
                               class="fila-criar-rag"
-                              style="margin:0; display:none;"
-                              onsubmit="return confirm('Criar uma RAG a partir deste documento?');">
+                              style="margin:0;"
+                              onsubmit="return confirm('Gerar uma RAG a partir do texto desta movimentação?');">
                             {% csrf_token %}
                             <input type="hidden" name="processo" value="{{ m.processo }}">
                             <input type="hidden" name="tipo" value="{{ m.tipo|default:'' }}">
                             <input type="hidden" name="data" value="{{ m.data|default:'' }}">
                             <input type="hidden" name="link_processo" value="{{ m.link_processo|default:'' }}">
-                            <input type="hidden" name="link_documento" value="{{ m.link_documento }}">
+                            <input type="hidden" name="link_documento" value="{{ m.link_documento|default:'' }}">
+                            <input type="hidden" name="texto_movimentacao" value="{{ m.tipo|default:'' }} {{ m.data|default:'' }}">
                             <button type="submit" class="btn btn-sm btn-outline">
-                                🧠 Criar RAG
+                                🧠 Gerar RAG
                             </button>
                         </form>
-                        {% endif %}
                     </div>
                 </td>
             </tr>
@@ -306,22 +320,32 @@
                 el.appendChild(nada);
             }
 
-            if (linha && dados.url_form) {
+            if (linha) {
+                const ehDecurso = dados.tipo_certidao === 'decurso_pagamento';
                 const botaoGerar = linha.querySelector('.btn-gerar');
                 if (botaoGerar) {
-                    botaoGerar.href = dados.url_form;
-                    botaoGerar.style.display = '';
+                    if (ehDecurso && dados.url_form) {
+                        botaoGerar.href = dados.url_form;
+                        botaoGerar.style.display = '';
+                    } else {
+                        botaoGerar.style.display = 'none';
+                    }
                 }
-            }
-            if (linha) {
-                const formCriar = linha.querySelector('.fila-criar-rag');
-                if (formCriar) {
-                    formCriar.style.display = dados.rag_encontrada
-                        ? 'none' : 'block';
+
+                const formRag = linha.querySelector('.fila-gerar-rag');
+                if (formRag) {
+                    if (dados.rag_id && dados.tem_template && !ehDecurso) {
+                        const campoRag = formRag.querySelector('[name="rag_id"]');
+                        if (campoRag) campoRag.value = dados.rag_id;
+                        formRag.style.display = 'inline';
+                    } else {
+                        formRag.style.display = 'none';
+                    }
                 }
+
                 const botaoConfig = linha.querySelector('.btn-config-rag');
                 if (botaoConfig) {
-                    if (dados.rag_id && !dados.url_form) {
+                    if (dados.rag_id && !dados.tem_template && !ehDecurso) {
                         botaoConfig.href = (
                             '/admin/processes/ragexample/' +
                             dados.rag_id + '/change/'
