@@ -155,6 +155,29 @@ def _prazo_intimacao(registro, situacao, prazo_informado='') -> str:
     return '5' if situacao == 'intempestivo' else '10'
 
 
+def _observacao_juntada(registro, template_nome) -> str:
+    """Texto da juntada; nos embargos usa a conclusão e a segurança."""
+    if registro.tipo_prazo == 'impugnacao_embargos_execucao':
+        conclusao = (
+            'TEMPESTIVIDADE' if registro.tempestivo
+            else 'INTEMPESTIVIDADE')
+        texto = (
+            f'Juntada da Certidão de {conclusao} da impugnação/Embargos '
+            'à Execução')
+        if registro.tempestivo:
+            seguranca = registro.seguranca_juizo
+            if seguranca == 'parcial':
+                texto += (
+                    ' - depósito PARCIAL, NÃO HAVENDO SEGURANÇA INTEGRAL '
+                    'DO JUÍZO')
+            elif seguranca == 'integral':
+                texto += ' - SEGURANÇA INTEGRAL DO JUÍZO'
+            elif seguranca == 'nenhuma':
+                texto += ' - NÃO HOUVE SEGURANÇA DO JUÍZO'
+        return texto
+    return f'Juntada da {template_nome}.'
+
+
 def _observacao_intimacao(registro, situacao) -> str:
     evento = str(registro.evento_recurso or '').strip()
     texto_evento = f' (evento {evento})' if evento.isdigit() else ''
@@ -272,9 +295,8 @@ def montar_plano(registro, user=None, processo_url='', polo='',
         'tipo_conclusao': registro.tipo_conclusao or '18',
         'juiz_conclusao': registro.juiz_conclusao or '41201',
         'pode_intimar': pode_intimar,
-        'observacao_juntada': (
-            f'Juntada da {template_nome}.'
-        ),
+        'observacao_juntada': _observacao_juntada(
+            registro, template_nome),
         'observacao_intimacao': observacao_intimacao,
         'erros': erros,
         'preview_disponivel': bool(registro.certidao_path),

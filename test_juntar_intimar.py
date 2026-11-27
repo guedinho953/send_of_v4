@@ -146,6 +146,11 @@ class JuntarIntimarPlanTest(TestCase):
         self.assertEqual(plano['localizador'], '1')
         self.assertEqual(plano['tipo_conclusao'], '18')
         self.assertEqual(plano['juiz_conclusao'], '41201')
+        self.assertEqual(
+            plano['observacao_juntada'],
+            'Juntada da Certidão de TEMPESTIVIDADE da impugnação/Embargos '
+            'à Execução - SEGURANÇA INTEGRAL DO JUÍZO',
+        )
         self.assertTrue(plano['pode_intimar'])
         self.assertEqual(plano['polo'], 'autores')
         self.assertEqual(plano['prazo'], '15')
@@ -154,6 +159,33 @@ class JuntarIntimarPlanTest(TestCase):
         self.assertIn(
             'impugnação/manifestação/contrarrazões aos embargos',
             plano['observacao_intimacao'])
+
+    def test_plano_embargos_tempestivos_deposito_parcial(self):
+        from projudi.juntar_service import montar_plano
+
+        registro = PrazoDjenRecord.objects.create(
+            processo='0000006-66.2026.8.05.0191',
+            origem='movimentacao',
+            tipo_prazo='impugnacao_embargos_execucao',
+            prazo_dias=15,
+            tempestivo=True,
+            seguranca_juizo='parcial',
+            evento_recurso='86',
+            certidao_path=str(self.preview),
+        )
+        plano = montar_plano(
+            registro,
+            self.user,
+            processo_url=(
+                'https://projudi.tjba.jus.br/projudi/listagens/'
+                'DadosProcesso?numeroProcesso=12345678901234'),
+        )
+        self.assertEqual(
+            plano['observacao_juntada'],
+            'Juntada da Certidão de TEMPESTIVIDADE da impugnação/Embargos '
+            'à Execução - depósito PARCIAL, NÃO HAVENDO SEGURANÇA INTEGRAL '
+            'DO JUÍZO',
+        )
 
     def test_plano_embargos_intempestivos_nao_intima(self):
         from projudi.juntar_service import montar_plano
@@ -177,6 +209,11 @@ class JuntarIntimarPlanTest(TestCase):
         self.assertEqual(plano['situacao'], 'embargos_intempestivos')
         self.assertFalse(plano['pode_intimar'])
         self.assertEqual(plano['observacao_intimacao'], '')
+        self.assertEqual(
+            plano['observacao_juntada'],
+            'Juntada da Certidão de INTEMPESTIVIDADE da '
+            'impugnação/Embargos à Execução',
+        )
 
     @patch(
         'projudi.movimentacao_service.MovimentacaoService.executar_com_intimacao',
