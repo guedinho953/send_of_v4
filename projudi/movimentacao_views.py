@@ -90,7 +90,7 @@ class MovimentacaoFilaView(LoginRequiredMixin, TemplateView):
         qs = MovimentacaoRecord.objects.filter(
             user=user,
             status__in=['pendente', 'falha'],
-        )
+        ).select_related('rag_example')
 
         filtro_hoje = self.request.GET.get('data') == 'hoje'
         if filtro_hoje:
@@ -134,7 +134,7 @@ class MovimentacaoListView(LoginRequiredMixin, ListView):
     def get_queryset(self):
         qs = MovimentacaoRecord.objects.filter(
             user=self.request.user
-        ).exclude(categoria='certidao')
+        ).exclude(categoria='certidao').select_related('rag_example')
         status = self.request.GET.get('status', '')
         cat = self.request.GET.get('categoria', '')
         if status and status in dict(MovimentacaoRecord.STATUS_CHOICES):

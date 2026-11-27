@@ -33,6 +33,7 @@
     .tag-processando { background: #ede9fe; color: #5b21b6; }
     .tag-cumprido { background: #d1fae5; color: #065f46; }
     .tag-dispensado { background: #f3e8ff; color: #6b21a8; }
+    .tag-rag { background: #ccfbf1; color: #0f766e; }
     .btn-sm { padding: 5px 12px; font-size: 12px; border-radius: 5px; }
     .btn-green { background: #059669; color: white; }
     .btn-green:hover { background: #047857; }
@@ -121,6 +122,9 @@
                     {{ m.get_categoria_display }}
                     {% if m.categoria == 'certidao' %}
                     <span class="tag-status tag-pendente" style="margin-left:6px;">Certidão</span>
+                    {% endif %}
+                    {% if m.rag_example %}
+                    <span class="tag-status tag-rag" style="margin-left:6px;">RAG #{{ m.rag_example.id }}</span>
                     {% endif %}
                     {% if m.parte_nome %} | 👤 {{ m.parte_nome }}{% endif %}
                     {% if m.data_movimentacao %} | 📅 {{ m.data_movimentacao|date:"d/m/Y" }}{% endif %}

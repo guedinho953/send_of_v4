@@ -14,6 +14,7 @@
     .tag-cumprido { background: #d1fae5; color: #065f46; }
     .tag-falha { background: #fee2e2; color: #991b1b; }
     .tag-dispensado { background: #f3e8ff; color: #6b21a8; }
+    .tag-rag { background: #ccfbf1; color: #0f766e; }
     .btn-sm { padding: 5px 12px; font-size: 12px; border-radius: 5px; }
     .paginacao { display: flex; gap: 8px; justify-content: center; margin-top: 20px; flex-wrap: wrap; }
     .paginacao a, .paginacao span { padding: 6px 12px; border-radius: 6px; border: 1px solid #e5e7eb; background: #fff; color: #374151; text-decoration: none; font-size: 13px; }
@@ -99,7 +100,12 @@
                         <strong>{{ m.act_verb|default:"—" }}</strong>
                         {% if m.descricao_movimentacao %}<br><span style="font-size:12px; color:#6b7280;">{{ m.descricao_movimentacao }}</span>{% endif %}
                     </td>
-                    <td>{{ m.get_categoria_display }}</td>
+                    <td>
+                        {{ m.get_categoria_display }}
+                        {% if m.rag_example %}
+                        <span class="tag-status tag-rag" style="margin-left:4px;">RAG #{{ m.rag_example.id }}</span>
+                        {% endif %}
+                    </td>
                     <td>{{ m.parte_nome|default:"—" }}</td>
                     <td><span class="tag-status tag-{{ m.status }}">{{ m.get_status_display }}</span></td>
                     <td style="font-size:12px; color:#6b7280;">{{ m.data_movimentacao|date:"d/m/Y"|default:"—" }}</td>

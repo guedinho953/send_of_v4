@@ -16,6 +16,7 @@
     .tabela td { padding:10px 12px; border-bottom:1px solid #f1f5f9; vertical-align:top; }
     .tabela tr:hover td { background:#f8fafc; }
     .processo { font-family:monospace; font-size:12px; font-weight:700; color:#1e3a5f; white-space:nowrap; }
+    .badge-rag { display:none; margin-left:5px; padding:2px 7px; border-radius:9px; background:#ccfbf1; color:#0f766e; font-size:10px; font-weight:700; text-transform:uppercase; vertical-align:middle; }
     .tipo { font-weight:600; color:#374151; }
     .data { color:#6b7280; font-size:12px; white-space:nowrap; }
     .sugestao { font-size:12px; line-height:1.45; min-width:190px; }
@@ -73,6 +74,10 @@
 {% endif %}
 
 {% if movimentacoes %}
+<div style="font-size:11px; color:#6b7280; margin-bottom:8px;">
+    <span class="badge-rag" style="display:inline-block;">RAG</span>
+    indica movimentação com RAG relacionada ao despacho.
+</div>
 <div style="overflow-x:auto;">
     <table class="tabela">
         <thead>
@@ -88,7 +93,10 @@
             {% for m in movimentacoes %}
             <tr class="mov-row" data-tem-rag="0" data-tem-certidao="0">
                 <td>
-                    <div class="processo">{{ m.processo }}</div>
+                    <div class="processo">
+                        {{ m.processo }}
+                        <span class="badge-rag">RAG</span>
+                    </div>
                 </td>
                 <td>
                     <div class="tipo">{{ m.tipo|default:"—" }}</div>
@@ -225,6 +233,16 @@
             if (linha) {
                 linha.dataset.temRag = dados.rag_encontrada ? '1' : '0';
                 linha.dataset.temCertidao = dados.tipo_certidao ? '1' : '0';
+                const badge = linha.querySelector('.badge-rag');
+                if (badge) {
+                    if (dados.rag_encontrada) {
+                        badge.textContent = dados.rag_id
+                            ? 'RAG #' + dados.rag_id : 'RAG';
+                        badge.style.display = 'inline-block';
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                }
             }
 
             el.textContent = '';
