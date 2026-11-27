@@ -502,6 +502,17 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
             )
             try:
                 from .certidao_registro_service import registrar_documento
+                prazo_info = resultado.to_dict()
+                if tipo == 'impugnacao_embargos_execucao':
+                    prazo_info.update({
+                        'situacao_embargos': (
+                            'tempestivo'
+                            if data_envio <= resultado.ultimo_dia
+                            else 'intempestivo'
+                        ),
+                        'evento_impugnacao': evento_impugnacao,
+                        'seguranca_juizo': seguranca_juizo,
+                    })
                 registrar_documento(
                     request.user, doc,
                     tipo_prazo=tipo,
@@ -517,7 +528,7 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
                     ).strip(),
                     ultimo_dia=resultado.ultimo_dia,
                     data_decurso=resultado.data_decurso,
-                    prazo_info=resultado.to_dict(),
+                    prazo_info=prazo_info,
                     servidor=servidor,
                     servidor_cargo=servidor_cargo,
                 )
@@ -553,6 +564,15 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
 
         evento_recurso_numero = _evento_recurso_certidao(html)
 
+        eh_embargos = tipo == 'impugnacao_embargos_execucao'
+        situacao_embargos = ''
+        if eh_embargos:
+            situacao_embargos = (
+                'tempestivo'
+                if data_envio and data_envio <= resultado.ultimo_dia
+                else 'intempestivo'
+            )
+
         return render(request, 'projudi/certidao_peticao_preview.html', {
             'documento': doc,
             'html_content': html,
@@ -564,11 +584,15 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
                 'url_voltar': self.url_voltar,
                 'tipo': tipo,
                 'eh_recurso': eh_recurso,
+                'eh_embargos': eh_embargos,
                 'situacao_recurso': situacao_recurso,
+                'situacao_embargos': situacao_embargos,
+                'evento_impugnacao': evento_impugnacao,
                 'pode_intimar': (
-                    eh_recurso and situacao_recurso in (
+                    (eh_recurso and situacao_recurso in (
                         'preparo', 'intempestivo', 'gratuidade',
-                    )
+                    ))
+                    or (eh_embargos and situacao_embargos == 'tempestivo')
                 ),
                 'polo_recorrente': polo_recorrente,
                 'tipo_label': info['label'],
@@ -629,6 +653,7 @@ class CertidaoPeticaoPreviewView(LoginRequiredMixin, TemplateView):
 
         rotulo = doc.template.name if doc.template else 'Certidão'
         eh_recurso = rotulo == 'Certidão de Recurso Inominado'
+        eh_embargos = rotulo == 'Certidão de Impugnação/Embargos à Execução'
         origem = (
             'movimentacao'
             if (doc.recipient_name or '').startswith('Movimentação:')
@@ -638,6 +663,35 @@ class CertidaoPeticaoPreviewView(LoginRequiredMixin, TemplateView):
             _situacao_certidao_recurso(doc.html_content)
             if eh_recurso else ''
         )
+        situacao_embargos = ''
+        evento_impugnacao = ''
+        if eh_embargos:
+            from .models import CertidaoRegistro
+            registro = (
+                CertidaoRegistro.objects
+                .filter(generated_document=doc)
+                .order_by('-created_at')
+                .first()
+            )
+            if registro:
+                info = registro.prazo_info or {}
+                situacao_embargos = info.get('situacao_embargos') or ''
+                evento_impugnacao = str(
+                    info.get('evento_impugnacao') or ''
+                )
+            if not situacao_embargos:
+                texto = (doc.html_content or '').upper()
+                if 'INTEMPESTIVIDADE' in texto:
+                    situacao_embargos = 'intempestivo'
+                elif 'TEMPESTIVIDADE' in texto:
+                    situacao_embargos = 'tempestivo'
+            if not evento_impugnacao:
+                m_evento = re.search(
+                    r'apresentada\s*\(evento\s+(\d+)\)',
+                    doc.html_content or '', re.I,
+                )
+                if m_evento:
+                    evento_impugnacao = m_evento.group(1)
         context.update({
             'documento': doc,
             'html_content': doc.html_content,
@@ -656,15 +710,24 @@ class CertidaoPeticaoPreviewView(LoginRequiredMixin, TemplateView):
                 ),
                 'tipo': '',
                 'eh_recurso': eh_recurso,
+                'eh_embargos': eh_embargos,
                 'situacao_recurso': situacao,
+                'situacao_embargos': situacao_embargos,
+                'evento_impugnacao': evento_impugnacao,
                 'pode_intimar': (
-                    eh_recurso and situacao in (
+                    (eh_recurso and situacao in (
                         'preparo', 'intempestivo', 'gratuidade',
-                    )
+                    ))
+                    or (eh_embargos and situacao_embargos == 'tempestivo')
                 ),
                 'polo_recorrente': '',
                 'tipo_label': rotulo,
-                'situacao_label': '',
+                'situacao_label': (
+                    'Embargos tempestivos'
+                    if eh_embargos and situacao_embargos == 'tempestivo'
+                    else 'Embargos intempestivos'
+                    if eh_embargos else ''
+                ),
                 'recorrente': '',
                 'evento_recurso': '',
                 'evento_recurso_numero': (
@@ -734,26 +797,63 @@ class CertidaoPeticaoJuntarIntimarView(LoginRequiredMixin, View):
             doc.template.name if doc.template else 'Certidão'
         )
         eh_recurso = rotulo_certidao == 'Certidão de Recurso Inominado'
+        eh_embargos = (
+            rotulo_certidao == 'Certidão de Impugnação/Embargos à Execução'
+        )
         acao = (request.POST.get('acao') or 'juntar_intimar').strip().lower()
         if acao not in ('juntar', 'intimar', 'juntar_intimar'):
             messages.error(request, 'Ação inválida.')
             return self._preview_redirect(doc)
-        if acao in ('intimar', 'juntar_intimar') and not eh_recurso:
+        if acao in ('intimar', 'juntar_intimar') and not (
+                eh_recurso or eh_embargos):
             messages.error(
                 request,
-                'A intimação só se aplica à Certidão de Recurso Inominado.'
+                'A intimação só se aplica às certidões de recurso '
+                'inominado e de impugnação/embargos à execução.'
             )
             return self._preview_redirect(doc)
 
         # Situação da certidão define a intimação:
         # - preparo ou gratuidade: parte contrária (recorrido), para
         #   contrarrazões em 10 dias;
-        # - intempestivo: recorrente, para ciência da intempestividade.
+        # - intempestivo: recorrente, para ciência da intempestividade;
+        # - embargos tempestivos: embargado/exequente, 15 dias.
         situacao_recurso = (
             _situacao_certidao_recurso(doc.html_content)
             if eh_recurso else ''
         )
+        situacao_embargos = ''
+        evento_impugnacao = ''
+        if eh_embargos:
+            from .models import CertidaoRegistro
+            registro = (
+                CertidaoRegistro.objects
+                .filter(generated_document=doc)
+                .order_by('-created_at')
+                .first()
+            )
+            if registro:
+                info = registro.prazo_info or {}
+                situacao_embargos = info.get('situacao_embargos') or ''
+                evento_impugnacao = str(
+                    info.get('evento_impugnacao') or ''
+                )
+            if not situacao_embargos:
+                texto = (doc.html_content or '').upper()
+                if 'INTEMPESTIVIDADE' in texto:
+                    situacao_embargos = 'intempestivo'
+                elif 'TEMPESTIVIDADE' in texto:
+                    situacao_embargos = 'tempestivo'
+            if not evento_impugnacao:
+                m_evento = re.search(
+                    r'apresentada\s*\(evento\s+(\d+)\)',
+                    doc.html_content or '', re.I,
+                )
+                if m_evento:
+                    evento_impugnacao = m_evento.group(1)
+
         if (acao in ('intimar', 'juntar_intimar')
+                and eh_recurso
                 and situacao_recurso not in (
                     'preparo', 'intempestivo', 'gratuidade',
                 )):
@@ -764,9 +864,21 @@ class CertidaoPeticaoJuntarIntimarView(LoginRequiredMixin, View):
                 'É possível apenas juntar a certidão.'
             )
             return self._preview_redirect(doc)
+        if (acao in ('intimar', 'juntar_intimar')
+                and eh_embargos
+                and situacao_embargos != 'tempestivo'):
+            messages.warning(
+                request,
+                'A intimação do embargado só é feita quando os embargos '
+                'são TEMPESTIVOS. Use “Apenas juntar certidão”.'
+            )
+            return self._preview_redirect(doc)
 
         polo = (request.POST.get('polo_intimacao') or 'autores').strip().lower()
         if polo not in ('autores', 'res', 'todos'):
+            polo = 'autores'
+        if eh_embargos:
+            # O embargado é o exequente/credor (polo ativo).
             polo = 'autores'
 
         observacao = (
@@ -892,18 +1004,34 @@ class CertidaoPeticaoJuntarIntimarView(LoginRequiredMixin, View):
                 )
                 return self._preview_redirect(doc)
 
-            evento_recurso = _evento_recurso_certidao(doc.html_content)
+            evento_recurso = (
+                evento_impugnacao if eh_embargos
+                else _evento_recurso_certidao(doc.html_content)
+            )
             texto_evento = (
                 f' (evento {evento_recurso})' if evento_recurso else ''
             )
 
-            if situacao_recurso in ('preparo', 'gratuidade'):
+            if eh_embargos:
+                observacao_intimacao = (
+                    'Intime-se o(a) embargado(a) para, querendo, no prazo '
+                    'de 15 (quinze) dias úteis, apresentar '
+                    'impugnação/manifestação/contrarrazões aos embargos à '
+                    f'execução{texto_evento}, conforme certidão em anexo.'
+                )
+                prazo_dias = '15'
+                prazo_codigo = '4'
+                rotulo_intimacao = (
+                    'embargado(a) para manifestação em 15 dias úteis'
+                )
+            elif situacao_recurso in ('preparo', 'gratuidade'):
                 observacao_intimacao = (
                     'Intime(m)-se o(s) recorrido(s) para que, querendo, '
                     'apresente(m) contrarrazões ao Recurso Inominado'
                     f'{texto_evento}, no prazo de 10 dias úteis.'
                 )
                 prazo_dias = '10'
+                prazo_codigo = '3'
                 rotulo_intimacao = (
                     'parte contrária (recorrido) para contrarrazões'
                 )
@@ -916,17 +1044,12 @@ class CertidaoPeticaoJuntarIntimarView(LoginRequiredMixin, View):
                 prazo_dias = (
                     (request.POST.get('prazo_intimacao') or '5').strip()
                 )
+                prazo_codigo = {
+                    '5': '2', '10': '3', '15': '4',
+                }.get(prazo_dias, '2')
                 rotulo_intimacao = (
                     'recorrente para ciência da intempestividade'
                 )
-
-            prazo_codigo = {'5': '2', '10': '3', '15': '4'}.get(prazo_dias)
-            if not prazo_codigo:
-                prazo_dias = (
-                    '10' if situacao_recurso in ('preparo', 'gratuidade')
-                    else '5'
-                )
-                prazo_codigo = {'5': '2', '10': '3', '15': '4'}[prazo_dias]
 
             try:
                 ok_intimacao = service.executar_com_intimacao(
@@ -977,7 +1100,12 @@ class CertidaoPeticaoJuntarIntimarView(LoginRequiredMixin, View):
             )
             return self._preview_redirect(doc)
 
-        if situacao_recurso in ('preparo', 'gratuidade'):
+        if eh_embargos:
+            mensagem = (
+                '✅ Certidão juntada e embargado(a) intimado(a) para '
+                'manifestação sobre os embargos em 15 dias úteis.'
+            )
+        elif situacao_recurso in ('preparo', 'gratuidade'):
             mensagem = (
                 '✅ Certidão juntada e parte contrária intimada para '
                 'apresentar contrarrazões em 10 dias úteis.'

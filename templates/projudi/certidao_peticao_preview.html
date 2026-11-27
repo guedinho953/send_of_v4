@@ -111,6 +111,22 @@
             </div>
             {% endif %}
         </div>
+        {% elif item.eh_embargos %}
+        <div style="margin-bottom:12px; background:#ecfdf5; border:1px solid #a7f3d0; border-radius:6px; padding:10px 12px; font-size:12px; color:#065f46; line-height:1.5;">
+            {% if item.pode_intimar %}
+            <strong>Embargos TEMPESTIVOS.</strong>
+            O embargado/exequente será intimado(a), no polo ativo, para
+            manifestação sobre os embargos à execução em
+            <strong>15 dias úteis</strong>, conforme certidão em anexo.
+            {% if item.evento_impugnacao %}
+            Evento da impugnação/embargos: <strong>{{ item.evento_impugnacao }}</strong>.
+            {% endif %}
+            {% else %}
+            <strong>Embargos INTEMPESTIVOS ou situação não identificada.</strong>
+            É possível apenas juntar a certidão; não haverá intimação do
+            embargado.
+            {% endif %}
+        </div>
         {% elif item.eh_recurso %}
         <div style="margin-bottom:12px; background:#fef3c7; border-left:4px solid #f59e0b; border-radius:6px; padding:10px 12px; font-size:12px; color:#92400e; line-height:1.5;">
             <strong>Não foi possível identificar a situação da certidão.</strong>
@@ -149,6 +165,21 @@
                     {% endif %}
                 {% endif %}
             </button>
+            {% elif item.eh_embargos and item.pode_intimar %}
+            <button type="submit" name="acao" value="{% if documento.exported_to_projudi %}intimar{% else %}juntar_intimar{% endif %}"
+                    class="btn" style="background:#059669; border-color:#059669;"
+                    onclick="return confirm('{% if documento.exported_to_projudi %}Intimar o embargado para manifestação em 15 dias úteis?{% else %}Juntar a certidão e intimar o embargado para manifestação em 15 dias úteis?{% endif %}');">
+                {% if documento.exported_to_projudi %}
+                📨 Apenas intimar embargado (15 dias)
+                {% else %}
+                📎📨 Juntar certidão + intimar embargado (15 dias)
+                {% endif %}
+            </button>
+            {% elif item.eh_embargos and documento.exported_to_projudi %}
+            <span style="font-size:12px; color:#92400e; align-self:center;">
+                ✅ Certidão juntada. Embargos intempestivos/sem situação:
+                não há intimação do embargado.
+            </span>
             {% elif item.eh_recurso and documento.exported_to_projudi %}
             <span style="font-size:12px; color:#047857; align-self:center;">
                 ✅ Certidão juntada. Não foi possível identificar a situação;
