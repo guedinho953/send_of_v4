@@ -44,6 +44,10 @@ Opções:
 | `--servidor` | Nome do servidor que assina |
 | `--saida` | Caminho do HTML (default `var/certidao_prazo_<data>.html`) |
 | `--sem-html` | Só calcula e mostra a memória de contagem |
+| `--origem` | `peticao` ou `movimentacao` (default: petição para recurso/contrarrazões) |
+| `--peticao-documento` | Nome do PDF da petição (para a aba Petições) |
+| `--peticao-url` | URL do PDF da petição (para a aba Petições) |
+| `--nao-registrar` | Teste: não grava no dashboard |
 
 Exemplos:
 
@@ -155,6 +159,30 @@ dirigida a ele. Se não conseguir, informe `--recorrente`.
 Os **comprovantes/guias não definem o preparo**: o comando apenas os lista.
 Quem confere os valores é o usuário, que informa o `--preparo`.
 
+## Separação por origem: petições × movimentações
+
+As certidões são separadas em duas abas/dashboards:
+
+| Rota | Conteúdo |
+|------|----------|
+| `/projudi/certidoes/` | Todas as certidões (visão geral) |
+| `/projudi/certidoes/peticoes/` | Certidões vinculadas à fila de petições (`JuntadaPeticao`) |
+| `/projudi/certidoes/movimentacoes/` | Certidões vinculadas a movimentações/prazos do processo |
+
+O campo `PrazoDjenRecord.origem` guarda `peticao` ou `movimentacao`.
+
+- `peticoes_inominado` e `certidao_inominado` registram automaticamente
+  `origem='peticao'`, com o nome e a URL do PDF da petição.
+- `prazo_djen` usa `movimentacao` por padrão; para recurso/contrarrazões,
+  usa `peticao` automaticamente. Também é possível forçar com `--origem`.
+- A aba Petições mostra o documento da petição e o link para o PDF.
+- A aba Movimentações mostra os prazos/decursos calculados a partir de
+  eventos e intimações.
+
+A migração `projudi/0018` adiciona `origem`, `peticao_documento` e
+`peticao_url` e marca os registros antigos de recurso/contrarrazões como
+`peticao`.
+
 ## Dashboard de certidões
 
 Acesse **Certidões** no menu ou:
@@ -165,6 +193,7 @@ http://127.0.0.1:8000/projudi/certidoes/
 
 O dashboard mostra:
 
+- abas **Todas / Petições / Movimentações**, com contadores por origem;
 - cards de **Total / Tempestivas / Intempestivas / Sem protocolo**;
 - filtros por status, tipo e busca (processo, parte ou motivo);
 - tabela com processo, parte, tipo, último dia, protocolo, preparo,
@@ -187,6 +216,7 @@ ficam registradas em:
 
 ```bat
 python -m unittest test_prazo_djen test_verificacao_inominado test_peticoes_inominado test_partes_inominado
+python manage.py test test_certidao_origem
 ```
 
 Casos cobertos:
@@ -203,7 +233,9 @@ Casos cobertos:
   dos comprovantes;
 - identificação do recorrente e escolha do DJEN nominal do recorrente
   (ex.: evento da Maria x evento do Banco);
-- linha `PARA` com promovente/promovido ou omissão quando não localizados.
+- linha `PARA` com promovente/promovido ou omissão quando não localizados;
+- separação das certidões por origem (petição × movimentação) no dashboard
+  e nos comandos.
 
 ## Limitações / próximos passos
 

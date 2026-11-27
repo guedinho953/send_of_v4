@@ -74,6 +74,8 @@ urlpatterns = [
 
     # Dashboard de certidões/prazos DJEN (controle interno)
     path('certidoes/', certidao_views.CertidaoDashboardView.as_view(), name='certidao_dashboard'),
+    path('certidoes/peticoes/', certidao_views.CertidaoPeticaoView.as_view(), name='certidao_peticoes'),
+    path('certidoes/movimentacoes/', certidao_views.CertidaoMovimentacaoView.as_view(), name='certidao_movimentacoes'),
     path('certidoes/<int:pk>/', certidao_views.CertidaoDetailView.as_view(), name='certidao_detail'),
     path('certidoes/<int:pk>/preview/', certidao_views.CertidaoPreviewView.as_view(), name='certidao_preview'),
 

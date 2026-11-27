@@ -50,6 +50,9 @@ class Command(BaseCommand):
             '--peticao-url',
             help='URL do PDF da petição (para identificar o recorrente)')
         parser.add_argument(
+            '--peticao-documento',
+            help='Nome do documento da petição (para a aba Petições)')
+        parser.add_argument(
             '--recorrente',
             help='Nome do recorrente (se não for possível ler na petição)')
         parser.add_argument('--evento-recurso', help='Nº do evento do recurso')
@@ -218,6 +221,9 @@ class Command(BaseCommand):
             evento_intimacao=str(evento_intimacao),
             processo=processo,
             parte=partes_texto or '',
+            origem='peticao',
+            peticao_documento=options.get('peticao_documento') or '',
+            peticao_url=peticao_url or '',
             servidor=options['servidor'],
             habilitacao=options['habilitacao'],
             saida=options.get('saida') or None,

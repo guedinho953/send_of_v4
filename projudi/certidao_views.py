@@ -38,10 +38,19 @@ def _datas_br(valores):
 
 class CertidaoDashboardView(LoginRequiredMixin, TemplateView):
     template_name = 'projudi/certidao_dashboard.html'
+    origem = ''
+    url_name = 'projudi:certidao_dashboard'
+
+    def get_origem(self):
+        return self.origem or (self.request.GET.get('origem') or '')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        base = PrazoDjenRecord.objects.all()
+        todos = PrazoDjenRecord.objects.all()
+        origem = self.get_origem()
+        base = todos
+        if origem in ('peticao', 'movimentacao'):
+            base = base.filter(origem=origem)
 
         busca = (self.request.GET.get('q') or '').strip()
         status = (self.request.GET.get('status') or '').strip()
@@ -52,6 +61,7 @@ class CertidaoDashboardView(LoginRequiredMixin, TemplateView):
             qs = qs.filter(
                 Q(processo__icontains=busca)
                 | Q(parte__icontains=busca)
+                | Q(peticao_documento__icontains=busca)
                 | Q(motivo__icontains=busca)
             )
         if status == 'tempestivo':
@@ -75,6 +85,17 @@ class CertidaoDashboardView(LoginRequiredMixin, TemplateView):
             'tempestivas': base.filter(tempestivo=True).count(),
             'intempestivas': base.filter(tempestivo=False).count(),
             'sem_protocolo': base.filter(tempestivo__isnull=True).count(),
+            'total_geral': todos.count(),
+            'total_peticoes': todos.filter(origem='peticao').count(),
+            'total_movimentacoes': todos.filter(
+                origem='movimentacao').count(),
+            'origem_filtro': origem,
+            'origem_label': {
+                'peticao': 'Certidões de petições',
+                'movimentacao': 'Certidões de movimentações',
+            }.get(origem, 'Todas as certidões'),
+            'mostrar_origem': not origem,
+            'url_name': self.url_name,
             'busca': busca,
             'filtro_status': status,
             'filtro_tipo': tipo,
@@ -84,6 +105,16 @@ class CertidaoDashboardView(LoginRequiredMixin, TemplateView):
             ],
         })
         return context
+
+
+class CertidaoPeticaoView(CertidaoDashboardView):
+    origem = 'peticao'
+    url_name = 'projudi:certidao_peticoes'
+
+
+class CertidaoMovimentacaoView(CertidaoDashboardView):
+    origem = 'movimentacao'
+    url_name = 'projudi:certidao_movimentacoes'
 
 
 class CertidaoDetailView(LoginRequiredMixin, DetailView):
@@ -97,6 +128,7 @@ class CertidaoDetailView(LoginRequiredMixin, DetailView):
         context['status_classe'], context['status_label'] = _status_registro(reg)
         context['tipo_label'] = TIPOS_PRAZO.get(
             reg.tipo_prazo, {}).get('label', reg.tipo_prazo)
+        context['origem_label'] = reg.get_origem_display()
         info = reg.prazo_info or {}
         context['dias_contados_br'] = _datas_br(info.get('dias_contados'))
         context['dias_excluidos_br'] = _datas_br(info.get('dias_excluidos'))

@@ -728,9 +728,21 @@ class PrazoDjenRecord(models.Model):
         ('nao_verificado', 'Não verificado'),
     ]
 
+    ORIGEM_CHOICES = [
+        ('peticao', 'Petição'),
+        ('movimentacao', 'Movimentação'),
+    ]
+
     processo = models.CharField(
         'Processo (CNJ)', max_length=25, blank=True, db_index=True)
     parte = models.CharField('Parte', max_length=300, blank=True)
+    origem = models.CharField(
+        'Origem', max_length=20, choices=ORIGEM_CHOICES,
+        default='movimentacao', db_index=True)
+    peticao_documento = models.CharField(
+        'Documento da petição', max_length=300, blank=True)
+    peticao_url = models.URLField(
+        'URL da petição', max_length=500, blank=True)
     tipo_prazo = models.CharField('Tipo de prazo', max_length=40, blank=True)
     prazo_dias = models.PositiveSmallIntegerField(
         'Prazo (dias úteis)', default=0)

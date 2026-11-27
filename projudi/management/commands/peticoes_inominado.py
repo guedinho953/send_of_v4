@@ -71,6 +71,9 @@ class Command(BaseCommand):
         parser.add_argument(
             '--peticao-url',
             help='URL do PDF da petição (default: a da fila)')
+        parser.add_argument(
+            '--peticao-documento',
+            help='Nome do documento da petição (default: o da fila)')
         parser.add_argument('--servidor', default='IVAN GUEDES DA SILVA')
         parser.add_argument('--habilitacao', choices=['regular', 'omitir'],
                             default='regular')
@@ -164,6 +167,10 @@ class Command(BaseCommand):
             peticao_url=(
                 options.get('peticao_url')
                 or (peticao['peticao']['url'] if peticao['peticao'] else None)
+            ),
+            peticao_documento=(
+                options.get('peticao_documento')
+                or (peticao['peticao']['nome'] if peticao['peticao'] else '')
             ),
             recorrente=options.get('recorrente'),
             data_protocolo=data_protocolo,

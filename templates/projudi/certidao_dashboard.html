@@ -33,12 +33,23 @@
 {% endblock %}
 
 {% block content %}
-<h1 class="section-title">📑 Certidões e Prazos DJEN</h1>
+<h1 class="section-title">📑 {{ origem_label|default:"Certidões e Prazos DJEN" }}</h1>
 
 <div class="aviso">
-    Controle interno das certidões. A certidão leva só a conclusão; a
+    Certidões agora separadas por origem: <strong>petições</strong> (fila
+    JuntadaPeticao) e <strong>movimentações</strong> (prazos e decursos do
+    processo). A certidão leva só a conclusão; a
     <strong>memória de cálculo completa</strong> fica registrada no detalhe e em
     <code>var/prazo_djen.jsonl</code>.
+</div>
+
+<div class="filtro-bar" style="margin-bottom:8px;">
+    <a class="filtro-btn {% if not origem_filtro %}active{% endif %}"
+       href="{% url 'projudi:certidao_dashboard' %}">Todas ({{ total_geral }})</a>
+    <a class="filtro-btn {% if origem_filtro == 'peticao' %}active{% endif %}"
+       href="{% url 'projudi:certidao_peticoes' %}">📄 Petições ({{ total_peticoes }})</a>
+    <a class="filtro-btn {% if origem_filtro == 'movimentacao' %}active{% endif %}"
+       href="{% url 'projudi:certidao_movimentacoes' %}">⚙️ Movimentações ({{ total_movimentacoes }})</a>
 </div>
 
 <div class="stats-grid">
@@ -50,17 +61,17 @@
 
 <div class="filtro-bar">
     <a class="filtro-btn {% if not filtro_status %}active{% endif %}"
-       href="{% url 'projudi:certidao_dashboard' %}?tipo={{ filtro_tipo|urlencode }}&q={{ busca|urlencode }}">Todos</a>
+       href="{% url url_name %}?tipo={{ filtro_tipo|urlencode }}&q={{ busca|urlencode }}">Todos</a>
     <a class="filtro-btn {% if filtro_status == 'tempestivo' %}active{% endif %}"
-       href="{% url 'projudi:certidao_dashboard' %}?status=tempestivo&tipo={{ filtro_tipo|urlencode }}&q={{ busca|urlencode }}">Tempestivas</a>
+       href="{% url url_name %}?status=tempestivo&tipo={{ filtro_tipo|urlencode }}&q={{ busca|urlencode }}">Tempestivas</a>
     <a class="filtro-btn {% if filtro_status == 'intempestivo' %}active{% endif %}"
-       href="{% url 'projudi:certidao_dashboard' %}?status=intempestivo&tipo={{ filtro_tipo|urlencode }}&q={{ busca|urlencode }}">Intempestivas</a>
+       href="{% url url_name %}?status=intempestivo&tipo={{ filtro_tipo|urlencode }}&q={{ busca|urlencode }}">Intempestivas</a>
     <a class="filtro-btn {% if filtro_status == 'sem_protocolo' %}active{% endif %}"
-       href="{% url 'projudi:certidao_dashboard' %}?status=sem_protocolo&tipo={{ filtro_tipo|urlencode }}&q={{ busca|urlencode }}">Sem protocolo</a>
+       href="{% url url_name %}?status=sem_protocolo&tipo={{ filtro_tipo|urlencode }}&q={{ busca|urlencode }}">Sem protocolo</a>
 
     <form method="get" style="display:flex; gap:6px; align-items:center; margin-left:auto;">
         <input type="hidden" name="status" value="{{ filtro_status }}">
-        <input type="text" name="q" value="{{ busca }}" placeholder="processo, parte ou motivo"
+        <input type="text" name="q" value="{{ busca }}" placeholder="processo, parte, petição ou motivo"
                style="padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px; width:230px;">
         <select name="tipo" onchange="this.form.submit()"
                 style="padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px;">
@@ -79,6 +90,7 @@
         <tr>
             <th>Data</th>
             <th>Processo</th>
+            {% if mostrar_origem %}<th>Origem</th>{% endif %}
             <th>Parte</th>
             <th>Tipo</th>
             <th>Último dia</th>
@@ -93,6 +105,13 @@
         <tr>
             <td>{{ r.created_at|date:"d/m/Y H:i" }}</td>
             <td><strong>{{ r.processo|default:"—" }}</strong></td>
+            {% if mostrar_origem %}
+            <td>
+                <span class="tag-status {% if r.origem == 'peticao' %}tag-tempestivo{% else %}tag-sem_protocolo{% endif %}">
+                    {{ r.get_origem_display }}
+                </span>
+            </td>
+            {% endif %}
             <td>{{ r.parte|default:"—"|truncatechars:40 }}</td>
             <td>{{ r.tipo_label }}<br><span style="color:#6b7280;">{{ r.prazo_dias }} dias úteis</span></td>
             <td>{{ r.ultimo_dia|date:"d/m/Y"|default:"—" }}</td>
@@ -100,6 +119,14 @@
             <td>{{ r.get_preparo_status_display|default:"—" }}</td>
             <td><span class="tag-status tag-{{ r.status_classe }}">{{ r.status_label }}</span></td>
             <td>
+                {% if r.peticao_documento %}
+                <div style="font-size:11px; color:#2563eb; margin-bottom:4px;">
+                    📄 {{ r.peticao_documento|truncatechars:70 }}
+                    {% if r.peticao_url %}
+                        <a href="{{ r.peticao_url }}" target="_blank" rel="noopener">abrir</a>
+                    {% endif %}
+                </div>
+                {% endif %}
                 <div class="motivo">{{ r.motivo|truncatechars:140 }}</div>
                 <div style="margin-top:6px;">
                     <a class="btn-sm" href="{% url 'projudi:certidao_detail' r.id %}">Detalhe</a>
@@ -114,8 +141,16 @@
 </table>
 {% else %}
 <div class="empty-state">
-    <h3>Nenhuma certidão registrada</h3>
-    <p>Gere um prazo com <code>python manage.py prazo_djen ...</code>.</p>
+    {% if origem_filtro == 'peticao' %}
+        <h3>Nenhuma certidão de petição registrada</h3>
+        <p>Gere pela fila com <code>python manage.py peticoes_inominado ...</code>.</p>
+    {% elif origem_filtro == 'movimentacao' %}
+        <h3>Nenhuma certidão de movimentação registrada</h3>
+        <p>Gere um prazo com <code>python manage.py prazo_djen ...</code>.</p>
+    {% else %}
+        <h3>Nenhuma certidão registrada</h3>
+        <p>Use a fila de petições ou o comando <code>prazo_djen</code>.</p>
+    {% endif %}
 </div>
 {% endif %}
 

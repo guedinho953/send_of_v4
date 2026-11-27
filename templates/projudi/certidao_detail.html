@@ -26,7 +26,8 @@
 <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px;">
     <h1 class="section-title" style="margin:0;">Certidão #{{ registro.id }}</h1>
     <span class="tag-status tag-{{ status_classe }}">{{ status_label }}</span>
-    <a class="btn-sm" href="{% url 'projudi:certidao_dashboard' %}" style="margin-left:auto;">← Voltar</a>
+    <span class="tag-status tag-sem_protocolo">{{ origem_label|default:registro.get_origem_display }}</span>
+    <a class="btn-sm" href="{% if registro.origem == 'peticao' %}{% url 'projudi:certidao_peticoes' %}{% else %}{% url 'projudi:certidao_movimentacoes' %}{% endif %}" style="margin-left:auto;">← Voltar</a>
 </div>
 
 <div class="box">
@@ -34,6 +35,14 @@
     <div class="grid">
         <div><strong>Processo</strong> {{ registro.processo|default:"—" }}</div>
         <div><strong>Parte</strong> {{ registro.parte|default:"—" }}</div>
+        <div><strong>Origem</strong> {{ origem_label|default:registro.get_origem_display }}</div>
+        {% if registro.peticao_documento %}
+        <div><strong>Petição</strong> {{ registro.peticao_documento }}
+            {% if registro.peticao_url %}
+                · <a href="{{ registro.peticao_url }}" target="_blank" rel="noopener">abrir PDF</a>
+            {% endif %}
+        </div>
+        {% endif %}
         <div><strong>Tipo</strong> {{ tipo_label|default:registro.tipo_prazo }}</div>
         <div><strong>Prazo</strong> {{ registro.prazo_dias }} dias úteis</div>
         <div><strong>Disponibilização</strong> {{ registro.data_disponibilizacao|date:"d/m/Y"|default:"—" }}</div>

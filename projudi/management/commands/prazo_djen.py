@@ -79,6 +79,16 @@ class Command(BaseCommand):
             help='Cláusula de habilitação dos advogados (default: regular)')
         parser.add_argument('--processo', help='Número CNJ')
         parser.add_argument('--parte', help='Nome da parte')
+        parser.add_argument(
+            '--origem', choices=['peticao', 'movimentacao'],
+            help=(
+                'Origem da certidão. Default: petição para recurso/'
+                'contrarrazões; movimentação para os demais tipos.'))
+        parser.add_argument(
+            '--peticao-documento',
+            help='Nome do documento da petição (para a aba Petições)')
+        parser.add_argument(
+            '--peticao-url', help='URL do PDF/documento da petição')
         parser.add_argument('--servidor', default='IVAN GUEDES DA SILVA')
         parser.add_argument('--tenant', type=int, help='ID do tenant (opcional)')
         parser.add_argument('--saida', help='Arquivo HTML de saída')
@@ -91,6 +101,13 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         if options.get('preparo') == 'insuficiente':
             options['preparo'] = 'incompleto'
+        if not options.get('origem'):
+            options['origem'] = (
+                'peticao'
+                if options.get('tipo') in (
+                    'inominado', 'contrarrazoes_inominado')
+                else 'movimentacao'
+            )
         dispo = _parse_data(options['disponibilizacao'])
         protocolo = (
             _parse_data(options['protocolo'])
@@ -325,6 +342,9 @@ class Command(BaseCommand):
             rec = PrazoDjenRecord.objects.create(
                 processo=options['processo'] or '',
                 parte=options['parte'] or '',
+                origem=options.get('origem') or 'movimentacao',
+                peticao_documento=options.get('peticao_documento') or '',
+                peticao_url=options.get('peticao_url') or '',
                 tipo_prazo=options['tipo'],
                 prazo_dias=res.prazo_dias,
                 data_disponibilizacao=res.data_disponibilizacao,
@@ -363,6 +383,9 @@ class Command(BaseCommand):
                 'id': registro_id,
                 'processo': options['processo'] or '',
                 'parte': options['parte'] or '',
+                'origem': options.get('origem') or 'movimentacao',
+                'peticao_documento': options.get('peticao_documento') or '',
+                'peticao_url': options.get('peticao_url') or '',
                 'tipo_prazo': options['tipo'],
                 'prazo_dias': res.prazo_dias,
                 'tempestivo': tempestivo,
