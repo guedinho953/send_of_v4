@@ -339,6 +339,15 @@ petição e os fallbacks da intimação. O sistema usa o
 e a intimação correspondente. A certidão é registrada com
 `origem='movimentacao'` e aparece na aba **Movimentações**.
 
+O formulário tem dois botões:
+
+- **Só certificar** — gera e registra a certidão, sem juntar/intimar;
+- **Certificar e abrir Juntar/Intimar** — gera e leva direto ao plano de
+  juntada/intimação.
+
+Na tela de juntar/intimar também existe a ação **Só certificar (não
+juntar)**, que mantém a certidão apenas no controle interno.
+
 A aba **Movimentações** do módulo de certidões também tem o atalho
 **📥 Fila de movimentações**, que abre `/projudi/movimentacoes/`. Nessa
 fila, cada linha tem:

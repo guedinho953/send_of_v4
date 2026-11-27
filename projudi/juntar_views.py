@@ -40,6 +40,9 @@ class CertidaoJuntarIntimarView(LoginRequiredMixin, View):
 
     def _contexto(self, registro, plano, **extra):
         acoes = [('simular', 'Simular plano')]
+        if registro.tipo_prazo == 'impugnacao_embargos_execucao':
+            acoes.append(
+                ('so_certificar', 'Só certificar (não juntar)'))
         if plano.get('pode_juntar', True):
             acoes.append(('juntar', 'Juntar certidão'))
         if plano.get('pode_intimar'):
@@ -128,6 +131,20 @@ class CertidaoJuntarIntimarView(LoginRequiredMixin, View):
             messages.info(
                 request,
                 'Simulação gerada. Nada foi enviado ao Projudi.',
+            )
+            return render(
+                request,
+                self.template_name,
+                self._contexto(
+                    registro, plano, acao=acao,
+                    processo_url=processo_url, polo=polo, prazo=prazo),
+            )
+
+        if acao == 'so_certificar':
+            messages.info(
+                request,
+                'Certidão mantida apenas no controle interno. '
+                'Nada foi enviado ao Projudi.',
             )
             return render(
                 request,

@@ -216,6 +216,33 @@ class JuntarIntimarPlanTest(TestCase):
         self.assertEqual(kwargs['polo_intimacao'], 'autores')
         self.assertEqual(kwargs['proc_projudi'], '12345678901234')
 
+    @patch('projudi.juntar_views.executar_juntada')
+    def test_so_certificar_nao_envia_ao_projudi(self, executar):
+        registro = PrazoDjenRecord.objects.create(
+            processo='0000013-13.2026.8.05.0191',
+            origem='movimentacao',
+            tipo_prazo='impugnacao_embargos_execucao',
+            prazo_dias=15,
+            tempestivo=True,
+            seguranca_juizo='parcial',
+            certidao_path=str(self.preview),
+        )
+        resposta = self.client.post(
+            reverse('projudi:certidao_juntar_intimar',
+                    args=[registro.id]),
+            {
+                'acao': 'so_certificar',
+                'processo_url': (
+                    'https://projudi.tjba.jus.br/projudi/listagens/'
+                    'DadosProcesso?numeroProcesso=12345678901234'),
+                'polo': 'autores',
+                'prazo': '15',
+            },
+        )
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'mantida apenas no controle interno')
+        executar.assert_not_called()
+
     @patch('projudi.juntar_views.agendar_pos_intimacao')
     @patch('projudi.juntar_views.executar_juntada_e_intimacao')
     def test_agenda_acoes_depois_da_intimacao(self, juntar, agendar):

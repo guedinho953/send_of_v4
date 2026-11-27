@@ -101,6 +101,7 @@ class CertidaoImpugnacaoEmbargosView(LoginRequiredMixin, View):
             request.POST.get('data_intimacao_manual') or '').strip()
         evento_intimacao_manual = (
             request.POST.get('evento_intimacao_manual') or '').strip()
+        proximo = (request.POST.get('proximo') or 'certificar').strip()
         tipo_localizador = (
             request.POST.get('tipo_localizador') or '').strip()
         localizador = (
@@ -248,6 +249,9 @@ class CertidaoImpugnacaoEmbargosView(LoginRequiredMixin, View):
                 'Certidão gerada e registrada em Movimentações '
                 f'(#{registro.id}).',
             )
+            if proximo == 'juntar':
+                return redirect(
+                    'projudi:certidao_juntar_intimar', pk=registro.id)
             return redirect('projudi:certidao_detail', pk=registro.id)
 
         messages.warning(

@@ -183,6 +183,37 @@ class ImpugnacaoEmbargosViewTest(TestCase):
 
     @patch('projudi.impugnacao_embargos_views.call_command')
     @patch('projudi.impugnacao_embargos_views.DecursoPagamentoService.analisar')
+    def test_certificar_e_abrir_juntar(self, analisar, comando):
+        analisar.return_value = resultado_analise()
+        registro = PrazoDjenRecord.objects.create(
+            processo='0000001-11.2026.8.05.0191',
+            origem='movimentacao',
+            tipo_prazo='impugnacao_embargos_execucao',
+            prazo_dias=15,
+        )
+        resposta = self.client.post(
+            reverse('projudi:certidao_impugnacao_embargos'),
+            {
+                'processo': '0000001-11.2026.8.05.0191',
+                'processo_url': 'https://projudi/processo',
+                'evento': '55',
+                'data_protocolo': '10/12/2026',
+                'evento_impugnacao': '86',
+                'seguranca_juizo': 'parcial',
+                'proximo': 'juntar',
+            },
+        )
+        self.assertEqual(resposta.status_code, 302)
+        self.assertRedirects(
+            resposta,
+            reverse('projudi:certidao_juntar_intimar',
+                    args=[registro.id]),
+            fetch_redirect_response=False,
+        )
+        comando.assert_called_once()
+
+    @patch('projudi.impugnacao_embargos_views.call_command')
+    @patch('projudi.impugnacao_embargos_views.DecursoPagamentoService.analisar')
     def test_gera_certidao_na_aba_movimentacoes(self, analisar, comando):
         analisar.return_value = resultado_analise()
         registro = PrazoDjenRecord.objects.create(
