@@ -14,10 +14,11 @@ from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.views import View
-from django.views.generic import TemplateView
+from django.views.generic import DetailView, TemplateView
 
 from .models import (
-    CumprimentoRecord, MovimentacaoRecord, ProjudiSession,
+    CertidaoRegistro, CumprimentoRecord, MovimentacaoRecord,
+    ProjudiSession,
 )
 from .services import ProjudiService
 
@@ -451,6 +452,20 @@ class CertidaoGerarViaRagView(LoginRequiredMixin, View):
                 recipient_name=f'Certidão: {template.name}',
                 html_content=html,
             )
+            try:
+                from .certidao_registro_service import registrar_documento
+                registrar_documento(
+                    request.user, doc,
+                    tipo_prazo=rag.tipo_certidao or 'certidao',
+                    origem='movimentacao',
+                    parte=record.parte_nome or '',
+                    status='gerada',
+                    evento_despacho=rag.evento_despacho or '',
+                    evento_intimacao=rag.evento_intimacao or '',
+                    prazo_info=record.prazo_info or {},
+                )
+            except Exception:
+                pass
             record.delete()
             messages.info(
                 request,
@@ -480,6 +495,43 @@ class CertidaoGerarViaRagView(LoginRequiredMixin, View):
                 request,
                 f'Erro ao gerar a certidão via RAG: {exc}'
             )
+
+        try:
+            from .models import CertidaoRegistro
+            info = record.prazo_info or {}
+            CertidaoRegistro.objects.get_or_create(
+                cumprimento=record,
+                defaults={
+                    'tenant': getattr(request.user, 'tenant', None),
+                    'user': request.user,
+                    'processo': processo,
+                    'numero_processo_cnj': processo,
+                    'parte': record.parte_nome or '',
+                    'origem': 'movimentacao',
+                    'tipo_prazo': rag.tipo_certidao or 'certidao',
+                    'prazo_dias': info.get('prazo_dias') or 0,
+                    'evento_despacho': rag.evento_despacho or '',
+                    'evento_intimacao': record.evento_decisao or '',
+                    'data_intimacao': record.prazo_info.get(
+                        'data_disponibilizacao'),
+                    'data_inicio': info.get('data_inicio'),
+                    'ultimo_dia': info.get('ultimo_dia'),
+                    'data_decurso': info.get('data_decurso'),
+                    'texto_certidao': record.texto_html or '',
+                    'motivo': record.fluxo_justificativa or '',
+                    'rag_example': rag,
+                    'template_used': template,
+                    'servidor': '',
+                    'status': (
+                        'juntada' if record.status == 'cumprido'
+                        else 'falha' if record.status == 'falha'
+                        else 'pendente'
+                    ),
+                    'prazo_info': info,
+                },
+            )
+        except Exception:
+            pass
 
         return HttpResponseRedirect(reverse('projudi:certidao_dashboard'))
 
@@ -839,7 +891,8 @@ class CertidaoTabelaView(LoginRequiredMixin, TemplateView):
         docs = GeneratedDocument.objects.filter(
             template__template_type='certidao',
             exported_to_projudi=False,
-        ).select_related('process', 'template')
+        ).select_related('process', 'template').prefetch_related(
+            'certidao_registros')
         if tenant:
             docs = docs.filter(tenant=tenant)
         docs = docs.order_by('-created_at')[:300]
@@ -861,6 +914,10 @@ class CertidaoTabelaView(LoginRequiredMixin, TemplateView):
                 'preview_url': reverse(
                     'projudi:certidao_peticao_preview', args=[doc.id]),
                 'doc_id': doc.id,
+                'registro_id': (
+                    doc.certidao_registros.first().id
+                    if doc.certidao_registros.exists() else None
+                ),
                 'fonte': 'Documento gerado',
                 'fonte_classe': 'doc',
             })
@@ -963,3 +1020,17 @@ class CertidaoTabelaView(LoginRequiredMixin, TemplateView):
             'total_visivel': len(rows),
         })
         return context
+
+
+class CertidaoRegistroDetailView(LoginRequiredMixin, DetailView):
+    """Detalhe do registro unificado de certidão."""
+
+    model = CertidaoRegistro
+    template_name = 'projudi/certidao_registro_detail.html'
+    context_object_name = 'registro'
+
+    def get_queryset(self):
+        return CertidaoRegistro.objects.select_related(
+            'generated_document', 'movimentacao', 'cumprimento',
+            'rag_example', 'template_used',
+        )

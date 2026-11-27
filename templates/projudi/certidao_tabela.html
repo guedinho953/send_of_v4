@@ -138,6 +138,12 @@
                             {% if r.preview_url %}👁 Preview{% else %}🔍 Detalhe{% endif %}
                         </a>
                         {% endif %}
+                        {% if r.registro_id %}
+                        <a class="btn btn-sm btn-outline"
+                           href="{% url 'projudi:certidao_registro_detail' r.registro_id %}">
+                            📄 Registro
+                        </a>
+                        {% endif %}
                         {% if r.doc_id %}
                         <details class="acoes-inline">
                             <summary>⚙️ Ações</summary>

@@ -7,6 +7,7 @@ from .models import (
     MandadoRecord, MandadoLog,
     CumprimentoRecord, CumprimentoLog,
     MovimentacaoRecord, MovimentacaoLog,
+    CertidaoRegistro,
     Feriado, SuspensaoPrazo,
 )
 
@@ -118,6 +119,18 @@ class MovimentacaoLogAdmin(admin.ModelAdmin):
     def mensagem_resumo(self, obj):
         return obj.mensagem[:80] + '...' if len(obj.mensagem) > 80 else obj.mensagem
     mensagem_resumo.short_description = 'Mensagem'
+
+
+@admin.register(CertidaoRegistro)
+class CertidaoRegistroAdmin(admin.ModelAdmin):
+    list_display = [
+        'id', 'processo', 'parte', 'origem', 'tipo_prazo',
+        'status', 'ultimo_dia', 'data_decurso', 'created_at',
+    ]
+    list_filter = ['origem', 'status', 'tipo_prazo', 'created_at']
+    search_fields = ['processo', 'numero_processo_cnj', 'parte', 'tipo_prazo']
+    readonly_fields = ['created_at', 'updated_at']
+    date_hierarchy = 'created_at'
 
 
 @admin.register(Feriado)

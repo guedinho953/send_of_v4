@@ -314,6 +314,24 @@ class CertidaoPeticaoGerarView(LoginRequiredMixin, View):
                 recipient_name=f'Petição: {info["label"]}',
                 html_content=html,
             )
+            try:
+                from .certidao_registro_service import registrar_documento
+                registrar_documento(
+                    request.user, doc,
+                    tipo_prazo=tipo,
+                    origem='peticao',
+                    parte=recorrente or '',
+                    status='gerada',
+                    data_intimacao=data_inicio,
+                    data_inicio=data_inicio,
+                    ultimo_dia=resultado.ultimo_dia,
+                    data_decurso=resultado.data_decurso,
+                    prazo_info=resultado.to_dict(),
+                    servidor=servidor,
+                    servidor_cargo=servidor_cargo,
+                )
+            except Exception:
+                pass
         except Exception as exc:
             messages.error(request, f'Erro ao gerar a certidão: {exc}')
             return HttpResponseRedirect(reverse('projudi:certidao_peticoes'))
@@ -599,6 +617,13 @@ class CertidaoPeticaoJuntarIntimarView(LoginRequiredMixin, View):
                 if certidao_juntada:
                     doc.exported_to_projudi = True
                     doc.save(update_fields=['exported_to_projudi'])
+                    try:
+                        from .certidao_registro_service import (
+                            sincronizar_documento,
+                        )
+                        sincronizar_documento(doc, status='juntada')
+                    except Exception:
+                        pass
                     logger.info(
                         'Certidão juntada | tipo=%s | processo=%s | '
                         'documento=%s | %s',
@@ -853,6 +878,19 @@ class CertidaoMovimentacaoCustasView(LoginRequiredMixin, View):
                 recipient_name='Certidão: Inexistência de Custas da Execução',
                 html_content=html,
             )
+            try:
+                from .certidao_registro_service import registrar_documento
+                registrar_documento(
+                    request.user, doc,
+                    tipo_prazo='custas_execucao',
+                    origem='movimentacao',
+                    parte=(parte if 'parte' in locals() else ''),
+                    status='gerada',
+                    servidor=servidor,
+                    servidor_cargo=servidor_cargo,
+                )
+            except Exception:
+                pass
         except Exception as exc:
             messages.error(request, f'Erro ao gerar a certidão: {exc}')
             return HttpResponseRedirect(
@@ -999,6 +1037,21 @@ class CertidaoAcoesView(LoginRequiredMixin, View):
 
             doc.exported_to_projudi = True
             doc.save(update_fields=['exported_to_projudi'])
+            try:
+                from .certidao_registro_service import sincronizar_documento
+                sincronizar_documento(
+                    doc,
+                    status=(
+                        'concluida' if acao == 'juntar_conclusao'
+                        else 'juntada'
+                    ),
+                    tipo_localizador=tipo_localizador,
+                    localizador=localizador,
+                    tipo_conclusao=tipo_conclusao,
+                    juiz_conclusao=juiz_conclusao,
+                )
+            except Exception:
+                pass
 
             if acao == 'juntar_localizador':
                 messages.success(
@@ -1256,6 +1309,14 @@ class CertidaoDecursoPagamentoView(LoginRequiredMixin, View):
                 ),
                 html_content=html,
             )
+            try:
+                from .certidao_registro_service import registrar_decurso
+                registrar_decurso(
+                    request.user, resultado, doc,
+                    servidor=servidor, servidor_cargo=servidor_cargo,
+                )
+            except Exception:
+                pass
         except Exception as exc:
             messages.error(request, f'Erro ao gerar a certidão: {exc}')
             return HttpResponseRedirect(

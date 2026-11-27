@@ -144,8 +144,10 @@ class DecursoPagamentoService:
                 else 'Intimação'
             ),
             'dias': dias,
+            'data_inicio': prazo.data_inicio,
             'ultimo_dia': prazo.ultimo_dia,
             'data_decurso': prazo.data_decurso,
+            'prazo_info': prazo.to_dict(),
         }
 
     def _localizar_despacho_pagamento(self, session, movs):

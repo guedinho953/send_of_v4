@@ -79,6 +79,7 @@ urlpatterns = [
     path('certidoes/dashboard/', certidao_views.CertidaoDashboardView.as_view(), name='certidao_dashboard'),
     path('certidoes/rags/', certidao_views.RagCertidaoListView.as_view(), name='rag_certidoes'),
     path('certidoes/tabela/', certidao_views.CertidaoTabelaView.as_view(), name='certidao_tabela'),
+    path('certidoes/registros/<int:pk>/', certidao_views.CertidaoRegistroDetailView.as_view(), name='certidao_registro_detail'),
     path('certidoes/transito-julgado/', transito_julgado_views.TransitoJulgadoView.as_view(), name='transito_julgado'),
     path('certidoes/transito-julgado/criar/', transito_julgado_views.TransitoJulgadoCriarView.as_view(), name='transito_julgado_criar'),
     path('certidoes/modelos/', certidao_modelo_views.CertidaoModeloListView.as_view(), name='certidao_modelos'),

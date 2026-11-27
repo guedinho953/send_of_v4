@@ -593,6 +593,106 @@ class MovimentacaoLog(TimeStampedModel):
         return f'[{self.tipo}] {self.movimentacao_id}'
 
 
+class CertidaoRegistro(TimeStampedModel):
+    """Registro unificado de certidão gerada/executada.
+
+    Reúne o que hoje fica espalhado entre GeneratedDocument,
+    CumprimentoRecord e MovimentacaoRecord, sem substituir esses modelos.
+    """
+
+    ORIGEM_CHOICES = [
+        ('peticao', 'Petição'),
+        ('movimentacao', 'Movimentação'),
+    ]
+    STATUS_CHOICES = [
+        ('em_curso', 'Prazo em curso'),
+        ('gerada', 'Gerada / não juntada'),
+        ('pendente', 'Pendente'),
+        ('juntada', 'Juntada'),
+        ('intimada', 'Juntada + intimada'),
+        ('concluida', 'Concluída'),
+        ('falha', 'Falha'),
+        ('dispensada', 'Dispensada'),
+    ]
+    PREPARO_CHOICES = [
+        ('gratuidade', 'Gratuidade / assistência judiciária'),
+        ('completo', 'Preparo completo'),
+        ('incompleto', 'Preparo incompleto'),
+        ('nao_pago', 'Não houve preparo'),
+        ('nao_verificado', 'Não verificado'),
+    ]
+
+    tenant = models.ForeignKey(
+        'accounts.Tenant', on_delete=models.CASCADE,
+        null=True, blank=True, related_name='certidoes_registros')
+    user = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='certidoes_registros')
+
+    processo = models.CharField('Processo (CNJ)', max_length=25, blank=True, db_index=True)
+    numero_processo_cnj = models.CharField(
+        'Nº processo CNJ', max_length=25, blank=True, db_index=True)
+    parte = models.CharField('Parte', max_length=300, blank=True)
+    origem = models.CharField(
+        'Origem', max_length=20, choices=ORIGEM_CHOICES,
+        default='movimentacao', db_index=True)
+    tipo_prazo = models.CharField('Tipo de prazo', max_length=40, blank=True)
+    prazo_dias = models.PositiveSmallIntegerField('Prazo (dias úteis)', default=0)
+
+    evento_despacho = models.CharField('Evento do despacho', max_length=20, blank=True)
+    evento_intimacao = models.CharField('Evento da intimação', max_length=20, blank=True)
+    data_intimacao = models.DateField('Intimação', null=True, blank=True)
+    data_inicio = models.DateField('Início do prazo', null=True, blank=True)
+    data_protocolo = models.DateField('Protocolo', null=True, blank=True)
+    ultimo_dia = models.DateField('Último dia', null=True, blank=True)
+    data_decurso = models.DateField('Decurso', null=True, blank=True)
+
+    texto_certidao = models.TextField('Texto da certidão', blank=True)
+    motivo = models.TextField('Memória / motivo', blank=True)
+    preview_path = models.CharField('Arquivo de preview', max_length=500, blank=True)
+
+    generated_document = models.ForeignKey(
+        'processes.GeneratedDocument', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='certidao_registros')
+    movimentacao = models.ForeignKey(
+        'MovimentacaoRecord', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='certidao_registros')
+    cumprimento = models.ForeignKey(
+        'CumprimentoRecord', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='certidao_registros')
+    rag_example = models.ForeignKey(
+        'processes.RAGExample', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='certidoes_registros')
+    template_used = models.ForeignKey(
+        'processes.DocumentTemplate', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='certidoes_registros')
+
+    tipo_localizador = models.CharField('Tipo localizador', max_length=20, blank=True)
+    localizador = models.CharField('Localizador', max_length=20, blank=True)
+    tipo_conclusao = models.CharField('Tipo de conclusão', max_length=2, blank=True)
+    juiz_conclusao = models.CharField('Juiz da conclusão', max_length=20, blank=True)
+
+    preparo_status = models.CharField(
+        'Preparo', max_length=20, choices=PREPARO_CHOICES, blank=True)
+    servidor = models.CharField('Servidor', max_length=200, blank=True)
+    servidor_cargo = models.CharField('Cargo do servidor', max_length=200, blank=True)
+    status = models.CharField(
+        'Status', max_length=20, choices=STATUS_CHOICES,
+        default='gerada', db_index=True)
+    prazo_info = models.JSONField('Cálculo (JSON)', default=dict, blank=True)
+
+    class Meta:
+        verbose_name = 'Registro de Certidão'
+        verbose_name_plural = 'Registros de Certidões'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return (
+            f'{self.processo or "sem processo"} — '
+            f'{self.tipo_prazo or "certidão"} — {self.get_status_display()}'
+        )
+
+
 class Feriado(TenantModel, TimeStampedModel, ActiveModel):
     """Feriado ou data especial que NÃO conta como dia útil.
 
