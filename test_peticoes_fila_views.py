@@ -318,6 +318,12 @@ class PeticaoFilaViewsTest(TestCase):
                 'tipo_conclusao': '18',
                 'juiz_conclusao': '41201',
                 'acao': 'gerar',
+                'fluxo_juntar': 'on',
+                'fluxo_intimar': 'on',
+                'fluxo_localizador': 'on',
+                'fluxo_contadoria': 'on',
+                'fluxo_conclusao': 'on',
+                'fluxo_mp': 'on',
             },
         )
         self.assertEqual(resposta.status_code, 302)
@@ -325,6 +331,12 @@ class PeticaoFilaViewsTest(TestCase):
             resposta,
             reverse('projudi:certidao_detail', args=[registro.id]),
             fetch_redirect_response=False,
+        )
+        registro.refresh_from_db()
+        self.assertEqual(
+            registro.acoes_fluxo,
+            ['juntar', 'intimar', 'localizador', 'contadoria',
+             'conclusao', 'mp'],
         )
         comando.assert_called_once()
         args, kwargs = comando.call_args

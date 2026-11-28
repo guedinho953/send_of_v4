@@ -433,6 +433,11 @@ def executar_juntada_e_intimacao(registro, user, plano=None):
             polo_intimacao=plano.get('polo') or 'autores',
             tipo_localizador=plano.get('tipo_localizador') or '',
             localizador=plano.get('localizador') or '',
+            envia_mp=bool(plano.get('enviar_mp')),
+            cod_nucleo_mp=plano.get('cod_nucleo_mp') or '31',
+            tipo_parecer_mp=plano.get('tipo_parecer_mp') or '6',
+            prazo_mp=plano.get('prazo_mp') or '5',
+            promotor_mp=plano.get('promotor_mp') or None,
         )
         return True, record, bool(intimacao_ok), ''
     except Exception as exc:

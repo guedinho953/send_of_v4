@@ -118,6 +118,13 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
             request.POST.get('tipo_conclusao') or '18').strip()
         juiz_conclusao = (
             request.POST.get('juiz_conclusao') or '41201').strip()
+        acoes_fluxo = [
+            nome for nome in (
+                'juntar', 'intimar', 'localizador', 'contadoria',
+                'conclusao', 'mp',
+            )
+            if request.POST.get(f'fluxo_{nome}') == 'on'
+        ]
 
         voltar = self._voltar()
 
@@ -300,6 +307,8 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
             .first()
         )
         if registro:
+            registro.acoes_fluxo = acoes_fluxo
+            registro.save(update_fields=['acoes_fluxo'])
             messages.success(
                 request,
                 f'Certidão gerada e registrada em '

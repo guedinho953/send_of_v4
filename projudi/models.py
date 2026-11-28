@@ -851,6 +851,10 @@ class PrazoDjenRecord(models.Model):
         'Texto da certidão', blank=True)
     tempestivo = models.BooleanField(
         'Tempestivo', null=True, blank=True)
+    acoes_fluxo = models.JSONField(
+        'Fluxo escolhido', default=list, blank=True,
+        help_text='Ações escolhidas na geração: juntar, intimar, '
+                  'localizador, contadoria, conclusão, MP.')
     motivo = models.TextField('Memória / motivo', blank=True)
     prazo_info = models.JSONField(
         'Cálculo (JSON)', default=dict, blank=True)

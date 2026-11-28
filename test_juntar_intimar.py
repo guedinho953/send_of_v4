@@ -239,6 +239,10 @@ class JuntarIntimarPlanTest(TestCase):
             'prazo_codigo': '4',
             'motivo_intimacao': '3',
             'polo': 'autores',
+            'enviar_mp': True,
+            'cod_nucleo_mp': '31',
+            'tipo_parecer_mp': '6',
+            'prazo_mp': '5',
         }
         ok, record, intimacao_ok, erro = executar_juntada_e_intimacao(
             registro, self.user, plano=plano)
@@ -252,6 +256,10 @@ class JuntarIntimarPlanTest(TestCase):
         self.assertEqual(kwargs['prazo_intimacao'], '4')
         self.assertEqual(kwargs['polo_intimacao'], 'autores')
         self.assertEqual(kwargs['proc_projudi'], '12345678901234')
+        self.assertTrue(kwargs['envia_mp'])
+        self.assertEqual(kwargs['cod_nucleo_mp'], '31')
+        self.assertEqual(kwargs['tipo_parecer_mp'], '6')
+        self.assertEqual(kwargs['prazo_mp'], '5')
 
     @patch('projudi.juntar_views.executar_juntada')
     def test_juntar_localizador(self, juntar):

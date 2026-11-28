@@ -134,6 +134,36 @@
         <input type="hidden" name="tipo_conclusao" value="{{ tipo_conclusao|default:'18' }}">
         <input type="hidden" name="juiz_conclusao" value="{{ juiz_conclusao|default:'41201' }}">
 
+        <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:10px 12px; margin-bottom:16px;">
+            <strong style="display:block; font-size:13px; color:#166534; margin-bottom:6px;">
+                Fluxo escolhido já na geração
+            </strong>
+            <div style="display:flex; gap:12px; flex-wrap:wrap; font-size:12px; color:#166534;">
+                <label><input type="checkbox" name="fluxo_juntar"
+                    {% if 'juntar' in acoes_fluxo or not acoes_fluxo %}checked{% endif %}>
+                    Juntar certidão</label>
+                <label><input type="checkbox" name="fluxo_intimar"
+                    {% if 'intimar' in acoes_fluxo %}checked{% endif %}>
+                    Intimar embargado</label>
+                <label><input type="checkbox" name="fluxo_localizador"
+                    {% if 'localizador' in acoes_fluxo %}checked{% endif %}>
+                    Localizador</label>
+                <label><input type="checkbox" name="fluxo_contadoria"
+                    {% if 'contadoria' in acoes_fluxo %}checked{% endif %}>
+                    Contadoria</label>
+                <label><input type="checkbox" name="fluxo_conclusao"
+                    {% if 'conclusao' in acoes_fluxo %}checked{% endif %}>
+                    Conclusão ao Juiz</label>
+                <label><input type="checkbox" name="fluxo_mp"
+                    {% if 'mp' in acoes_fluxo %}checked{% endif %}>
+                    Vistas ao MP</label>
+            </div>
+            <div style="font-size:11px; color:#166534; margin-top:6px;">
+                As ações serão apenas pré-selecionadas na tela de Juntar/Intimar;
+                nada é executado sem a confirmação final.
+            </div>
+        </div>
+
         <div style="background:#f5f3ff; border:1px solid #ddd6fe; border-radius:8px; padding:10px 12px; margin-bottom:16px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
             <strong style="font-size:13px; color:#5b21b6;">Assinatura da certidão:</strong>
             <select id="assinanteSelect" name="assinante" onchange="atualizarAssinatura()"

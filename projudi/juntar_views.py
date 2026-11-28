@@ -56,6 +56,13 @@ class CertidaoJuntarIntimarView(LoginRequiredMixin, View):
         if plano.get('pode_intimar'):
             acoes.append(('juntar_intimar', 'Juntar + intimar'))
         embargos = registro.tipo_prazo == 'impugnacao_embargos_execucao'
+        fluxo = registro.acoes_fluxo or []
+        if 'intimar' in fluxo and plano.get('pode_intimar'):
+            acao_padrao = 'juntar_intimar'
+        elif 'juntar' in fluxo and plano.get('pode_juntar', True):
+            acao_padrao = 'juntar'
+        else:
+            acao_padrao = 'simular'
         context = {
             'registro': registro,
             'plano': plano,
@@ -77,16 +84,19 @@ class CertidaoJuntarIntimarView(LoginRequiredMixin, View):
             'processo_url': plano.get('processo_url', ''),
             'polo': plano.get('polo', 'autores'),
             'prazo': plano.get('prazo', '10'),
-            'fazer_conclusao': plano.get('fazer_conclusao', False),
+            'fazer_conclusao': plano.get(
+                'fazer_conclusao', 'conclusao' in fluxo),
             'agendar_localizador': plano.get(
-                'agendar_localizador', False),
-            'agendar_contadoria': plano.get('agendar_contadoria', False),
+                'agendar_localizador', 'localizador' in fluxo),
+            'agendar_contadoria': plano.get(
+                'agendar_contadoria', 'contadoria' in fluxo),
+            'enviar_mp': plano.get('enviar_mp', 'mp' in fluxo),
             'tipo_conclusao': plano.get('tipo_conclusao', '18'),
             'conclusao_opcoes': CONCLUSAO_OPCOES,
             'juiz_conclusao': plano.get(
                 'juiz_conclusao', JUIZ_CONCLUSAO_PADRAO),
             'juizes_conclusao': JUIZES_CONCLUSAO,
-            'acao': 'simular',
+            'acao': acao_padrao,
         }
         context.update(extra)
         return context
@@ -116,6 +126,7 @@ class CertidaoJuntarIntimarView(LoginRequiredMixin, View):
             request.POST.get('agendar_contadoria') == 'on'
             and registro.tipo_prazo == 'impugnacao_embargos_execucao'
         )
+        enviar_mp = request.POST.get('enviar_mp') == 'on'
         tipo_conclusao = (
             request.POST.get('tipo_conclusao') or '18').strip()
         juiz_conclusao = (
@@ -134,6 +145,7 @@ class CertidaoJuntarIntimarView(LoginRequiredMixin, View):
         plano['juiz_conclusao'] = juiz_conclusao
         plano['agendar_localizador'] = agendar_localizador
         plano['agendar_contadoria'] = agendar_contadoria
+        plano['enviar_mp'] = enviar_mp
 
         if acao == 'simular':
             messages.info(

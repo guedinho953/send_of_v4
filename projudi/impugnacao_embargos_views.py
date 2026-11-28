@@ -64,6 +64,7 @@ class CertidaoImpugnacaoEmbargosView(LoginRequiredMixin, View):
             'localizador': '',
             'tipo_conclusao': '18',
             'juiz_conclusao': '41201',
+            'acoes_fluxo': [],
         }
         context.update(extra)
         return context
@@ -110,6 +111,13 @@ class CertidaoImpugnacaoEmbargosView(LoginRequiredMixin, View):
             request.POST.get('tipo_conclusao') or '18').strip()
         juiz_conclusao = (
             request.POST.get('juiz_conclusao') or '41201').strip()
+        acoes_fluxo = [
+            nome for nome in (
+                'juntar', 'intimar', 'localizador', 'contadoria',
+                'conclusao', 'mp',
+            )
+            if request.POST.get(f'fluxo_{nome}') == 'on'
+        ]
 
         dados = {
             'processo': processo,
@@ -125,6 +133,7 @@ class CertidaoImpugnacaoEmbargosView(LoginRequiredMixin, View):
             'localizador': localizador,
             'tipo_conclusao': tipo_conclusao,
             'juiz_conclusao': juiz_conclusao,
+            'acoes_fluxo': acoes_fluxo,
         }
 
         if not processo:
@@ -275,6 +284,8 @@ class CertidaoImpugnacaoEmbargosView(LoginRequiredMixin, View):
             .first()
         )
         if registro:
+            registro.acoes_fluxo = acoes_fluxo
+            registro.save(update_fields=['acoes_fluxo'])
             messages.success(
                 request,
                 'Certidão gerada e registrada em Movimentações '

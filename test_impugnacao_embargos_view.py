@@ -259,6 +259,12 @@ class ImpugnacaoEmbargosViewTest(TestCase):
                 'evento_impugnacao': '86',
                 'seguranca_juizo': 'parcial',
                 'proximo': 'juntar',
+                'fluxo_juntar': 'on',
+                'fluxo_intimar': 'on',
+                'fluxo_localizador': 'on',
+                'fluxo_contadoria': 'on',
+                'fluxo_conclusao': 'on',
+                'fluxo_mp': 'on',
             },
         )
         self.assertEqual(resposta.status_code, 302)
@@ -269,6 +275,12 @@ class ImpugnacaoEmbargosViewTest(TestCase):
             fetch_redirect_response=False,
         )
         comando.assert_called_once()
+        registro.refresh_from_db()
+        self.assertEqual(
+            registro.acoes_fluxo,
+            ['juntar', 'intimar', 'localizador', 'contadoria',
+             'conclusao', 'mp'],
+        )
 
     @patch('projudi.impugnacao_embargos_views.call_command')
     @patch('projudi.impugnacao_embargos_views.DecursoPagamentoService.analisar')
