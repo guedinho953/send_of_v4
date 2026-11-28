@@ -97,7 +97,13 @@
     {% endif %}
 
     <div style="display:flex; gap:8px; margin-top:16px; flex-wrap:wrap;">
-        {% if movimentacao.pode_executar %}
+        {% if movimentacao.codigo_movimentacao == '581' and movimentacao.status != 'cumprido' %}
+        <form method="post" action="{% url 'projudi:movimentacao_intimar' movimentacao.pk %}" style="display:inline;"
+              onsubmit="return confirm('Confirmar a intimação 581 da parte com esta observação?');">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-green">✉️ Intimar a parte (581)</button>
+        </form>
+        {% elif movimentacao.pode_executar %}
         <form method="post" action="{% url 'projudi:movimentacao_executar' movimentacao.pk %}" style="display:inline;">
             {% csrf_token %}
             <button type="submit" class="btn btn-sm btn-green">▶️ Executar movimentação</button>

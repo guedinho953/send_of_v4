@@ -136,6 +136,18 @@
                                 <input type="hidden" name="tipo_conclusao" value="18">
                                 <input type="hidden" name="juiz_conclusao" value="41201">
                                 <input type="hidden" name="template_id" class="template-id" value="">
+                                <input type="hidden" name="modo_saida" class="modo-saida" value="certidao">
+                                <input type="hidden" name="observacao_tempestiva" class="obs-tempestiva" value="">
+                                <input type="hidden" name="observacao_intempestiva" class="obs-intempestiva" value="">
+                                <input type="hidden" name="rag_id" class="rag-id" value="">
+
+                                <div class="alerta-saida-observacao"
+                                     style="display:none; background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:10px; margin-bottom:10px; font-size:11px; color:#92400e;">
+                                    <strong>Saída da RAG: observação.</strong>
+                                    Ao gerar, será criada apenas a prévia da
+                                    observação (11383) ou da intimação (581),
+                                    sem certidão. A execução é confirmada depois.
+                                </div>
 
                                 <div class="params-grid">
                                     <div class="campo">
@@ -472,6 +484,30 @@ document.querySelectorAll('.sugestao-certidao').forEach(async function (el) {
             const prazoDias = form.querySelector('[name="prazo_dias"]');
             if (prazoDias && dados.prazo_dias) {
                 prazoDias.value = dados.prazo_dias;
+            }
+            const modoSaida = form.querySelector('.modo-saida');
+            if (modoSaida) {
+                modoSaida.value = dados.modo_saida || 'certidao';
+            }
+            const obsTemp = form.querySelector('.obs-tempestiva');
+            if (obsTemp) {
+                obsTemp.value = dados.observacao_tempestiva || '';
+            }
+            const obsIntemp = form.querySelector('.obs-intempestiva');
+            if (obsIntemp) {
+                obsIntemp.value = dados.observacao_intempestiva || '';
+            }
+            const ragId = form.querySelector('.rag-id');
+            if (ragId) {
+                ragId.value = dados.rag_id || '';
+            }
+            const alertaSaida = form.querySelector(
+                '.alerta-saida-observacao');
+            if (alertaSaida) {
+                alertaSaida.style.display = (
+                    dados.modo_saida
+                    && dados.modo_saida !== 'certidao'
+                ) ? 'block' : 'none';
             }
             if (Array.isArray(dados.acoes_fluxo)
                     && dados.acoes_fluxo.length) {

@@ -171,6 +171,7 @@ urlpatterns = [
     path('movimentacoes/sync/', movimentacao_views.MovimentacaoSyncView.as_view(), name='movimentacao_sync'),
     path('movimentacoes/<int:pk>/', movimentacao_views.MovimentacaoDetailView.as_view(), name='movimentacao_detail'),
     path('movimentacoes/<int:pk>/executar/', movimentacao_views.MovimentacaoExecutarView.as_view(), name='movimentacao_executar'),
+    path('movimentacoes/<int:pk>/intimar/', movimentacao_views.MovimentacaoIntimarView.as_view(), name='movimentacao_intimar'),
     path('movimentacoes/<int:pk>/dispensar/', movimentacao_views.MovimentacaoDispensarView.as_view(), name='movimentacao_dispensar'),
     path('movimentacoes/executar-todos/', movimentacao_views.MovimentacaoBatchView.as_view(), name='movimentacao_batch'),
     path('movimentacoes/<int:pk>/logs/json/', movimentacao_views.MovimentacaoLogsJsonView.as_view(), name='movimentacao_logs_json'),

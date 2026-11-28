@@ -302,6 +302,51 @@ class MovimentacaoExecutarView(LoginRequiredMixin, View):
             reverse('projudi:movimentacao_detail', kwargs={'pk': pk}))
 
 
+class MovimentacaoIntimarView(LoginRequiredMixin, View):
+    """POST — Confirma e executa a intimação 581 de uma observação."""
+
+    def post(self, request, pk):
+        record = get_object_or_404(MovimentacaoRecord, pk=pk, user=request.user)
+        if (record.codigo_movimentacao or '') != '581':
+            messages.error(
+                request,
+                'Esta movimentação não é uma intimação (581).')
+            return HttpResponseRedirect(
+                reverse('projudi:movimentacao_detail',
+                        kwargs={'pk': pk}))
+        service = MovimentacaoService(request.user)
+        try:
+            sucesso = service.executar_com_intimacao(
+                processo_numero=record.processo,
+                observacao=record.observacao,
+                codigo_mov='581',
+                descricao_mov=(
+                    record.descricao_movimentacao or 'Intimação'),
+                proc_projudi=(
+                    record.numero_processo_cnj or record.processo),
+                prazo_intimacao='',
+            )
+            if sucesso:
+                record.status = 'cumprido'
+                record.save(update_fields=['status'])
+                messages.success(
+                    request,
+                    '✅ Intimação 581 executada com a observação.')
+            else:
+                record.status = 'falha'
+                record.save(update_fields=['status'])
+                messages.error(
+                    request,
+                    '❌ Falha ao executar a intimação 581. '
+                    'Confira os logs.')
+        except Exception as exc:
+            record.status = 'falha'
+            record.save(update_fields=['status'])
+            messages.error(request, f'Erro ao intimar: {str(exc)[:200]}')
+        return HttpResponseRedirect(
+            reverse('projudi:movimentacao_detail', kwargs={'pk': pk}))
+
+
 class MovimentacaoBatchView(LoginRequiredMixin, View):
     """POST — Executa todas as movimentações pendentes."""
 

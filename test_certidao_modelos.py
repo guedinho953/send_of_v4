@@ -68,6 +68,27 @@ class CertidaoModelosTest(TestCase):
         self.assertContains(resposta, 'Certifico')
         self.assertContains(resposta, '0000000-00.0000.8.05.0191')
 
+    def test_cria_rag_somente_observacao_sem_modelo(self):
+        resposta = self.client.post(
+            reverse('projudi:rag_certidao_nova'),
+            {
+                'processo': '0000004-44.2026.8.05.0191',
+                'ato': 'DESPACHO',
+                'texto_despacho': 'DESPACHO Intime-se.',
+                'tipo_certidao': 'impugnacao_embargos_execucao',
+                'modo_saida': 'observacao_11383',
+                'observacao_tempestiva': 'Certifico a tempestividade.',
+                'observacao_intempestiva': 'Certifico a intempestividade.',
+            },
+        )
+        self.assertEqual(resposta.status_code, 302)
+        rag = RAGExample.objects.get(
+            process__number='0000004-44.2026.8.05.0191')
+        self.assertEqual(rag.modo_saida, 'observacao_11383')
+        self.assertEqual(
+            rag.observacao_tempestiva, 'Certifico a tempestividade.')
+        self.assertFalse(rag.suggested_templates.exists())
+
     def test_lista_rags_de_certidao(self):
         resposta = self.client.get(reverse('projudi:rag_certidoes'))
         self.assertEqual(resposta.status_code, 200)

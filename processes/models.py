@@ -554,6 +554,18 @@ class RAGExample(TimeStampedModel):
         'Prazo da certidão (dias)', null=True, blank=True,
         help_text='Sobrescreve o prazo padrão do tipo de certidão. '
                   'Deixe vazio para usar o padrão.')
+    MODO_SAIDA_CHOICES = [
+        ('certidao', 'Gerar certidão'),
+        ('observacao_11383', 'Apenas observação — 11383'),
+        ('intimacao_581', 'Intimação da observação — 581'),
+    ]
+    modo_saida = models.CharField(
+        'Saída', max_length=20, choices=MODO_SAIDA_CHOICES,
+        default='certidao')
+    observacao_tempestiva = models.TextField(
+        'Observação se tempestivo', blank=True)
+    observacao_intempestiva = models.TextField(
+        'Observação se intempestivo', blank=True)
     sequencia_cumprimento = models.JSONField(
         'Sequência de Execução', default=list, blank=True,
         help_text=(

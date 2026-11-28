@@ -112,6 +112,11 @@
                 </td>
                 <td>
                     <span class="tag tag-tipo">{{ r.tipo_certidao_label }}</span>
+                    {% if r.modo_saida and r.modo_saida != 'certidao' %}
+                    <div class="meta" style="color:#92400e;">
+                        Saída: {{ r.get_modo_saida_display }}
+                    </div>
+                    {% endif %}
                     {% if r.templates_nomes %}
                     <div class="meta">{{ r.templates_nomes|join:", "|truncatechars:100 }}</div>
                     {% endif %}

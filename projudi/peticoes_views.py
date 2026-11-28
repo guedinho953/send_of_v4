@@ -125,6 +125,14 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
             int(prazo_dias_txt)
             if prazo_dias_txt.isdigit() and int(prazo_dias_txt) > 0
             else None)
+        modo_saida = (
+            request.POST.get('modo_saida') or 'certidao').strip()
+        observacao_tempestiva = (
+            request.POST.get('observacao_tempestiva') or '').strip()
+        observacao_intempestiva = (
+            request.POST.get('observacao_intempestiva') or '').strip()
+        rag_id = (request.POST.get('rag_id') or '').strip()
+        rag_id = int(rag_id) if rag_id.isdigit() else None
         acoes_fluxo = [
             nome for nome in (
                 'juntar', 'intimar', 'localizador', 'contadoria',
@@ -142,6 +150,7 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
             messages.error(request, 'Escolha a certidão que será gerada.')
             return voltar
         if (tipo_prazo == 'impugnacao_embargos_execucao'
+                and modo_saida == 'certidao'
                 and seguranca_juizo not in ('integral', 'parcial', 'nenhuma')):
             messages.error(
                 request,
@@ -165,6 +174,23 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
                 'Use "Gerar certidão" por enquanto.',
             )
             return voltar
+
+        if modo_saida in ('observacao_11383', 'intimacao_581'):
+            return self._gerar_observacao(
+                request,
+                processo=processo,
+                processo_url=processo_url,
+                tipo_prazo=tipo_prazo,
+                evento=evento_despacho or evento_origem,
+                evento_intimacao=evento_intimacao,
+                data_protocolo_txt=data_envio,
+                parte=parte,
+                modo_saida=modo_saida,
+                observacao_tempestiva=observacao_tempestiva,
+                observacao_intempestiva=observacao_intempestiva,
+                prazo_dias=prazo_dias,
+                rag_id=rag_id,
+            )
 
         if tipo_prazo == 'decurso_pagamento':
             return self._gerar_decurso(
@@ -338,6 +364,98 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
             f'Confira a aba {self.origem_label}.',
         )
         return redirect(self.url_lista)
+
+    def _gerar_observacao(
+            self, request, *, processo, processo_url, tipo_prazo, evento,
+            evento_intimacao, data_protocolo_txt, parte, modo_saida,
+            observacao_tempestiva, observacao_intempestiva, prazo_dias,
+            rag_id):
+        """Cria a prévia da observação/intimação, sem executar no Projudi.
+
+        A execução fica pendente na Fila de Movimentações. Na 581, o botão
+        "Intimar" da tela de detalhe faz a confirmação explícita.
+        """
+        from processes.models import RAGExample
+        from projudi.movimentacao_service import MovimentacaoService
+
+        voltar = self._voltar()
+        if not (observacao_tempestiva or observacao_intempestiva):
+            messages.error(
+                request, 'Informe a observação tempestiva e/ou intempestiva.')
+            return voltar
+
+        texto = observacao_tempestiva or observacao_intempestiva
+        tempestivo = None
+        # Quando as duas versões existem, tenta usar o mesmo cálculo de
+        # tempestividade da certidão de impugnação/embargos.
+        if observacao_tempestiva and observacao_intempestiva:
+            data_protocolo = self._data(data_protocolo_txt)
+            if data_protocolo:
+                try:
+                    resultado = DecursoPagamentoService(
+                        request.user).analisar(
+                            processo,
+                            evento=evento or None,
+                            url=processo_url or None,
+                            evento_intimacao=evento_intimacao or None,
+                            dias=prazo_dias or 15,
+                        )
+                    if not resultado.get('erro'):
+                        tempestivo = (
+                            data_protocolo <= resultado['ultimo_dia'])
+                        texto = (
+                            observacao_tempestiva if tempestivo
+                            else observacao_intempestiva)
+                except Exception:
+                    pass
+
+        rag = (
+            RAGExample.objects.filter(pk=rag_id).first()
+            if rag_id else None
+        )
+        try:
+            record = MovimentacaoService(request.user).importar(
+                processo_numero=processo,
+                act_verb=(
+                    'certifique-se' if modo_saida == 'observacao_11383'
+                    else 'intimar'),
+                observacao=texto,
+                categoria=(
+                    'registro' if modo_saida == 'observacao_11383'
+                    else 'intimacao'),
+                origem='movimentacao',
+                processo_cnj=processo,
+                parte_nome=parte,
+                rag_example=rag,
+                url_processo=processo_url,
+                codigo_movimentacao=(
+                    '11383' if modo_saida == 'observacao_11383' else '581'),
+                descricao_movimentacao=(
+                    'Cumprimento de Ofício'
+                    if modo_saida == 'observacao_11383' else 'Intimação'),
+            )
+        except Exception as exc:
+            messages.error(
+                request, f'Erro ao criar a observação: {exc}')
+            return voltar
+
+        if tempestivo is not None:
+            situacao = 'TEMPESTIVO' if tempestivo else 'INTEMPESTIVO'
+            messages.info(request, f'Texto escolhido: {situacao}.')
+        if modo_saida == 'observacao_11383':
+            messages.success(
+                request,
+                f'Observação criada na movimentação #{record.id} '
+                '(código 11383). Confira e execute na Fila de Movimentações.',
+            )
+        else:
+            messages.success(
+                request,
+                f'Prévia de intimação criada na movimentação #{record.id} '
+                '(código 581). Confira e clique em "Intimar" para confirmar '
+                'a comunicação à parte.',
+            )
+        return redirect('projudi:movimentacao_detail', pk=record.id)
 
     def _gerar_decurso(self, request, *, processo, processo_url, evento,
                        executado, data_intimacao_manual,

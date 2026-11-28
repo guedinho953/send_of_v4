@@ -364,6 +364,9 @@ class RagCertidaoCreateView(LoginRequiredMixin, View):
             'texto_despacho': '',
             'tipo_certidao': '',
             'prazo_dias': '',
+            'modo_saida': 'certidao',
+            'observacao_tempestiva': '',
+            'observacao_intempestiva': '',
             'nome_modelo': '',
             'texto_certidao': '',
             'tipo_localizador': '',
@@ -440,6 +443,11 @@ class RagCertidaoCreateView(LoginRequiredMixin, View):
                     'prazo_dias': (
                         base_rag.prazo_dias
                         if base_rag.prazo_dias else ''),
+                    'modo_saida': base_rag.modo_saida or 'certidao',
+                    'observacao_tempestiva': (
+                        base_rag.observacao_tempestiva or ''),
+                    'observacao_intempestiva': (
+                        base_rag.observacao_intempestiva or ''),
                     'tipo_localizador': base_rag.tipo_localizador,
                     'localizador': base_rag.localizador,
                     'tipo_conclusao': base_rag.tipo_conclusao or '18',
@@ -478,6 +486,12 @@ class RagCertidaoCreateView(LoginRequiredMixin, View):
             request.POST.get('texto_despacho') or '').strip()
         tipo_certidao = (
             request.POST.get('tipo_certidao') or '').strip()
+        modo_saida = (
+            request.POST.get('modo_saida') or 'certidao').strip()
+        observacao_tempestiva = (
+            request.POST.get('observacao_tempestiva') or '').strip()
+        observacao_intempestiva = (
+            request.POST.get('observacao_intempestiva') or '').strip()
         prazo_dias_txt = (
             request.POST.get('prazo_dias') or '').strip()
         prazo_dias = (
@@ -738,7 +752,7 @@ class RagCertidaoCreateView(LoginRequiredMixin, View):
                 acoes_fluxo=acoes_fluxo,
             ))
 
-        if not texto_certidao:
+        if (modo_saida == 'certidao' and not texto_certidao):
             messages.error(request, 'Informe o texto da certidão.')
             return render(request, self.template_name, self._contexto(
                 processo=processo, processo_url=processo_url,
@@ -750,6 +764,30 @@ class RagCertidaoCreateView(LoginRequiredMixin, View):
                 evento_intimacao=evento_intimacao,
                 data_protocolo=data_protocolo_txt,
                 seguranca_juizo=seguranca_juizo,
+                modo_saida=modo_saida,
+                observacao_tempestiva=observacao_tempestiva,
+                observacao_intempestiva=observacao_intempestiva,
+                acoes_fluxo=acoes_fluxo,
+            ))
+        if (modo_saida != 'certidao'
+                and not observacao_tempestiva
+                and not observacao_intempestiva):
+            messages.error(
+                request,
+                'Informe a observação tempestiva e/ou a intempestiva.')
+            return render(request, self.template_name, self._contexto(
+                processo=processo, processo_url=processo_url,
+                evento_despacho=evento_despacho, ato=ato,
+                texto_despacho=texto_despacho,
+                tipo_certidao=tipo_certidao, nome_modelo=nome_modelo,
+                texto_certidao=texto_certidao,
+                evento_peticao=evento_peticao,
+                evento_intimacao=evento_intimacao,
+                data_protocolo=data_protocolo_txt,
+                seguranca_juizo=seguranca_juizo,
+                modo_saida=modo_saida,
+                observacao_tempestiva=observacao_tempestiva,
+                observacao_intempestiva=observacao_intempestiva,
                 acoes_fluxo=acoes_fluxo,
             ))
         if tipo_certidao not in tipos:
@@ -836,6 +874,9 @@ class RagCertidaoCreateView(LoginRequiredMixin, View):
             ),
             tipo_certidao=tipo_certidao,
             prazo_dias=prazo_dias,
+            modo_saida=modo_saida,
+            observacao_tempestiva=observacao_tempestiva,
+            observacao_intempestiva=observacao_intempestiva,
             tipo_localizador=tipo_localizador,
             localizador=localizador,
             tipo_conclusao=tipo_conclusao,
@@ -843,23 +884,33 @@ class RagCertidaoCreateView(LoginRequiredMixin, View):
             acoes_fluxo=acoes_fluxo,
             active=True,
         )
-        modelo = DocumentTemplate.objects.create(
-            name=(
-                nome_modelo
-                or f'Certidão RAG #{rag.id} — {tipos[tipo_certidao]["label"]}'
-            ),
-            template_type='certidao',
-            description=texto_despacho[:500],
-            html_template=html_certidao,
-            active=True,
-        )
-        rag.suggested_templates.add(modelo)
+        modelo = None
+        if texto_certidao:
+            modelo = DocumentTemplate.objects.create(
+                name=(
+                    nome_modelo
+                    or f'Certidão RAG #{rag.id} — '
+                       f'{tipos[tipo_certidao]["label"]}'
+                ),
+                template_type='certidao',
+                description=texto_despacho[:500],
+                html_template=html_certidao,
+                active=True,
+            )
+            rag.suggested_templates.add(modelo)
 
-        messages.success(
-            request,
-            f'✅ RAG #{rag.id} e modelo "{modelo.name}" criados e '
-            'vinculados. Revise na lista de RAGs.',
-        )
+        if modelo:
+            messages.success(
+                request,
+                f'✅ RAG #{rag.id} e modelo "{modelo.name}" criados e '
+                'vinculados. Revise na lista de RAGs.',
+            )
+        else:
+            messages.success(
+                request,
+                f'✅ RAG #{rag.id} criada para saída '
+                f'{rag.get_modo_saida_display()}. Revise na lista de RAGs.',
+            )
         return HttpResponseRedirect(reverse('projudi:rag_certidoes'))
 
 

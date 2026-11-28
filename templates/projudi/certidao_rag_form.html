@@ -173,11 +173,35 @@
                 <div class="ajuda">Sobrescreve o prazo do tipo.</div>
             </div>
             <div class="campo">
+                <label for="modo_saida">Saída</label>
+                <select id="modo_saida" name="modo_saida">
+                    <option value="certidao" {% if modo_saida == 'certidao' %}selected{% endif %}>Gerar certidão</option>
+                    <option value="observacao_11383" {% if modo_saida == 'observacao_11383' %}selected{% endif %}>Apenas observação — 11383</option>
+                    <option value="intimacao_581" {% if modo_saida == 'intimacao_581' %}selected{% endif %}>Intimação da observação — 581</option>
+                </select>
+            </div>
+            <div class="campo">
                 <label for="nome_modelo">Nome do modelo</label>
                 <input id="nome_modelo" name="nome_modelo"
                        value="{{ nome_modelo }}"
                        placeholder="Ex.: Certidão de Tempestividade — Embargos">
             </div>
+        </div>
+
+        <div class="grid">
+            <div class="campo">
+                <label for="observacao_tempestiva">Observação se TEMPESTIVO</label>
+                <textarea id="observacao_tempestiva" name="observacao_tempestiva"
+                          placeholder="Texto que vai na observação/Mov581.">{{ observacao_tempestiva }}</textarea>
+            </div>
+            <div class="campo">
+                <label for="observacao_intempestiva">Observação se INTEMPESTIVO</label>
+                <textarea id="observacao_intempestiva" name="observacao_intempestiva"
+                          placeholder="Texto que vai na observação/Mov581.">{{ observacao_intempestiva }}</textarea>
+            </div>
+        </div>
+        <div class="ajuda" style="margin-bottom:14px;">
+            Usadas quando a saída for “Apenas observação” ou “Intimação da observação”.
         </div>
 
         <div class="campo">

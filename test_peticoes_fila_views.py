@@ -446,3 +446,58 @@ class PeticaoFilaViewsTest(TestCase):
         self.assertFalse(
             PrazoDjenRecord.objects.filter(
                 tipo_prazo='decurso_pagamento').exists())
+
+    @patch('projudi.movimentacao_service.MovimentacaoService.importar')
+    def test_observacao_11383_cria_previas_sem_certidao(self, importar):
+        from types import SimpleNamespace
+        importar.return_value = SimpleNamespace(id=123)
+        resposta = self.client.post(
+            reverse('projudi:certidao_movimentacao_fila_gerar'),
+            {
+                'processo': '0002156-47.2026.8.05.0191',
+                'processo_url': 'https://projudi/processo',
+                'tipo_prazo': 'impugnacao_embargos_execucao',
+                'evento_origem': '28',
+                'parte': 'BANCO MERCANTIL DO BRASIL SA',
+                'acao': 'gerar',
+                'modo_saida': 'observacao_11383',
+                'observacao_tempestiva': 'Certifico a tempestividade.',
+            },
+        )
+        self.assertEqual(resposta.status_code, 302)
+        self.assertEqual(
+            resposta.url,
+            reverse('projudi:movimentacao_detail', kwargs={'pk': 123}),
+        )
+        importar.assert_called_once()
+        kwargs = importar.call_args.kwargs
+        self.assertEqual(kwargs['codigo_movimentacao'], '11383')
+        self.assertEqual(kwargs['observacao'],
+                         'Certifico a tempestividade.')
+        self.assertFalse(
+            PrazoDjenRecord.objects.filter(
+                processo='0002156-47.2026.8.05.0191').exists())
+
+    @patch('projudi.movimentacao_service.MovimentacaoService.importar')
+    def test_intimacao_581_cria_previa_pendente(self, importar):
+        from types import SimpleNamespace
+        importar.return_value = SimpleNamespace(id=124)
+        resposta = self.client.post(
+            reverse('projudi:certidao_movimentacao_fila_gerar'),
+            {
+                'processo': '0002156-47.2026.8.05.0191',
+                'processo_url': 'https://projudi/processo',
+                'tipo_prazo': 'impugnacao_embargos_execucao',
+                'evento_origem': '28',
+                'parte': 'BANCO MERCANTIL DO BRASIL SA',
+                'acao': 'gerar',
+                'modo_saida': 'intimacao_581',
+                'observacao_intempestiva': 'Intime-se da observação.',
+            },
+        )
+        self.assertEqual(resposta.status_code, 302)
+        kwargs = importar.call_args.kwargs
+        self.assertEqual(kwargs['codigo_movimentacao'], '581')
+        self.assertEqual(kwargs['categoria'], 'intimacao')
+        self.assertEqual(kwargs['observacao'],
+                         'Intime-se da observação.')

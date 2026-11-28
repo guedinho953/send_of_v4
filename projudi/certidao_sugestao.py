@@ -180,6 +180,9 @@ def sugerir_certidao(user, processo, documento_url, processo_url=''):
         'juiz_conclusao': '41201',
         'acoes_fluxo': [],
         'prazo_dias': None,
+        'modo_saida': 'certidao',
+        'observacao_tempestiva': '',
+        'observacao_intempestiva': '',
         'template_id': None,
         'template_nome': '',
         'mensagem': '',
@@ -266,6 +269,13 @@ def sugerir_certidao(user, processo, documento_url, processo_url=''):
             if rag else []),
         'prazo_dias': (
             getattr(rag, 'prazo_dias', None) if rag else None),
+        'modo_saida': (
+            getattr(rag, 'modo_saida', '') or 'certidao'
+            if rag else 'certidao'),
+        'observacao_tempestiva': (
+            getattr(rag, 'observacao_tempestiva', '') if rag else ''),
+        'observacao_intempestiva': (
+            getattr(rag, 'observacao_intempestiva', '') if rag else ''),
         'template_id': template.id if template else None,
         'template_nome': template.name if template else '',
     })
