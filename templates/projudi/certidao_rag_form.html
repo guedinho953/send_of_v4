@@ -55,6 +55,15 @@
                        placeholder="https://projudi.tjba.jus.br/.../DadosProcesso?...">
             </div>
             <div class="campo">
+                <label for="evento_despacho">Evento do despacho</label>
+                <input id="evento_despacho" name="evento_despacho"
+                       value="{{ evento_despacho }}" placeholder="ex.: 28">
+                <div class="ajuda">
+                    Se informar o evento e deixar o texto em branco, o
+                    sistema busca o texto no Projudi.
+                </div>
+            </div>
+            <div class="campo">
                 <label for="ato">Ato</label>
                 <select id="ato" name="ato">
                     <option value="DESPACHO" {% if ato == 'DESPACHO' %}selected{% endif %}>DESPACHO</option>
@@ -65,12 +74,13 @@
         </div>
 
         <div class="campo">
-            <label for="texto_despacho">Texto do despacho/decisão *</label>
-            <textarea id="texto_despacho" name="texto_despacho" required
-                      placeholder="Cole aqui o texto que será usado como gatilho da RAG.">{{ texto_despacho }}</textarea>
+            <label for="texto_despacho">Texto do despacho/decisão</label>
+            <textarea id="texto_despacho" name="texto_despacho"
+                      placeholder="Cole aqui o texto que será usado como gatilho da RAG ou informe o evento acima.">{{ texto_despacho }}</textarea>
             <div class="ajuda">
                 Este é o texto comparado com as movimentações. Pode deixar o
-                título DESPACHO/DECISÃO/SENTENÇA no início.
+                título DESPACHO/DECISÃO/SENTENÇA no início. Preencha o texto
+                ou informe o evento.
             </div>
         </div>
 

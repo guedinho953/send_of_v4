@@ -290,6 +290,53 @@ class CriarRagMovimentacaoView(LoginRequiredMixin, View):
         return voltar
 
 
+def _texto_do_evento(user, processo, processo_url, evento):
+    """Busca o texto do despacho/decisão de um evento no Projudi."""
+    from projudi.certidao_sugestao import (
+        _texto_documento, limpar_texto_despacho,
+    )
+    from projudi.services import ProjudiService
+    from projudi.verificacao_inominado import data_mov
+    from projudiProcessNavigator import ProcessoParser
+
+    if not processo_url:
+        from projudi.processo_lookup import localizar_processo
+        achado = localizar_processo(user, processo)
+        if achado:
+            processo_url = achado['url']
+    if not processo_url:
+        return '', None
+
+    sessao = ProjudiService(user)._get_session_from_cookies()
+    if not sessao:
+        return '', None
+    session, _ = sessao
+    resposta = session.get(processo_url, timeout=40)
+    if resposta.status_code != 200:
+        return '', None
+    parser = ProcessoParser(resposta.text)
+    movs, _ = parser.extrair_movimentacoes()
+    mov = next(
+        (m for m in movs if str(m.get('evento')) == str(evento)),
+        None,
+    )
+    if not mov:
+        return '', None
+
+    data = data_mov(mov)
+    documentos = mov.get('documentos') or []
+    link = ''
+    if documentos and isinstance(documentos[0], dict):
+        link = documentos[0].get('url') or ''
+    texto = _texto_documento(session, link) if link else ''
+    if not texto.strip():
+        texto = ' '.join(
+            str(mov.get(k) or '') for k in
+            ('ato', 'observacao', 'ato_normalizado', 'descricao')
+        )
+    return limpar_texto_despacho(texto), data
+
+
 class RagCertidaoCreateView(LoginRequiredMixin, View):
     """Cadastro rápido de RAG + modelo de certidão em uma única tela."""
 
@@ -302,6 +349,7 @@ class RagCertidaoCreateView(LoginRequiredMixin, View):
             'tipos_certidao': TIPOS_CERTIDAO,
             'processo': '',
             'processo_url': '',
+            'evento_despacho': '',
             'ato': 'DESPACHO',
             'texto_despacho': '',
             'tipo_certidao': '',
@@ -323,6 +371,8 @@ class RagCertidaoCreateView(LoginRequiredMixin, View):
             self._contexto(
                 processo=(request.GET.get('processo') or '').strip(),
                 processo_url=(request.GET.get('url') or '').strip(),
+                evento_despacho=(
+                    request.GET.get('evento') or '').strip(),
                 texto_despacho=(
                     request.GET.get('texto_despacho') or '').strip(),
                 tipo_certidao=(
@@ -337,6 +387,8 @@ class RagCertidaoCreateView(LoginRequiredMixin, View):
 
         processo = (request.POST.get('processo') or '').strip()
         processo_url = (request.POST.get('processo_url') or '').strip()
+        evento_despacho = (
+            request.POST.get('evento_despacho') or '').strip()
         ato = (request.POST.get('ato') or 'DESPACHO').strip().upper()
         texto_despacho = (
             request.POST.get('texto_despacho') or '').strip()
@@ -362,16 +414,62 @@ class RagCertidaoCreateView(LoginRequiredMixin, View):
 
         from projudi.peticoes_inominado import TIPOS_CERTIDAO
         tipos = {t['valor']: t for t in TIPOS_CERTIDAO}
-        if not processo or not texto_despacho or not texto_certidao:
+        if evento_despacho and not evento_despacho.isdigit():
             messages.error(
-                request,
-                'Informe o processo, o texto do despacho e o texto da '
-                'certidão.')
+                request, 'Evento do despacho inválido. Informe apenas o número.')
             return render(
                 request, self.template_name,
                 self._contexto(
                     processo=processo, processo_url=processo_url,
-                    ato=ato, texto_despacho=texto_despacho,
+                    evento_despacho=evento_despacho, ato=ato,
+                    texto_despacho=texto_despacho,
+                    tipo_certidao=tipo_certidao, nome_modelo=nome_modelo,
+                    texto_certidao=texto_certidao,
+                    tipo_localizador=tipo_localizador,
+                    localizador=localizador,
+                    tipo_conclusao=tipo_conclusao,
+                    juiz_conclusao=juiz_conclusao,
+                    acoes_fluxo=acoes_fluxo,
+                ),
+            )
+
+        data_evento = None
+        if not texto_despacho and evento_despacho and processo:
+            texto_despacho, data_evento = _texto_do_evento(
+                request.user, processo, processo_url, evento_despacho)
+            if not texto_despacho:
+                messages.error(
+                    request,
+                    'Não localizei o texto do evento '
+                    f'{evento_despacho}. Confira o número ou cole o texto '
+                    'do despacho manualmente.')
+                return render(
+                    request, self.template_name,
+                    self._contexto(
+                        processo=processo, processo_url=processo_url,
+                        evento_despacho=evento_despacho, ato=ato,
+                        tipo_certidao=tipo_certidao,
+                        nome_modelo=nome_modelo,
+                        texto_certidao=texto_certidao,
+                        tipo_localizador=tipo_localizador,
+                        localizador=localizador,
+                        tipo_conclusao=tipo_conclusao,
+                        juiz_conclusao=juiz_conclusao,
+                        acoes_fluxo=acoes_fluxo,
+                    ),
+                )
+
+        if not processo or not texto_despacho or not texto_certidao:
+            messages.error(
+                request,
+                'Informe o processo, o evento ou o texto do despacho, e o '
+                'texto da certidão.')
+            return render(
+                request, self.template_name,
+                self._contexto(
+                    processo=processo, processo_url=processo_url,
+                    evento_despacho=evento_despacho, ato=ato,
+                    texto_despacho=texto_despacho,
                     tipo_certidao=tipo_certidao, nome_modelo=nome_modelo,
                     texto_certidao=texto_certidao,
                     tipo_localizador=tipo_localizador,
@@ -454,9 +552,13 @@ class RagCertidaoCreateView(LoginRequiredMixin, View):
         rag = RAGExample.objects.create(
             process=proc,
             tenant=tenant,
+            evento_despacho=evento_despacho,
             despacho_ato=ato[:200],
             despacho_observacao=texto_despacho,
-            despacho_data=datetime.now().strftime('%d/%m/%Y'),
+            despacho_data=(
+                data_evento.strftime('%d/%m/%Y')
+                if data_evento else datetime.now().strftime('%d/%m/%Y')
+            ),
             tipo_certidao=tipo_certidao,
             tipo_localizador=tipo_localizador,
             localizador=localizador,

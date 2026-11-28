@@ -1,5 +1,7 @@
 """Testes das telas de modelos de certidão e RAGs de certidão."""
 
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
@@ -63,6 +65,29 @@ class CertidaoModelosTest(TestCase):
         self.assertEqual(resposta.status_code, 200)
         self.assertContains(resposta, 'Nova RAG de Certidão')
         self.assertContains(resposta, 'Texto da certidão')
+
+    @patch('projudi.certidao_views._texto_do_evento')
+    def test_cria_rag_por_processo_e_evento(self, texto_evento):
+        from datetime import date
+        texto_evento.return_value = (
+            'DESPACHO Certifique-se a tempestividade.', date(2026, 11, 28))
+
+        resposta = self.client.post(
+            reverse('projudi:rag_certidao_nova'),
+            {
+                'processo': '0000003-33.2026.8.05.0191',
+                'evento_despacho': '28',
+                'ato': 'DESPACHO',
+                'tipo_certidao': 'impugnacao_embargos_execucao',
+                'texto_certidao': '<p>Certifico.</p>',
+            },
+        )
+        self.assertEqual(resposta.status_code, 302)
+        rag = RAGExample.objects.get(
+            process__number='0000003-33.2026.8.05.0191')
+        self.assertEqual(rag.evento_despacho, '28')
+        self.assertIn('Certifique-se a tempestividade', rag.despacho_observacao)
+        self.assertEqual(rag.despacho_data, '28/11/2026')
 
     def test_cria_rag_e_modelo_de_certidao(self):
         resposta = self.client.post(
