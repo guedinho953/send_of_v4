@@ -40,10 +40,10 @@ class CertidaoJuntarIntimarView(LoginRequiredMixin, View):
     template_name = 'projudi/certidao_juntar_intimar.html'
 
     def _contexto(self, registro, plano, **extra):
-        acoes = [('simular', 'Simular plano')]
-        if registro.tipo_prazo == 'impugnacao_embargos_execucao':
-            acoes.append(
-                ('so_certificar', 'Só certificar (não juntar)'))
+        acoes = [
+            ('simular', 'Simular plano'),
+            ('so_certificar', 'Só certificar (não juntar)'),
+        ]
         if plano.get('pode_juntar', True):
             acoes.append(('juntar', 'Juntar certidão'))
         if (registro.tipo_prazo == 'impugnacao_embargos_execucao'
