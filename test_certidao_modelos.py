@@ -147,6 +147,7 @@ class CertidaoModelosTest(TestCase):
                 'ato': 'DESPACHO',
                 'texto_despacho': 'DESPACHO Certifique-se a tempestividade.',
                 'tipo_certidao': 'impugnacao_embargos_execucao',
+                'prazo_dias': '7',
                 'nome_modelo': 'Modelo criado pela tela',
                 'texto_certidao': (
                     '<p>Certifico {{ processo }} para {{ parte }}.</p>'),
@@ -159,6 +160,7 @@ class CertidaoModelosTest(TestCase):
         rag = RAGExample.objects.get(
             process__number='0000002-22.2026.8.05.0191')
         self.assertEqual(rag.acoes_fluxo, ['juntar', 'intimar', 'mp'])
+        self.assertEqual(rag.prazo_dias, 7)
         modelo = rag.suggested_templates.get(
             name='Modelo criado pela tela')
         self.assertEqual(modelo.template_type, 'certidao')

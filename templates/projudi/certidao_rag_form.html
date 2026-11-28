@@ -166,6 +166,13 @@
                 </select>
             </div>
             <div class="campo">
+                <label for="prazo_dias">Prazo da certidão (dias)</label>
+                <input id="prazo_dias" name="prazo_dias" type="number"
+                       min="1" max="365" value="{{ prazo_dias }}"
+                       placeholder="vazio = padrão do tipo">
+                <div class="ajuda">Sobrescreve o prazo do tipo.</div>
+            </div>
+            <div class="campo">
                 <label for="nome_modelo">Nome do modelo</label>
                 <input id="nome_modelo" name="nome_modelo"
                        value="{{ nome_modelo }}"

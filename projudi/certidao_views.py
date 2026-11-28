@@ -363,6 +363,7 @@ class RagCertidaoCreateView(LoginRequiredMixin, View):
             'ato': 'DESPACHO',
             'texto_despacho': '',
             'tipo_certidao': '',
+            'prazo_dias': '',
             'nome_modelo': '',
             'texto_certidao': '',
             'tipo_localizador': '',
@@ -436,6 +437,9 @@ class RagCertidaoCreateView(LoginRequiredMixin, View):
                     'ato': ato_form,
                     'texto_despacho': base_rag.despacho_observacao,
                     'tipo_certidao': base_rag.tipo_certidao,
+                    'prazo_dias': (
+                        base_rag.prazo_dias
+                        if base_rag.prazo_dias else ''),
                     'tipo_localizador': base_rag.tipo_localizador,
                     'localizador': base_rag.localizador,
                     'tipo_conclusao': base_rag.tipo_conclusao or '18',
@@ -474,6 +478,12 @@ class RagCertidaoCreateView(LoginRequiredMixin, View):
             request.POST.get('texto_despacho') or '').strip()
         tipo_certidao = (
             request.POST.get('tipo_certidao') or '').strip()
+        prazo_dias_txt = (
+            request.POST.get('prazo_dias') or '').strip()
+        prazo_dias = (
+            int(prazo_dias_txt)
+            if prazo_dias_txt.isdigit() and int(prazo_dias_txt) > 0
+            else None)
         nome_modelo = (request.POST.get('nome_modelo') or '').strip()
         texto_certidao = (
             request.POST.get('texto_certidao') or '').strip()
@@ -671,6 +681,7 @@ class RagCertidaoCreateView(LoginRequiredMixin, View):
                     evento=evento_despacho,
                     url=processo_url or None,
                     evento_intimacao=evento_intimacao or None,
+                    dias=prazo_dias or 15,
                 )
             except Exception as exc:
                 messages.error(request, f'Erro no cálculo: {exc}')
@@ -824,6 +835,7 @@ class RagCertidaoCreateView(LoginRequiredMixin, View):
                 if data_evento else datetime.now().strftime('%d/%m/%Y')
             ),
             tipo_certidao=tipo_certidao,
+            prazo_dias=prazo_dias,
             tipo_localizador=tipo_localizador,
             localizador=localizador,
             tipo_conclusao=tipo_conclusao,

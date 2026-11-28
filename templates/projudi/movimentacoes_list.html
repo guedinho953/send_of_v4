@@ -152,6 +152,12 @@
                                             mostrar todas as certidões
                                         </a>
                                     </div>
+                                    <div class="campo">
+                                        <label>Prazo (dias)</label>
+                                        <input name="prazo_dias" type="number" min="1"
+                                               placeholder="padrão do tipo"
+                                               style="width:100px;">
+                                    </div>
                                     <div class="campo campo-protocolo">
                                         <label>Data do protocolo</label>
                                         <input name="data_envio" placeholder="DD/MM/AAAA">
@@ -453,6 +459,10 @@ document.querySelectorAll('.sugestao-certidao').forEach(async function (el) {
             const templateId = form.querySelector('.template-id');
             if (templateId && dados.template_id) {
                 templateId.value = dados.template_id;
+            }
+            const prazoDias = form.querySelector('[name="prazo_dias"]');
+            if (prazoDias && dados.prazo_dias) {
+                prazoDias.value = dados.prazo_dias;
             }
             if (Array.isArray(dados.acoes_fluxo)
                     && dados.acoes_fluxo.length) {

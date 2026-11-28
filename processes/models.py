@@ -550,6 +550,10 @@ class RAGExample(TimeStampedModel):
         'Fluxo da certidão', default=list, blank=True,
         help_text='Ações pré-selecionadas na geração da certidão: '
                   'juntar, intimar, localizador, contadoria, conclusão, MP.')
+    prazo_dias = models.PositiveSmallIntegerField(
+        'Prazo da certidão (dias)', null=True, blank=True,
+        help_text='Sobrescreve o prazo padrão do tipo de certidão. '
+                  'Deixe vazio para usar o padrão.')
     sequencia_cumprimento = models.JSONField(
         'Sequência de Execução', default=list, blank=True,
         help_text=(

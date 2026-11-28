@@ -317,6 +317,7 @@ class PeticaoFilaViewsTest(TestCase):
                 'localizador': '1',
                 'tipo_conclusao': '18',
                 'juiz_conclusao': '41201',
+                'prazo_dias': '7',
                 'acao': 'gerar',
                 'fluxo_juntar': 'on',
                 'fluxo_intimar': 'on',
@@ -349,6 +350,7 @@ class PeticaoFilaViewsTest(TestCase):
         self.assertEqual(kwargs['seguranca_juizo'], 'parcial')
         self.assertEqual(kwargs['tipo_localizador'], '15286')
         self.assertEqual(kwargs['localizador'], '1')
+        self.assertEqual(kwargs['prazo'], 7)
 
     def test_limpar_texto_despacho_remove_cabecalho_e_assinatura(self):
         from projudi.certidao_sugestao import limpar_texto_despacho

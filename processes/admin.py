@@ -153,11 +153,15 @@ class RAGExampleAdmin(admin.ModelAdmin):
     search_fields = ['process__number', 'despacho_ato']
     filter_horizontal = ['suggested_templates']
     fieldsets = [
-        ('Processo', {'fields': ['process', 'oficio', 'evento_despacho']}),
+        ('Processo', {'fields': [
+            'process', 'oficio', 'evento_despacho',
+            'evento_peticao', 'evento_intimacao',
+        ]}),
         ('Decisão do Juiz', {'fields': ['despacho_ato', 'despacho_observacao',
                                          'despacho_data', 'despacho_autor']}),
         ('Certidão, localizador e conclusão sugeridos',
-         {'fields': ['tipo_certidao', 'tipo_localizador', 'localizador',
+         {'fields': ['tipo_certidao', 'prazo_dias', 'acoes_fluxo',
+                     'tipo_localizador', 'localizador',
                      'tipo_conclusao', 'juiz_conclusao'],
           'description':
               'Usados na fila de movimentações para sugerir a certidão, '

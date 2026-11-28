@@ -179,6 +179,7 @@ def sugerir_certidao(user, processo, documento_url, processo_url=''):
         'tipo_conclusao_label': CONCLUSAO_LABELS['18'],
         'juiz_conclusao': '41201',
         'acoes_fluxo': [],
+        'prazo_dias': None,
         'template_id': None,
         'template_nome': '',
         'mensagem': '',
@@ -263,6 +264,8 @@ def sugerir_certidao(user, processo, documento_url, processo_url=''):
         'acoes_fluxo': (
             list(getattr(rag, 'acoes_fluxo', []) or [])
             if rag else []),
+        'prazo_dias': (
+            getattr(rag, 'prazo_dias', None) if rag else None),
         'template_id': template.id if template else None,
         'template_nome': template.name if template else '',
     })
