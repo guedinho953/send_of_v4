@@ -434,7 +434,15 @@ document.querySelectorAll('.sugestao-certidao').forEach(async function (el) {
                 ['juiz_conclusao', dados.juiz_conclusao],
             ].forEach(function (par) {
                 const campo = form.querySelector('[name="' + par[0] + '"]');
-                if (campo && par[1]) campo.value = par[1];
+                if (campo && par[1] && !campo.value) campo.value = par[1];
+            });
+            [
+                ['evento_origem', dados.evento_despacho],
+                ['evento_impugnacao', dados.evento_peticao],
+                ['evento_intimacao', dados.evento_intimacao],
+            ].forEach(function (par) {
+                const campo = form.querySelector('[name="' + par[0] + '"]');
+                if (campo && par[1] && !campo.value) campo.value = par[1];
             });
             const templateId = form.querySelector('.template-id');
             if (templateId && dados.template_id) {

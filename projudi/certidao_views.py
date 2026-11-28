@@ -350,6 +350,11 @@ class RagCertidaoCreateView(LoginRequiredMixin, View):
             'processo': '',
             'processo_url': '',
             'evento_despacho': '',
+            'evento_peticao': '',
+            'evento_intimacao': '',
+            'data_protocolo': '',
+            'seguranca_juizo': '',
+            'calculo': None,
             'ato': 'DESPACHO',
             'texto_despacho': '',
             'tipo_certidao': '',
@@ -389,6 +394,15 @@ class RagCertidaoCreateView(LoginRequiredMixin, View):
         processo_url = (request.POST.get('processo_url') or '').strip()
         evento_despacho = (
             request.POST.get('evento_despacho') or '').strip()
+        evento_peticao = (
+            request.POST.get('evento_peticao') or '').strip()
+        evento_intimacao = (
+            request.POST.get('evento_intimacao') or '').strip()
+        data_protocolo_txt = (
+            request.POST.get('data_protocolo') or '').strip()
+        seguranca_juizo = (
+            request.POST.get('seguranca_juizo') or '').strip()
+        acao = (request.POST.get('acao') or 'salvar').strip()
         ato = (request.POST.get('ato') or 'DESPACHO').strip().upper()
         texto_despacho = (
             request.POST.get('texto_despacho') or '').strip()
@@ -459,11 +473,10 @@ class RagCertidaoCreateView(LoginRequiredMixin, View):
                     ),
                 )
 
-        if not processo or not texto_despacho or not texto_certidao:
+        if not processo or not texto_despacho:
             messages.error(
                 request,
-                'Informe o processo, o evento ou o texto do despacho, e o '
-                'texto da certidão.')
+                'Informe o processo e o evento ou o texto do despacho.')
             return render(
                 request, self.template_name,
                 self._contexto(
@@ -472,6 +485,10 @@ class RagCertidaoCreateView(LoginRequiredMixin, View):
                     texto_despacho=texto_despacho,
                     tipo_certidao=tipo_certidao, nome_modelo=nome_modelo,
                     texto_certidao=texto_certidao,
+                    evento_peticao=evento_peticao,
+                    evento_intimacao=evento_intimacao,
+                    data_protocolo=data_protocolo_txt,
+                    seguranca_juizo=seguranca_juizo,
                     tipo_localizador=tipo_localizador,
                     localizador=localizador,
                     tipo_conclusao=tipo_conclusao,
@@ -479,6 +496,153 @@ class RagCertidaoCreateView(LoginRequiredMixin, View):
                     acoes_fluxo=acoes_fluxo,
                 ),
             )
+
+        data_protocolo = None
+        if data_protocolo_txt:
+            try:
+                data_protocolo = datetime.strptime(
+                    data_protocolo_txt, '%d/%m/%Y').date()
+            except ValueError:
+                data_protocolo = None
+        if not data_protocolo and evento_peticao and processo:
+            if not evento_peticao.isdigit():
+                messages.error(request, 'Evento da petição inválido.')
+                return render(request, self.template_name, self._contexto(
+                    processo=processo, processo_url=processo_url,
+                    evento_despacho=evento_despacho, ato=ato,
+                    texto_despacho=texto_despacho,
+                    tipo_certidao=tipo_certidao, nome_modelo=nome_modelo,
+                    texto_certidao=texto_certidao,
+                    evento_peticao=evento_peticao,
+                    evento_intimacao=evento_intimacao,
+                    data_protocolo=data_protocolo_txt,
+                    seguranca_juizo=seguranca_juizo,
+                    acoes_fluxo=acoes_fluxo,
+                ))
+            from projudi.intimacao_service import data_evento_processo
+            if not processo_url:
+                from projudi.processo_lookup import localizar_processo
+                achado = localizar_processo(request.user, processo)
+                if achado:
+                    processo_url = achado['url']
+            if processo_url:
+                data_protocolo = data_evento_processo(
+                    request.user, processo_url, evento_peticao)
+
+        if acao == 'calcular':
+            if tipo_certidao != 'impugnacao_embargos_execucao':
+                messages.info(
+                    request,
+                    'O cálculo de tempestividade está disponível para '
+                    'Impugnação/Embargos à Execução.')
+                return render(request, self.template_name, self._contexto(
+                    processo=processo, processo_url=processo_url,
+                    evento_despacho=evento_despacho, ato=ato,
+                    texto_despacho=texto_despacho,
+                    tipo_certidao=tipo_certidao, nome_modelo=nome_modelo,
+                    texto_certidao=texto_certidao,
+                    evento_peticao=evento_peticao,
+                    evento_intimacao=evento_intimacao,
+                    data_protocolo=data_protocolo_txt,
+                    seguranca_juizo=seguranca_juizo,
+                    acoes_fluxo=acoes_fluxo,
+                ))
+            if not data_protocolo:
+                messages.error(
+                    request,
+                    'Informe a data do protocolo ou o evento da petição '
+                    'para calcular a tempestividade.')
+                return render(request, self.template_name, self._contexto(
+                    processo=processo, processo_url=processo_url,
+                    evento_despacho=evento_despacho, ato=ato,
+                    texto_despacho=texto_despacho,
+                    tipo_certidao=tipo_certidao, nome_modelo=nome_modelo,
+                    texto_certidao=texto_certidao,
+                    evento_peticao=evento_peticao,
+                    evento_intimacao=evento_intimacao,
+                    data_protocolo=data_protocolo_txt,
+                    seguranca_juizo=seguranca_juizo,
+                    acoes_fluxo=acoes_fluxo,
+                ))
+            from projudi.decurso_pagamento_service import (
+                DecursoPagamentoService,
+            )
+            try:
+                resultado = DecursoPagamentoService(request.user).analisar(
+                    processo,
+                    evento=evento_despacho,
+                    url=processo_url or None,
+                    evento_intimacao=evento_intimacao or None,
+                )
+            except Exception as exc:
+                messages.error(request, f'Erro no cálculo: {exc}')
+                return render(request, self.template_name, self._contexto(
+                    processo=processo, processo_url=processo_url,
+                    evento_despacho=evento_despacho, ato=ato,
+                    texto_despacho=texto_despacho,
+                    tipo_certidao=tipo_certidao, nome_modelo=nome_modelo,
+                    texto_certidao=texto_certidao,
+                    evento_peticao=evento_peticao,
+                    evento_intimacao=evento_intimacao,
+                    data_protocolo=data_protocolo_txt,
+                    seguranca_juizo=seguranca_juizo,
+                    acoes_fluxo=acoes_fluxo,
+                ))
+            if resultado.get('erro'):
+                messages.error(request, resultado['erro'])
+                return render(request, self.template_name, self._contexto(
+                    processo=processo, processo_url=processo_url,
+                    evento_despacho=evento_despacho, ato=ato,
+                    texto_despacho=texto_despacho,
+                    tipo_certidao=tipo_certidao, nome_modelo=nome_modelo,
+                    texto_certidao=texto_certidao,
+                    evento_peticao=evento_peticao,
+                    evento_intimacao=evento_intimacao,
+                    data_protocolo=data_protocolo_txt,
+                    seguranca_juizo=seguranca_juizo,
+                    acoes_fluxo=acoes_fluxo,
+                ))
+            tempestivo = data_protocolo <= resultado['ultimo_dia']
+            calculo = {
+                'tempestivo': tempestivo,
+                'data_protocolo': data_protocolo,
+                'ultimo_dia': resultado['ultimo_dia'],
+                'data_decurso': resultado['data_decurso'],
+                'data_intimacao': resultado.get('data_intimacao'),
+                'evento_intimacao': resultado.get('evento_intimacao'),
+                'meio_label': resultado.get('meio_label'),
+                'data_publicacao': resultado.get('data_publicacao'),
+                'data_inicio_contagem': resultado.get(
+                    'data_inicio_contagem'),
+            }
+            return render(request, self.template_name, self._contexto(
+                processo=processo, processo_url=processo_url,
+                evento_despacho=evento_despacho, ato=ato,
+                texto_despacho=texto_despacho,
+                tipo_certidao=tipo_certidao, nome_modelo=nome_modelo,
+                texto_certidao=texto_certidao,
+                evento_peticao=evento_peticao,
+                evento_intimacao=evento_intimacao,
+                data_protocolo=data_protocolo_txt,
+                seguranca_juizo=seguranca_juizo,
+                calculo=calculo,
+                acoes_fluxo=acoes_fluxo,
+            ))
+
+        if not texto_certidao:
+            messages.error(request, 'Informe o texto da certidão.')
+            return render(request, self.template_name, self._contexto(
+                processo=processo, processo_url=processo_url,
+                evento_despacho=evento_despacho, ato=ato,
+                texto_despacho=texto_despacho,
+                tipo_certidao=tipo_certidao, nome_modelo=nome_modelo,
+                texto_certidao=texto_certidao,
+                evento_peticao=evento_peticao,
+                evento_intimacao=evento_intimacao,
+                data_protocolo=data_protocolo_txt,
+                seguranca_juizo=seguranca_juizo,
+                acoes_fluxo=acoes_fluxo,
+            ))
         if tipo_certidao not in tipos:
             messages.error(request, 'Escolha o tipo de certidão.')
             return render(
@@ -553,6 +717,8 @@ class RagCertidaoCreateView(LoginRequiredMixin, View):
             process=proc,
             tenant=tenant,
             evento_despacho=evento_despacho,
+            evento_peticao=evento_peticao,
+            evento_intimacao=evento_intimacao,
             despacho_ato=ato[:200],
             despacho_observacao=texto_despacho,
             despacho_data=(

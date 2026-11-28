@@ -469,6 +469,12 @@ class RAGExample(TimeStampedModel):
     despacho_data = models.CharField('Data Despacho', max_length=20, blank=True)
     despacho_autor = models.CharField('Juiz', max_length=200, blank=True)
     evento_despacho = models.CharField('Evento Despacho', max_length=20, blank=True)
+    evento_peticao = models.CharField(
+        'Evento da Petição', max_length=20, blank=True,
+        help_text='Evento da impugnação/embargos/recurso, quando aplicável.')
+    evento_intimacao = models.CharField(
+        'Evento da Intimação', max_length=20, blank=True,
+        help_text='Evento da intimação/DJEN, quando aplicável.')
     CERTIDAO_CHOICES = [
         ('', 'Nenhuma'),
         ('inominado', 'Recurso Inominado'),

@@ -73,6 +73,52 @@
             </div>
         </div>
 
+        <div class="grid">
+            <div class="campo">
+                <label for="evento_peticao">Evento da petição</label>
+                <input id="evento_peticao" name="evento_peticao"
+                       value="{{ evento_peticao }}" placeholder="ex.: 32">
+            </div>
+            <div class="campo">
+                <label for="evento_intimacao">Evento da intimação</label>
+                <input id="evento_intimacao" name="evento_intimacao"
+                       value="{{ evento_intimacao }}" placeholder="ex.: 31">
+            </div>
+            <div class="campo">
+                <label for="data_protocolo">Data do protocolo</label>
+                <input id="data_protocolo" name="data_protocolo"
+                       value="{{ data_protocolo }}" placeholder="DD/MM/AAAA">
+            </div>
+            <div class="campo">
+                <label for="seguranca_juizo">Segurança do juízo</label>
+                <select id="seguranca_juizo" name="seguranca_juizo">
+                    <option value="">Selecione...</option>
+                    <option value="integral" {% if seguranca_juizo == 'integral' %}selected{% endif %}>Integral</option>
+                    <option value="parcial" {% if seguranca_juizo == 'parcial' %}selected{% endif %}>Depósito parcial</option>
+                    <option value="nenhuma" {% if seguranca_juizo == 'nenhuma' %}selected{% endif %}>Não houve</option>
+                </select>
+            </div>
+        </div>
+
+        {% if calculo %}
+        <div style="background:{% if calculo.tempestivo %}#dcfce7; border:1px solid #86efac; color:#166534{% else %}#fee2e2; border:1px solid #fecaca; color:#991b1b{% endif %}; border-radius:8px; padding:12px 14px; margin-bottom:16px;">
+            <strong style="font-size:15px;">
+                {% if calculo.tempestivo %}TEMPESTIVO{% else %}INTEMPESTIVO{% endif %}
+            </strong>
+            <div style="font-size:12px; margin-top:4px;">
+                Protocolo: {{ calculo.data_protocolo|date:"d/m/Y" }}
+                · Último dia: {{ calculo.ultimo_dia|date:"d/m/Y" }}
+                · Decurso: {{ calculo.data_decurso|date:"d/m/Y" }}
+            </div>
+            {% if calculo.evento_intimacao %}
+            <div style="font-size:12px;">
+                Intimação: evento {{ calculo.evento_intimacao }}
+                {% if calculo.data_intimacao %}em {{ calculo.data_intimacao|date:"d/m/Y" }}{% endif %}
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
         <div class="campo">
             <label for="texto_despacho">Texto do despacho/decisão</label>
             <textarea id="texto_despacho" name="texto_despacho"
@@ -105,9 +151,11 @@
         </div>
 
         <div class="campo">
-            <label for="texto_certidao">Texto da certidão que será gerada *</label>
+            <label for="texto_certidao">Texto da certidão que será gerada</label>
             <textarea id="texto_certidao" name="texto_certidao" class="grande"
-                      required placeholder="Ex.: Certifico, para os devidos fins, a TEMPESTIVIDADE...">{{ texto_certidao }}</textarea>
+                      placeholder="Ex.: Certifico, para os devidos fins, a TEMPESTIVIDADE...">{{ texto_certidao }}</textarea>
+            <div class="ajuda">Obrigatório para salvar a RAG; pode calcular a
+                tempestividade antes de escrever o texto.</div>
             <div class="ajuda">
                 Pode escrever texto normal ou HTML. Placeholders disponíveis:
                 <code>{% templatetag openvariable %} processo {% templatetag closevariable %}</code>,
@@ -165,7 +213,13 @@
         </div>
 
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <button type="submit" class="btn btn-green">💾 Criar RAG e modelo</button>
+            <button type="submit" name="acao" value="calcular" class="btn"
+                    style="background:#0891b2; color:#fff;">
+                🧮 Calcular tempestividade
+            </button>
+            <button type="submit" name="acao" value="salvar" class="btn btn-green">
+                💾 Criar RAG e modelo
+            </button>
             <a href="{% url 'projudi:rag_certidoes' %}" class="btn btn-outline">Cancelar</a>
         </div>
     </form>
