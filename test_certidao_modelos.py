@@ -112,6 +112,21 @@ class CertidaoModelosTest(TestCase):
         self.assertIn('Certifique-se a tempestividade', rag.despacho_observacao)
         self.assertEqual(rag.despacho_data, '28/11/2026')
 
+    def test_carregar_modelo_nao_perde_processo_e_evento(self):
+        resposta = self.client.post(
+            reverse('projudi:rag_certidao_nova'),
+            {
+                'acao': 'carregar_modelo',
+                'processo': '0000009-99.2026.8.05.0191',
+                'evento_despacho': '102',
+                'modelo_base': str(self.modelo.pk),
+            },
+        )
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, '0000009-99.2026.8.05.0191')
+        self.assertContains(resposta, 'value="102"')
+        self.assertContains(resposta, 'Certifico {{ processo }}.')
+
     def test_rag_carrega_dados_de_rag_existente(self):
         resposta = self.client.get(
             reverse('projudi:rag_certidao_nova')

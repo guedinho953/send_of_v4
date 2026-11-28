@@ -467,6 +467,7 @@ class RagCertidaoCreateView(LoginRequiredMixin, View):
             request.POST.get('data_protocolo') or '').strip()
         seguranca_juizo = (
             request.POST.get('seguranca_juizo') or '').strip()
+        modelo_base = (request.POST.get('modelo_base') or '').strip()
         acao = (request.POST.get('acao') or 'salvar').strip()
         ato = (request.POST.get('ato') or 'DESPACHO').strip().upper()
         texto_despacho = (
@@ -493,6 +494,38 @@ class RagCertidaoCreateView(LoginRequiredMixin, View):
 
         from projudi.peticoes_inominado import TIPOS_CERTIDAO
         tipos = {t['valor']: t for t in TIPOS_CERTIDAO}
+
+        if acao == 'carregar_modelo':
+            base = None
+            if modelo_base.isdigit():
+                base = DocumentTemplate.objects.filter(
+                    pk=int(modelo_base), template_type='certidao',
+                    active=True,
+                ).first()
+            if base:
+                texto_certidao = base.html_template
+                nome_modelo = f'{base.name} (cópia)'
+            else:
+                messages.warning(
+                    request, 'Escolha um modelo existente para copiar.')
+            return render(request, self.template_name, self._contexto(
+                processo=processo, processo_url=processo_url,
+                evento_despacho=evento_despacho, ato=ato,
+                texto_despacho=texto_despacho,
+                tipo_certidao=tipo_certidao, nome_modelo=nome_modelo,
+                texto_certidao=texto_certidao,
+                evento_peticao=evento_peticao,
+                evento_intimacao=evento_intimacao,
+                data_protocolo=data_protocolo_txt,
+                seguranca_juizo=seguranca_juizo,
+                tipo_localizador=tipo_localizador,
+                localizador=localizador,
+                tipo_conclusao=tipo_conclusao,
+                juiz_conclusao=juiz_conclusao,
+                modelo_base=modelo_base,
+                acoes_fluxo=acoes_fluxo,
+            ))
+
         if evento_despacho and not evento_despacho.isdigit():
             messages.error(
                 request, 'Evento do despacho inválido. Informe apenas o número.')
