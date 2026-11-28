@@ -65,6 +65,13 @@ TIPOS_PRAZO: Dict[str, Dict[str, object]] = {
         'ato': 'decurso de pagamento',
         'protocolo_frase': 'O prazo de pagamento decorreu',
     },
+    'decurso_manifestacao_adjudicacao': {
+        'dias': 5,
+        'label': 'Decurso de manifestação sobre adjudicação',
+        'transito': False,
+        'ato': 'decurso de manifestação sobre adjudicação',
+        'protocolo_frase': 'O prazo de manifestação sobre adjudicação decorreu',
+    },
     'impugnacao_embargos_execucao': {
         'dias': 15,
         'label': 'Impugnação/Embargos à Execução',

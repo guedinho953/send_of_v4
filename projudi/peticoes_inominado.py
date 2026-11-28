@@ -150,6 +150,11 @@ TIPOS_CERTIDAO = [
         'dias': 15,
     },
     {
+        'valor': 'decurso_manifestacao_adjudicacao',
+        'label': 'Decurso de Manifestação sobre Adjudicação',
+        'dias': 5,
+    },
+    {
         'valor': 'impugnacao_embargos_execucao',
         'label': 'Impugnação/Embargos à Execução',
         'dias': 15,

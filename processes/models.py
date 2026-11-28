@@ -482,6 +482,8 @@ class RAGExample(TimeStampedModel):
         ('cumprimento_sentenca', 'Impugnação/Cumprimento de Sentença'),
         ('pagamento_impugnacao_penhora', 'Impugnação/Decurso da Penhora'),
         ('decurso_pagamento', 'Decurso de Pagamento Voluntário'),
+        ('decurso_manifestacao_adjudicacao',
+         'Decurso de Manifestação sobre Adjudicação'),
         ('impugnacao_embargos_execucao',
          'Impugnação/Embargos à Execução'),
     ]

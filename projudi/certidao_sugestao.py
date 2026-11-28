@@ -94,6 +94,9 @@ def _texto_documento(session, url):
         return ''
     if not url.startswith('http'):
         url = urljoin(BASE, url)
+    # Alguns links da movimentação vêm com "downloadarquivo" minúsculo,
+    # mas o Projudi só responde no caminho "DownloadArquivo".
+    url = url.replace('downloadarquivo', 'DownloadArquivo')
     resposta = session.get(url, timeout=30)
     if resposta.status_code != 200:
         return ''
@@ -119,6 +122,9 @@ def _tipo_por_texto(texto):
         return 'contrarrazoes_inominado'
     if 'RECURSO INOMINADO' in alvo:
         return 'inominado'
+    if 'ADJUDICACAO' in alvo and (
+            'MANIFESTACAO' in alvo or 'DECURSO' in alvo):
+        return 'decurso_manifestacao_adjudicacao'
     if 'EMBARGOS' in alvo and 'EXECUCAO' in alvo:
         return 'impugnacao_embargos_execucao'
     if 'IMPUGNACAO' in alvo and 'EXECUCAO' in alvo:

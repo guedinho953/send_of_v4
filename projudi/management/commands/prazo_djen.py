@@ -119,6 +119,8 @@ def _texto_publico_prazo(res, info, options, tempestivo=None):
             'impugnação ao decurso do prazo da penhora'),
         'decurso_pagamento': (
             'cumprimento voluntário da sentença/impugnação'),
+        'decurso_manifestacao_adjudicacao': (
+            'decurso do prazo de manifestação sobre adjudicação'),
     }
     ato = atos.get(
         tipo,
