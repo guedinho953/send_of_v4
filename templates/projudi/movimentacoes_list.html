@@ -99,7 +99,7 @@
                         <form method="post"
                               action="{% url 'projudi:movimentacao_criar_rag' %}"
                               class="form-criar-rag"
-                              style="display:none; margin-top:6px;"
+                              style="margin-top:6px;"
                               onsubmit="return confirm('Gerar uma RAG a partir do texto desta movimentação?');">
                             {% csrf_token %}
                             <input type="hidden" name="processo" value="{{ m.processo }}">
@@ -109,6 +109,7 @@
                             <input type="hidden" name="link_documento" value="{{ m.link_documento|default:'' }}">
                             <input type="hidden" name="texto_movimentacao"
                                    value="{{ m.tipo|default:'' }} {{ m.data|default:'' }}">
+                            <input type="hidden" name="forcar" class="forcar-rag" value="">
                             <button type="submit" class="btn btn-sm"
                                     style="background:#7c3aed; color:#fff;">
                                 🧠 Gerar RAG
@@ -386,8 +387,17 @@ document.querySelectorAll('.sugestao-certidao').forEach(async function (el) {
             linha.dataset.temRag = dados.rag_encontrada ? '1' : '0';
             const criarRag = linha.querySelector('.form-criar-rag');
             if (criarRag) {
-                criarRag.style.display = dados.rag_encontrada
-                    ? 'none' : 'block';
+                criarRag.style.display = 'block';
+                const botaoCriar = criarRag.querySelector(
+                    'button[type="submit"]');
+                if (botaoCriar) {
+                    botaoCriar.textContent = dados.rag_encontrada
+                        ? '🧠 Nova RAG' : '🧠 Gerar RAG';
+                }
+                const forcar = criarRag.querySelector('.forcar-rag');
+                if (forcar) {
+                    forcar.value = dados.rag_encontrada ? '1' : '';
+                }
             }
             if (typeof window.aplicarFiltroRag === 'function') {
                 window.aplicarFiltroRag();

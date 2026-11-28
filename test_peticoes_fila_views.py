@@ -388,6 +388,30 @@ class PeticaoFilaViewsTest(TestCase):
             rag.tipo_certidao, 'impugnacao_embargos_execucao')
         self.assertIn('Certifique-se', rag.despacho_observacao)
 
+    @patch('projudi.services.ProjudiService._get_session_from_cookies',
+           return_value=(object(), {}))
+    @patch('projudi.certidao_sugestao._texto_documento', return_value=(
+        'Certifique-se a inexistência de custas da execução.'))
+    def test_criar_rag_sem_tenant_usa_tenant_padrao(self, _texto, _sessao):
+        from accounts.models import Tenant
+        from processes.models import RAGExample
+
+        tenant = Tenant.objects.create(
+            name='Tenant padrão RAG', cnpj='77.777.777/0001-77')
+        resposta = self.client.post(
+            reverse('projudi:movimentacao_criar_rag'),
+            {
+                'processo': '0001224-59.2026.8.05.0191',
+                'tipo': 'Mero expediente',
+                'data': '28/11/2026',
+                'link_documento': 'https://projudi/despacho.pdf',
+            },
+        )
+        self.assertEqual(resposta.status_code, 302)
+        rag = RAGExample.objects.get(
+            process__number='0001224-59.2026.8.05.0191')
+        self.assertEqual(rag.tenant_id, tenant.id)
+
     @patch('projudi.peticoes_views.DecursoPagamentoService.analisar')
     def test_decurso_nao_gera_antes_do_prazo(self, analisar):
         resultado = resultado_decurso()

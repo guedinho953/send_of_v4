@@ -160,6 +160,7 @@ class CriarRagMovimentacaoView(LoginRequiredMixin, View):
         link_documento = (request.POST.get('link_documento') or '').strip()
         texto_movimentacao = (
             request.POST.get('texto_movimentacao') or '').strip()
+        forcar = request.POST.get('forcar') == '1'
 
         voltar = HttpResponseRedirect(reverse('projudi:movimentacoes'))
         if not processo:
@@ -190,19 +191,38 @@ class CriarRagMovimentacaoView(LoginRequiredMixin, View):
 
         numero = normalize_process_number(processo)
         proc = Process.objects.filter(number_normalized=numero).first()
+
+        # O tenant é obrigatório em Process. Usuários antigos podem não ter
+        # tenant vinculado; nesse caso reaproveita o tenant do processo ou,
+        # por último, o tenant padrão do sistema.
+        tenant = getattr(request.user, 'tenant', None)
+        if tenant is None and proc is not None:
+            tenant = proc.tenant
+        if tenant is None:
+            from accounts.models import Tenant
+            tenant = Tenant.objects.first()
+        if tenant is None:
+            messages.error(
+                request,
+                'Nenhum tenant cadastrado para criar a RAG.',
+            )
+            return voltar
+
         if not proc:
             proc = Process.objects.create(
                 number=processo,
                 number_normalized=numero,
-                tenant=getattr(request.user, 'tenant', None),
+                tenant=tenant,
                 status='analyzing',
                 projudi_url=link_processo,
             )
 
-        existente = RAGExample.objects.filter(
-            process=proc,
-            despacho_observacao=texto,
-        ).first()
+        existente = None
+        if not forcar:
+            existente = RAGExample.objects.filter(
+                process=proc,
+                despacho_observacao=texto,
+            ).first()
         if existente:
             messages.info(
                 request,
@@ -225,7 +245,7 @@ class CriarRagMovimentacaoView(LoginRequiredMixin, View):
             })
         rag = RAGExample.objects.create(
             process=proc,
-            tenant=getattr(request.user, 'tenant', None),
+            tenant=tenant,
             despacho_ato=(tipo or 'Movimentação')[:200],
             despacho_observacao=texto,
             despacho_data=data,
