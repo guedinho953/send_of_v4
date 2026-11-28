@@ -361,7 +361,9 @@ document.querySelectorAll('form.fila-mov-form').forEach(function (form) {
     function atualizarTipo() {
         const valor = tipo ? tipo.value : '';
         const ehImpugnacao = valor === 'impugnacao_embargos_execucao';
-        const ehDecurso = valor === 'decurso_pagamento';
+        const ehDecurso = (
+            valor === 'decurso_pagamento'
+            || valor === 'decurso_manifestacao_adjudicacao');
         if (impugnacao) {
             impugnacao.style.display = ehImpugnacao ? 'flex' : 'none';
         }

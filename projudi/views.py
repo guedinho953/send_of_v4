@@ -113,6 +113,7 @@ class MovimentacoesListView(LoginRequiredMixin, ListView):
             'cumprimento_sentenca',
             'pagamento_impugnacao_penhora',
             'decurso_pagamento',
+            'decurso_manifestacao_adjudicacao',
             'impugnacao_embargos_execucao',
         }
         context['tipos_certidao'] = [

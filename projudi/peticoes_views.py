@@ -187,7 +187,9 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
                     request.user, processo_url, evento_impugnacao)
             except Exception:
                 data_protocolo = None
-        if not data_protocolo:
+        tipos_sem_protocolo = (
+            'decurso_pagamento', 'decurso_manifestacao_adjudicacao')
+        if not data_protocolo and tipo_prazo not in tipos_sem_protocolo:
             messages.error(
                 request,
                 'Informe a data do protocolo ou o evento da petição '
@@ -275,7 +277,9 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
                     tipo=tipo_prazo,
                     disponibilizacao=data_intimacao_final.strftime(
                         '%d/%m/%Y'),
-                    protocolo=data_protocolo.strftime('%d/%m/%Y'),
+                    protocolo=(
+                        data_protocolo.strftime('%d/%m/%Y')
+                        if data_protocolo else None),
                     processo=processo,
                     processo_url=processo_url or None,
                     parte=parte,
