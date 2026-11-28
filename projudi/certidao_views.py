@@ -375,36 +375,80 @@ class RagCertidaoCreateView(LoginRequiredMixin, View):
         return context
 
     def get(self, request):
-        from processes.models import DocumentTemplate
+        from processes.models import DocumentTemplate, RAGExample
 
         modelo_base = (request.GET.get('modelo_base') or '').strip()
+        rag_base_id = (request.GET.get('rag_base') or '').strip()
         texto_certidao = (
             request.GET.get('texto_certidao') or '').strip()
         nome_modelo = ''
+        dados = {
+            'processo': (request.GET.get('processo') or '').strip(),
+            'processo_url': (request.GET.get('url') or '').strip(),
+            'evento_despacho': (
+                request.GET.get('evento') or '').strip(),
+            'texto_despacho': (
+                request.GET.get('texto_despacho') or '').strip(),
+            'tipo_certidao': (
+                request.GET.get('tipo_certidao') or '').strip(),
+            'texto_certidao': texto_certidao,
+            'nome_modelo': nome_modelo,
+            'modelo_base': modelo_base,
+        }
+
         if modelo_base.isdigit():
             base = DocumentTemplate.objects.filter(
                 pk=int(modelo_base), template_type='certidao', active=True,
             ).first()
             if base:
-                texto_certidao = base.html_template
-                nome_modelo = f'{base.name} (cópia)'
-        return render(
-            request,
-            self.template_name,
-            self._contexto(
-                processo=(request.GET.get('processo') or '').strip(),
-                processo_url=(request.GET.get('url') or '').strip(),
-                evento_despacho=(
-                    request.GET.get('evento') or '').strip(),
-                texto_despacho=(
-                    request.GET.get('texto_despacho') or '').strip(),
-                tipo_certidao=(
-                    request.GET.get('tipo_certidao') or '').strip(),
-                texto_certidao=texto_certidao,
-                nome_modelo=nome_modelo,
-                modelo_base=modelo_base,
-            ),
-        )
+                dados['texto_certidao'] = base.html_template
+                dados['nome_modelo'] = f'{base.name} (cópia)'
+
+        if rag_base_id.isdigit():
+            base_rag = (
+                RAGExample.objects
+                .select_related('process')
+                .prefetch_related('suggested_templates')
+                .filter(pk=int(rag_base_id), active=True)
+                .first()
+            )
+            if base_rag:
+                ato = (base_rag.despacho_ato or '').upper()
+                if 'DECIS' in ato:
+                    ato_form = 'DECISÃO'
+                elif 'SENTEN' in ato:
+                    ato_form = 'SENTENÇA'
+                else:
+                    ato_form = 'DESPACHO'
+                template = base_rag.suggested_templates.filter(
+                    template_type='certidao', active=True,
+                ).first()
+                dados.update({
+                    'processo': (
+                        base_rag.process.number
+                        if base_rag.process else dados['processo']),
+                    'processo_url': (
+                        base_rag.process.projudi_url
+                        if base_rag.process else dados['processo_url']),
+                    'evento_despacho': base_rag.evento_despacho,
+                    'evento_peticao': base_rag.evento_peticao,
+                    'evento_intimacao': base_rag.evento_intimacao,
+                    'ato': ato_form,
+                    'texto_despacho': base_rag.despacho_observacao,
+                    'tipo_certidao': base_rag.tipo_certidao,
+                    'tipo_localizador': base_rag.tipo_localizador,
+                    'localizador': base_rag.localizador,
+                    'tipo_conclusao': base_rag.tipo_conclusao or '18',
+                    'juiz_conclusao': base_rag.juiz_conclusao or '41201',
+                    'acoes_fluxo': list(base_rag.acoes_fluxo or []),
+                    'texto_certidao': (
+                        template.html_template
+                        if template else dados['texto_certidao']),
+                    'nome_modelo': (
+                        f'{template.name} (cópia)'
+                        if template else dados['nome_modelo']),
+                })
+        return render(request, self.template_name, self._contexto(**dados))
 
     def post(self, request):
         from base.utils import normalize_process_number

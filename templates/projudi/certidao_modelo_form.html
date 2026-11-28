@@ -52,6 +52,24 @@
         </div>
 
         <div class="campo">
+            <label for="rag_ids">RAGs vinculadas</label>
+            <select id="rag_ids" name="rag_ids" multiple size="7"
+                    style="width:100%; min-height:150px;">
+                {% for r in rags %}
+                <option value="{{ r.id }}" {% if r.id in rag_ids %}selected{% endif %}>
+                    #{{ r.id }} — {{ r.process.number|default:"sem processo" }}
+                    {% if r.evento_despacho %}— evento {{ r.evento_despacho }}{% endif %}
+                    — {{ r.despacho_ato|truncatechars:60 }}
+                </option>
+                {% endfor %}
+            </select>
+            <div class="ajuda">
+                Segure <strong>Ctrl</strong> para selecionar mais de uma RAG.
+                O modelo será sugerido quando uma dessas RAGs der match.
+            </div>
+        </div>
+
+        <div class="campo">
             <label for="html_template">Template HTML *</label>
             <textarea id="html_template" name="html_template" class="codigo" required
                       placeholder="<div>...</div>">{{ valores.html_template }}</textarea>

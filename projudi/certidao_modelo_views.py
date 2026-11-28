@@ -7,7 +7,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
 
-from processes.models import DocumentTemplate
+from processes.models import DocumentTemplate, RAGExample
 
 
 SAMPLE_CONTEXT = {
@@ -26,6 +26,15 @@ SAMPLE_CONTEXT = {
         'processuais pendentes.'
     ),
 }
+
+
+def _rags_disponiveis():
+    return (
+        RAGExample.objects
+        .filter(active=True)
+        .select_related('process')
+        .order_by('process__number', 'evento_despacho')
+    )
 
 
 class CertidaoModeloListView(LoginRequiredMixin, View):
@@ -51,6 +60,8 @@ class CertidaoModeloCreateView(LoginRequiredMixin, View):
     def get(self, request):
         return render(request, self.template_name, {
             'modelo': None,
+            'rags': _rags_disponiveis(),
+            'rag_ids': [],
             'valores': {
                 'name': '',
                 'description': '',
@@ -64,11 +75,14 @@ class CertidaoModeloCreateView(LoginRequiredMixin, View):
         descricao = (request.POST.get('description') or '').strip()
         html = (request.POST.get('html_template') or '').strip()
         ativo = request.POST.get('active') == '1'
+        rag_ids = request.POST.getlist('rag_ids')
 
         if not nome or not html:
             messages.error(request, 'Nome e template HTML são obrigatórios.')
             return render(request, self.template_name, {
                 'modelo': None,
+                'rags': _rags_disponiveis(),
+                'rag_ids': rag_ids,
                 'valores': {
                     'name': nome,
                     'description': descricao,
@@ -84,6 +98,8 @@ class CertidaoModeloCreateView(LoginRequiredMixin, View):
             html_template=html,
             active=ativo,
         )
+        if rag_ids:
+            modelo.rag_examples.set(rag_ids)
         messages.success(request, f'✅ Modelo "{modelo.name}" criado.')
         return redirect('projudi:certidao_modelos')
 
@@ -97,6 +113,9 @@ class CertidaoModeloUpdateView(LoginRequiredMixin, View):
         )
         return render(request, self.template_name, {
             'modelo': modelo,
+            'rags': _rags_disponiveis(),
+            'rag_ids': list(
+                modelo.rag_examples.values_list('id', flat=True)),
             'valores': {
                 'name': modelo.name,
                 'description': modelo.description,
@@ -113,11 +132,14 @@ class CertidaoModeloUpdateView(LoginRequiredMixin, View):
         descricao = (request.POST.get('description') or '').strip()
         html = (request.POST.get('html_template') or '').strip()
         ativo = request.POST.get('active') == '1'
+        rag_ids = request.POST.getlist('rag_ids')
 
         if not nome or not html:
             messages.error(request, 'Nome e template HTML são obrigatórios.')
             return render(request, self.template_name, {
                 'modelo': modelo,
+                'rags': _rags_disponiveis(),
+                'rag_ids': rag_ids,
                 'valores': {
                     'name': nome,
                     'description': descricao,
@@ -133,6 +155,7 @@ class CertidaoModeloUpdateView(LoginRequiredMixin, View):
         modelo.save(update_fields=[
             'name', 'description', 'html_template', 'active',
         ])
+        modelo.rag_examples.set(rag_ids)
         messages.success(request, f'✅ Modelo "{modelo.name}" atualizado.')
         return redirect('projudi:certidao_modelos')
 

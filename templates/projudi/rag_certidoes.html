@@ -133,6 +133,10 @@
                         </a>
                         {% endif %}
                         <a class="btn btn-sm btn-outline"
+                           href="{% url 'projudi:rag_certidao_nova' %}?rag_base={{ r.id }}">
+                            📑 Usar como base
+                        </a>
+                        <a class="btn btn-sm btn-outline"
                            href="{% url 'projudi:movimentacoes' %}?q={{ r.process.number|urlencode }}">
                             🔎 Movimentações
                         </a>

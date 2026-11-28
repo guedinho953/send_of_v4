@@ -46,6 +46,21 @@ class CertidaoModelosTest(TestCase):
         self.assertContains(resposta, 'Certidão de Teste')
         self.assertContains(resposta, 'Novo modelo')
 
+    def test_cria_modelo_vinculado_a_rag(self):
+        resposta = self.client.post(
+            reverse('projudi:certidao_modelo_novo'),
+            {
+                'name': 'Modelo vinculado',
+                'description': 'Teste',
+                'html_template': '<p>Certifico.</p>',
+                'active': '1',
+                'rag_ids': [str(self.rag.pk)],
+            },
+        )
+        self.assertEqual(resposta.status_code, 302)
+        modelo = DocumentTemplate.objects.get(name='Modelo vinculado')
+        self.assertIn(self.rag, modelo.rag_examples.all())
+
     def test_preview_modelo(self):
         resposta = self.client.get(reverse(
             'projudi:certidao_modelo_preview', args=[self.modelo.pk]))
@@ -96,6 +111,18 @@ class CertidaoModelosTest(TestCase):
         self.assertEqual(rag.evento_despacho, '28')
         self.assertIn('Certifique-se a tempestividade', rag.despacho_observacao)
         self.assertEqual(rag.despacho_data, '28/11/2026')
+
+    def test_rag_carrega_dados_de_rag_existente(self):
+        resposta = self.client.get(
+            reverse('projudi:rag_certidao_nova')
+            + f'?rag_base={self.rag.pk}')
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(
+            resposta, self.processo.number)
+        self.assertContains(
+            resposta, 'Certifico {{ processo }}.')
+        self.assertContains(
+            resposta, 'Impugnação/Embargos à Execução')
 
     def test_cria_rag_e_modelo_de_certidao(self):
         resposta = self.client.post(
