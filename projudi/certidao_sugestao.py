@@ -34,6 +34,59 @@ def _normalizar(texto):
     return re.sub(r'\s+', ' ', texto).strip().upper()
 
 
+def limpar_texto_despacho(texto):
+    """Extrai o corpo útil do despacho/decisão.
+
+    Remove o cabeçalho do tribunal e o bloco de assinatura/eletrônica que
+    costumam vir no PDF, mantendo apenas o texto que interessa para a RAG.
+    """
+    import re
+
+    texto = (
+        str(texto or '')
+        .replace('\xa0', ' ')
+        .replace('\r\n', '\n')
+        .replace('\r', '\n')
+    )
+    if not texto.strip():
+        return ''
+
+    # Corta o cabeçalho a partir do título do ato.
+    inicio = re.search(
+        r'\b(DESPACHO|DECIS[ÃA]O|SENTEN[ÇC]A|ATO\s+ORDINAT[ÓO]RIO)\b',
+        texto,
+        re.I,
+    )
+    if inicio:
+        texto = texto[inicio.end():]
+
+    # Corta a assinatura e os dados de validação.
+    assinatura = re.search(
+        r'(?i)(?:Paulo\s+Afonso(?:-BA)?,\s*'
+        r'(?:data\s+da\s+assinatura|\d{1,2}\s+de\s+[a-zç]+\s+de\s+\d{4})'
+        r'|Documento\s+Assinado\s+Eletronicamente'
+        r'|Assinado\s+eletronicamente\s+por'
+        r'|C[óo]digo\s+de\s+valida[çc][ãa]o'
+        r'|Este\s+documento\s+foi\s+assinado)',
+        texto,
+    )
+    if assinatura:
+        texto = texto[:assinatura.start()]
+
+    # Remove restos de paginação/linhas vazias e normaliza os espaços.
+    linhas = []
+    for linha in texto.splitlines():
+        linha = re.sub(r'\s+', ' ', linha).strip()
+        if not linha or linha.isdigit():
+            continue
+        if re.match(r'^(P[ÁA]GINA|PAG\.?)\s*\d+', linha, re.I):
+            continue
+        linhas.append(linha)
+    texto = re.sub(r'\s+', ' ', ' '.join(linhas)).strip()
+    texto = re.sub(r'\s+([,.;:!?])', r'\1', texto)
+    return texto
+
+
 def _texto_documento(session, url):
     if not url:
         return ''
@@ -133,6 +186,7 @@ def sugerir_certidao(user, processo, documento_url, processo_url=''):
     except Exception as exc:
         resultado['mensagem'] = f'Erro ao baixar o documento: {exc}'
         return resultado
+    texto = limpar_texto_despacho(texto)
     if len(texto.strip()) < 30:
         resultado['mensagem'] = 'Documento sem texto suficiente para a RAG.'
         return resultado

@@ -281,6 +281,7 @@ class PeticaoFilaViewsTest(TestCase):
         self.assertContains(resposta, 'Gerar certidão daqui')
         self.assertContains(resposta, 'Só RAGs')
         self.assertContains(resposta, 'mostrar todas as certidões')
+        self.assertContains(resposta, 'Gerar RAG')
         self.assertContains(resposta, 'Impugnação/Embargos à Execução')
         self.assertContains(resposta, 'Decurso de Pagamento Voluntário')
         self.assertContains(
@@ -336,6 +337,24 @@ class PeticaoFilaViewsTest(TestCase):
         self.assertEqual(kwargs['seguranca_juizo'], 'parcial')
         self.assertEqual(kwargs['tipo_localizador'], '15286')
         self.assertEqual(kwargs['localizador'], '1')
+
+    def test_limpar_texto_despacho_remove_cabecalho_e_assinatura(self):
+        from projudi.certidao_sugestao import limpar_texto_despacho
+
+        texto = (
+            'PODER JUDICIÁRIO DO ESTADO DA BAHIA 2ª VARA ... '
+            'DESPACHO Existindo comando judicial a ser executado, '
+            'intimem-se as partes. Paulo Afonso-BA, data da assinatura '
+            'eletrônica. MARTINHO FERRAZ DA NOBREGA JUNIOR JUIZ DE '
+            'DIREITO Documento Assinado Eletronicamente Código de '
+            'validação do documento: abc123.'
+        )
+        limpo = limpar_texto_despacho(texto)
+        self.assertTrue(limpo.startswith('Existindo comando judicial'))
+        self.assertNotIn('PODER JUDICIÁRIO', limpo)
+        self.assertNotIn('MARTINHO', limpo)
+        self.assertNotIn('Documento Assinado', limpo)
+        self.assertIn('intimem-se as partes', limpo)
 
     @patch('projudi.services.ProjudiService._get_session_from_cookies',
            return_value=(object(), {}))

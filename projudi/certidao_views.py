@@ -148,7 +148,9 @@ class CriarRagMovimentacaoView(LoginRequiredMixin, View):
     def post(self, request):
         from base.utils import normalize_process_number
         from processes.models import DocumentTemplate, Process, RAGExample
-        from projudi.certidao_sugestao import _texto_documento, _tipo_por_texto
+        from projudi.certidao_sugestao import (
+            _texto_documento, _tipo_por_texto, limpar_texto_despacho,
+        )
         from projudi.services import ProjudiService
 
         processo = (request.POST.get('processo') or '').strip()
@@ -174,9 +176,10 @@ class CriarRagMovimentacaoView(LoginRequiredMixin, View):
         texto = (
             _texto_documento(session, link_documento)
             if link_documento else '')
+        texto = limpar_texto_despacho(texto)
         usou_texto_movimentacao = False
         if len(texto.strip()) < 30 and texto_movimentacao:
-            texto = texto_movimentacao
+            texto = limpar_texto_despacho(texto_movimentacao)
             usou_texto_movimentacao = True
         if not texto.strip():
             messages.error(
