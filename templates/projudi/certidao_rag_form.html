@@ -107,12 +107,12 @@
                 <input id="evento_intimacao" name="evento_intimacao"
                        value="{{ evento_intimacao }}" placeholder="ex.: 31">
             </div>
-            <div class="campo">
+            <div class="campo campo-protocolo">
                 <label for="data_protocolo">Data do protocolo</label>
                 <input id="data_protocolo" name="data_protocolo"
                        value="{{ data_protocolo }}" placeholder="DD/MM/AAAA">
             </div>
-            <div class="campo">
+            <div class="campo campo-seguranca">
                 <label for="seguranca_juizo">Segurança do juízo</label>
                 <select id="seguranca_juizo" name="seguranca_juizo">
                     <option value="">Selecione...</option>
@@ -247,4 +247,24 @@
         </div>
     </form>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    const tipo = document.getElementById('tipo_certidao');
+    if (!tipo) return;
+
+    function atualizarCampos() {
+        const impugnacao = tipo.value === 'impugnacao_embargos_execucao';
+        document.querySelectorAll('.campo-protocolo, .campo-seguranca')
+            .forEach(function (campo) {
+                campo.style.display = impugnacao ? 'block' : 'none';
+            });
+    }
+
+    tipo.addEventListener('change', atualizarCampos);
+    atualizarCampos();
+})();
+</script>
 {% endblock %}
