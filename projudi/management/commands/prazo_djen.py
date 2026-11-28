@@ -614,10 +614,15 @@ class Command(BaseCommand):
             'servidor': options['servidor'],
             'servidor_cargo': (
                 options.get('servidor_cargo') or 'Servidor Secretaria 2'),
+            'evento_despacho': options.get('evento_origem') or '',
             'evento_intimacao': options.get('evento_intimacao') or '',
+            'data_intimacao': _fmt_curta(res.data_disponibilizacao),
             'data_publicacao': _fmt_curta(res.data_publicacao),
             'data_inicio_contagem': _fmt_curta(res.data_inicio_contagem),
             'ultimo_dia': _fmt_curta(res.ultimo_dia),
+            'data_decurso': _fmt_curta(res.data_decurso),
+            'prazo_dias': res.prazo_dias,
+            'tipo_certidao': info['label'],
         }
         parte_html = (
             f'<p>Para: {html_escape(ctx["parte"])}</p>'

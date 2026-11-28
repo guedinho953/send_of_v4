@@ -14,6 +14,9 @@ from django.urls import reverse
 from django.views import View
 from django.views.generic import DetailView, TemplateView
 
+from .certidao_layout import (
+    html_certidao_decurso, html_certidao_padrao,
+)
 from .models import PrazoDjenRecord
 from .prazo_service import TIPOS_PRAZO
 
@@ -464,7 +467,6 @@ class RagCertidaoCreateView(LoginRequiredMixin, View):
 
     def post(self, request):
         from base.utils import normalize_process_number
-        from html import escape
         from processes.models import DocumentTemplate, Process, RAGExample
 
         processo = (request.POST.get('processo') or '').strip()
@@ -853,12 +855,14 @@ class RagCertidaoCreateView(LoginRequiredMixin, View):
         if '<' in texto_certidao or '>' in texto_certidao:
             html_certidao = texto_certidao
         else:
-            html_certidao = (
-                '<div style="font-family:Times New Roman,serif;'
-                'font-size:12pt; white-space:pre-wrap;">'
-                + escape(texto_certidao).replace('\n', '<br>')
-                + '</div>'
-            )
+            # Texto simples → aplica o cabeçalho/brasão padrão da certidão.
+            # Decursos usam também a moldura com intimação, prazo e datas.
+            if tipo_certidao in (
+                    'decurso_pagamento',
+                    'decurso_manifestacao_adjudicacao'):
+                html_certidao = html_certidao_decurso(texto_certidao)
+            else:
+                html_certidao = html_certidao_padrao(texto_certidao)
 
         rag = RAGExample.objects.create(
             process=proc,
