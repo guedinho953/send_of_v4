@@ -151,6 +151,11 @@ urlpatterns = [
         certidao_views.RagCertidaoListView.as_view(),
         name='rag_certidoes',
     ),
+    path(
+        'certidoes/rags/nova/',
+        certidao_views.RagCertidaoCreateView.as_view(),
+        name='rag_certidao_nova',
+    ),
     path('certidoes/<int:pk>/', certidao_views.CertidaoDetailView.as_view(), name='certidao_detail'),
     path(
         'certidoes/<int:pk>/juntar-intimar/',

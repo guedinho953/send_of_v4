@@ -57,3 +57,33 @@ class CertidaoModelosTest(TestCase):
         self.assertContains(resposta, 'RAGs de Certidão')
         self.assertContains(resposta, '#%d' % self.rag.pk)
         self.assertContains(resposta, 'Impugnação/Embargos à Execução')
+
+    def test_formulario_rag_de_certidao(self):
+        resposta = self.client.get(reverse('projudi:rag_certidao_nova'))
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'Nova RAG de Certidão')
+        self.assertContains(resposta, 'Texto da certidão')
+
+    def test_cria_rag_e_modelo_de_certidao(self):
+        resposta = self.client.post(
+            reverse('projudi:rag_certidao_nova'),
+            {
+                'processo': '0000002-22.2026.8.05.0191',
+                'ato': 'DESPACHO',
+                'texto_despacho': 'DESPACHO Certifique-se a tempestividade.',
+                'tipo_certidao': 'impugnacao_embargos_execucao',
+                'nome_modelo': 'Modelo criado pela tela',
+                'texto_certidao': (
+                    '<p>Certifico {{ processo }} para {{ parte }}.</p>'),
+                'fluxo_juntar': 'on',
+                'fluxo_intimar': 'on',
+                'fluxo_mp': 'on',
+            },
+        )
+        self.assertEqual(resposta.status_code, 302)
+        rag = RAGExample.objects.get(
+            process__number='0000002-22.2026.8.05.0191')
+        self.assertEqual(rag.acoes_fluxo, ['juntar', 'intimar', 'mp'])
+        modelo = rag.suggested_templates.get(
+            name='Modelo criado pela tela')
+        self.assertEqual(modelo.template_type, 'certidao')

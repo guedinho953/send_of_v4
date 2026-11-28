@@ -538,6 +538,10 @@ class RAGExample(TimeStampedModel):
                   'False = qualquer uma bloqueia (OR).'
     )
 
+    acoes_fluxo = models.JSONField(
+        'Fluxo da certidão', default=list, blank=True,
+        help_text='Ações pré-selecionadas na geração da certidão: '
+                  'juntar, intimar, localizador, contadoria, conclusão, MP.')
     sequencia_cumprimento = models.JSONField(
         'Sequência de Execução', default=list, blank=True,
         help_text=(

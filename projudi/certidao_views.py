@@ -9,7 +9,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Q
 from django.http import Http404, HttpResponse, JsonResponse, HttpResponseRedirect
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.views import View
 from django.views.generic import DetailView, TemplateView
@@ -288,6 +288,201 @@ class CriarRagMovimentacaoView(LoginRequiredMixin, View):
             return HttpResponseRedirect(reverse(
                 'admin:processes_ragexample_change', args=[rag.id]))
         return voltar
+
+
+class RagCertidaoCreateView(LoginRequiredMixin, View):
+    """Cadastro rápido de RAG + modelo de certidão em uma única tela."""
+
+    template_name = 'projudi/certidao_rag_form.html'
+
+    def _contexto(self, **extra):
+        from projudi.peticoes_inominado import TIPOS_CERTIDAO
+
+        context = {
+            'tipos_certidao': TIPOS_CERTIDAO,
+            'processo': '',
+            'processo_url': '',
+            'ato': 'DESPACHO',
+            'texto_despacho': '',
+            'tipo_certidao': '',
+            'nome_modelo': '',
+            'texto_certidao': '',
+            'tipo_localizador': '',
+            'localizador': '',
+            'tipo_conclusao': '18',
+            'juiz_conclusao': '41201',
+            'acoes_fluxo': [],
+        }
+        context.update(extra)
+        return context
+
+    def get(self, request):
+        return render(
+            request,
+            self.template_name,
+            self._contexto(
+                processo=(request.GET.get('processo') or '').strip(),
+                processo_url=(request.GET.get('url') or '').strip(),
+                texto_despacho=(
+                    request.GET.get('texto_despacho') or '').strip(),
+                tipo_certidao=(
+                    request.GET.get('tipo_certidao') or '').strip(),
+            ),
+        )
+
+    def post(self, request):
+        from base.utils import normalize_process_number
+        from html import escape
+        from processes.models import DocumentTemplate, Process, RAGExample
+
+        processo = (request.POST.get('processo') or '').strip()
+        processo_url = (request.POST.get('processo_url') or '').strip()
+        ato = (request.POST.get('ato') or 'DESPACHO').strip().upper()
+        texto_despacho = (
+            request.POST.get('texto_despacho') or '').strip()
+        tipo_certidao = (
+            request.POST.get('tipo_certidao') or '').strip()
+        nome_modelo = (request.POST.get('nome_modelo') or '').strip()
+        texto_certidao = (
+            request.POST.get('texto_certidao') or '').strip()
+        tipo_localizador = (
+            request.POST.get('tipo_localizador') or '').strip()
+        localizador = (request.POST.get('localizador') or '').strip()
+        tipo_conclusao = (
+            request.POST.get('tipo_conclusao') or '18').strip()
+        juiz_conclusao = (
+            request.POST.get('juiz_conclusao') or '41201').strip()
+        acoes_fluxo = [
+            nome for nome in (
+                'juntar', 'intimar', 'localizador', 'contadoria',
+                'conclusao', 'mp',
+            )
+            if request.POST.get(f'fluxo_{nome}') == 'on'
+        ]
+
+        from projudi.peticoes_inominado import TIPOS_CERTIDAO
+        tipos = {t['valor']: t for t in TIPOS_CERTIDAO}
+        if not processo or not texto_despacho or not texto_certidao:
+            messages.error(
+                request,
+                'Informe o processo, o texto do despacho e o texto da '
+                'certidão.')
+            return render(
+                request, self.template_name,
+                self._contexto(
+                    processo=processo, processo_url=processo_url,
+                    ato=ato, texto_despacho=texto_despacho,
+                    tipo_certidao=tipo_certidao, nome_modelo=nome_modelo,
+                    texto_certidao=texto_certidao,
+                    tipo_localizador=tipo_localizador,
+                    localizador=localizador,
+                    tipo_conclusao=tipo_conclusao,
+                    juiz_conclusao=juiz_conclusao,
+                    acoes_fluxo=acoes_fluxo,
+                ),
+            )
+        if tipo_certidao not in tipos:
+            messages.error(request, 'Escolha o tipo de certidão.')
+            return render(
+                request, self.template_name,
+                self._contexto(
+                    processo=processo, processo_url=processo_url,
+                    ato=ato, texto_despacho=texto_despacho,
+                    tipo_certidao=tipo_certidao, nome_modelo=nome_modelo,
+                    texto_certidao=texto_certidao,
+                    tipo_localizador=tipo_localizador,
+                    localizador=localizador,
+                    tipo_conclusao=tipo_conclusao,
+                    juiz_conclusao=juiz_conclusao,
+                    acoes_fluxo=acoes_fluxo,
+                ),
+            )
+
+        numero = normalize_process_number(processo)
+        if len(numero) < 15:
+            messages.error(request, 'Número do processo inválido.')
+            return render(
+                request, self.template_name,
+                self._contexto(
+                    processo=processo, processo_url=processo_url,
+                    ato=ato, texto_despacho=texto_despacho,
+                    tipo_certidao=tipo_certidao, nome_modelo=nome_modelo,
+                    texto_certidao=texto_certidao,
+                    tipo_localizador=tipo_localizador,
+                    localizador=localizador,
+                    tipo_conclusao=tipo_conclusao,
+                    juiz_conclusao=juiz_conclusao,
+                    acoes_fluxo=acoes_fluxo,
+                ),
+            )
+        numero = numero.zfill(20)
+
+        proc = Process.objects.filter(number_normalized=numero).first()
+        tenant = getattr(request.user, 'tenant', None)
+        if tenant is None and proc is not None:
+            tenant = proc.tenant
+        if tenant is None:
+            from accounts.models import Tenant
+            tenant = Tenant.objects.first()
+        if tenant is None:
+            messages.error(request, 'Nenhum tenant cadastrado.')
+            return render(request, self.template_name, self._contexto(
+                processo=processo, texto_despacho=texto_despacho,
+                texto_certidao=texto_certidao))
+        if proc is None:
+            proc = Process.objects.create(
+                number=processo,
+                number_normalized=numero,
+                tenant=tenant,
+                status='analyzing',
+                projudi_url=processo_url,
+            )
+        elif processo_url and not proc.projudi_url:
+            proc.projudi_url = processo_url
+            proc.save(update_fields=['projudi_url'])
+
+        if '<' in texto_certidao or '>' in texto_certidao:
+            html_certidao = texto_certidao
+        else:
+            html_certidao = (
+                '<div style="font-family:Times New Roman,serif;'
+                'font-size:12pt; white-space:pre-wrap;">'
+                + escape(texto_certidao).replace('\n', '<br>')
+                + '</div>'
+            )
+
+        rag = RAGExample.objects.create(
+            process=proc,
+            tenant=tenant,
+            despacho_ato=ato[:200],
+            despacho_observacao=texto_despacho,
+            despacho_data=datetime.now().strftime('%d/%m/%Y'),
+            tipo_certidao=tipo_certidao,
+            tipo_localizador=tipo_localizador,
+            localizador=localizador,
+            tipo_conclusao=tipo_conclusao,
+            juiz_conclusao=juiz_conclusao,
+            acoes_fluxo=acoes_fluxo,
+            active=True,
+        )
+        modelo = DocumentTemplate.objects.create(
+            name=(
+                nome_modelo
+                or f'Certidão RAG #{rag.id} — {tipos[tipo_certidao]["label"]}'
+            ),
+            template_type='certidao',
+            description=texto_despacho[:500],
+            html_template=html_certidao,
+            active=True,
+        )
+        rag.suggested_templates.add(modelo)
+
+        messages.success(
+            request,
+            f'✅ RAG #{rag.id} e modelo "{modelo.name}" criados e '
+            'vinculados. Revise na lista de RAGs.',
+        )
+        return HttpResponseRedirect(reverse('projudi:rag_certidoes'))
 
 
 class RagCertidaoListView(LoginRequiredMixin, TemplateView):

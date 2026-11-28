@@ -135,6 +135,7 @@
                                 <input type="hidden" name="localizador" value="">
                                 <input type="hidden" name="tipo_conclusao" value="18">
                                 <input type="hidden" name="juiz_conclusao" value="41201">
+                                <input type="hidden" name="template_id" class="template-id" value="">
 
                                 <div class="params-grid">
                                     <div class="campo">
@@ -435,6 +436,18 @@ document.querySelectorAll('.sugestao-certidao').forEach(async function (el) {
                 const campo = form.querySelector('[name="' + par[0] + '"]');
                 if (campo && par[1]) campo.value = par[1];
             });
+            const templateId = form.querySelector('.template-id');
+            if (templateId && dados.template_id) {
+                templateId.value = dados.template_id;
+            }
+            if (Array.isArray(dados.acoes_fluxo)
+                    && dados.acoes_fluxo.length) {
+                form.querySelectorAll('input[name^="fluxo_"]').forEach(
+                    function (caixa) {
+                        caixa.checked = dados.acoes_fluxo.includes(
+                            caixa.name.replace('fluxo_', ''));
+                    });
+            }
         }
         el.textContent = '';
         if (!dados.tipo_label) {

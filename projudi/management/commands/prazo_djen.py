@@ -217,6 +217,9 @@ class Command(BaseCommand):
             help='Cargo do servidor que assina')
         parser.add_argument('--tenant', type=int, help='ID do tenant (opcional)')
         parser.add_argument('--saida', help='Arquivo HTML de saída')
+        parser.add_argument(
+            '--template-id', type=int, default=None,
+            help='ID do DocumentTemplate de certidão (RAG/modelo).')
         parser.add_argument('--sem-html', action='store_true',
                             help='Só calcula, sem gerar HTML')
         parser.add_argument(
@@ -590,8 +593,15 @@ class Command(BaseCommand):
             if texto_certidao
             else 'Certidão de Tempestividade / Trânsito (DJEN)'
         )
-        tpl = DocumentTemplate.objects.filter(
-            name=nome_tpl, active=True).first()
+        tpl = None
+        template_id = options.get('template_id')
+        if template_id:
+            tpl = DocumentTemplate.objects.filter(
+                pk=template_id, template_type='certidao', active=True,
+            ).first()
+        if tpl is None:
+            tpl = DocumentTemplate.objects.filter(
+                name=nome_tpl, active=True).first()
 
         ctx = {
             'processo': options['processo'] or '—',

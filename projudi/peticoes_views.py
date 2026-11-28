@@ -118,6 +118,8 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
             request.POST.get('tipo_conclusao') or '18').strip()
         juiz_conclusao = (
             request.POST.get('juiz_conclusao') or '41201').strip()
+        template_id = (request.POST.get('template_id') or '').strip()
+        template_id = int(template_id) if template_id.isdigit() else None
         acoes_fluxo = [
             nome for nome in (
                 'juntar', 'intimar', 'localizador', 'contadoria',
@@ -292,6 +294,7 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
                     localizador=localizador,
                     tipo_conclusao=tipo_conclusao,
                     juiz_conclusao=juiz_conclusao,
+                    template_id=template_id,
                 )
         except CommandError as exc:
             messages.error(request, str(exc))

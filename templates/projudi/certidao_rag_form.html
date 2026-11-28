@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+
+{% block title %}Nova RAG de Certidão — Send of v4{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-card { background:#fff; border-radius:10px; padding:20px; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+    .campo { margin-bottom:14px; }
+    label { display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:4px; }
+    input[type="text"], textarea, select {
+        width:100%; padding:8px 10px; border:1px solid #cbd5e1;
+        border-radius:6px; font-size:13px; box-sizing:border-box;
+    }
+    textarea { min-height:130px; resize:vertical; }
+    textarea.grande { min-height:260px; font-family:'Courier New',monospace; }
+    .ajuda { font-size:11px; color:#6b7280; margin-top:4px; line-height:1.45; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; }
+    .fluxo { background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:10px 12px; margin-bottom:14px; }
+    .fluxo label { display:inline-flex; align-items:center; gap:5px; font-weight:500; margin:3px 12px 3px 0; }
+    .btn-green { background:#0f766e; color:#fff; }
+    .btn-outline { background:#fff; border:1px solid #d1d5db; color:#374151; text-decoration:none; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:16px;">
+    <div>
+        <h1 class="section-title" style="font-size:22px; margin:0;">🧠 Nova RAG de Certidão</h1>
+        <p style="font-size:13px; color:#6b7280; margin:4px 0 0;">
+            Escreva o texto do despacho e o texto da certidão. A RAG e o
+            modelo serão criados e vinculados automaticamente.
+        </p>
+    </div>
+    <div style="display:flex; gap:8px;">
+        <a href="{% url 'projudi:rag_certidoes' %}" class="btn btn-outline">← RAGs</a>
+        <a href="{% url 'projudi:certidao_modelos' %}" class="btn btn-outline">🧩 Modelos</a>
+    </div>
+</div>
+
+<div class="form-card">
+    <form method="post">
+        {% csrf_token %}
+
+        <div class="grid">
+            <div class="campo">
+                <label for="processo">Processo *</label>
+                <input id="processo" name="processo" required
+                       value="{{ processo }}"
+                       placeholder="0000000-00.0000.8.05.0191">
+            </div>
+            <div class="campo">
+                <label for="processo_url">URL do processo (opcional)</label>
+                <input id="processo_url" name="processo_url"
+                       value="{{ processo_url }}"
+                       placeholder="https://projudi.tjba.jus.br/.../DadosProcesso?...">
+            </div>
+            <div class="campo">
+                <label for="ato">Ato</label>
+                <select id="ato" name="ato">
+                    <option value="DESPACHO" {% if ato == 'DESPACHO' %}selected{% endif %}>DESPACHO</option>
+                    <option value="DECISÃO" {% if ato == 'DECISÃO' %}selected{% endif %}>DECISÃO</option>
+                    <option value="SENTENÇA" {% if ato == 'SENTENÇA' %}selected{% endif %}>SENTENÇA</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="campo">
+            <label for="texto_despacho">Texto do despacho/decisão *</label>
+            <textarea id="texto_despacho" name="texto_despacho" required
+                      placeholder="Cole aqui o texto que será usado como gatilho da RAG.">{{ texto_despacho }}</textarea>
+            <div class="ajuda">
+                Este é o texto comparado com as movimentações. Pode deixar o
+                título DESPACHO/DECISÃO/SENTENÇA no início.
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="campo">
+                <label for="tipo_certidao">Tipo de certidão *</label>
+                <select id="tipo_certidao" name="tipo_certidao" required>
+                    <option value="">Selecione...</option>
+                    {% for t in tipos_certidao %}
+                    <option value="{{ t.valor }}" {% if tipo_certidao == t.valor %}selected{% endif %}>
+                        {{ t.label }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="campo">
+                <label for="nome_modelo">Nome do modelo</label>
+                <input id="nome_modelo" name="nome_modelo"
+                       value="{{ nome_modelo }}"
+                       placeholder="Ex.: Certidão de Tempestividade — Embargos">
+            </div>
+        </div>
+
+        <div class="campo">
+            <label for="texto_certidao">Texto da certidão que será gerada *</label>
+            <textarea id="texto_certidao" name="texto_certidao" class="grande"
+                      required placeholder="Ex.: Certifico, para os devidos fins, a TEMPESTIVIDADE...">{{ texto_certidao }}</textarea>
+            <div class="ajuda">
+                Pode escrever texto normal ou HTML. Placeholders disponíveis:
+                <code>{% templatetag openvariable %} processo {% templatetag closevariable %}</code>,
+                <code>{% templatetag openvariable %} parte {% templatetag closevariable %}</code>,
+                <code>{% templatetag openvariable %} data {% templatetag closevariable %}</code>,
+                <code>{% templatetag openvariable %} servidor {% templatetag closevariable %}</code>,
+                <code>{% templatetag openvariable %} servidor_cargo {% templatetag closevariable %}</code>,
+                <code>{% templatetag openvariable %} observacao_prazo {% templatetag closevariable %}</code>.
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="campo">
+                <label for="tipo_localizador">Tipo de localizador (opcional)</label>
+                <input id="tipo_localizador" name="tipo_localizador"
+                       value="{{ tipo_localizador }}" placeholder="ex.: 15286">
+            </div>
+            <div class="campo">
+                <label for="localizador">Localizador (opcional)</label>
+                <input id="localizador" name="localizador"
+                       value="{{ localizador }}" placeholder="ex.: 1">
+            </div>
+            <div class="campo">
+                <label for="tipo_conclusao">Tipo de conclusão</label>
+                <input id="tipo_conclusao" name="tipo_conclusao"
+                       value="{{ tipo_conclusao }}" placeholder="18">
+            </div>
+            <div class="campo">
+                <label for="juiz_conclusao">Login do Juiz</label>
+                <input id="juiz_conclusao" name="juiz_conclusao"
+                       value="{{ juiz_conclusao }}" placeholder="41201">
+            </div>
+        </div>
+
+        <div class="fluxo">
+            <strong style="display:block; font-size:12px; color:#166534; margin-bottom:4px;">
+                Fluxo sugerido para a geração da certidão
+            </strong>
+            <label><input type="checkbox" name="fluxo_juntar"
+                {% if 'juntar' in acoes_fluxo or not acoes_fluxo %}checked{% endif %}> Juntar</label>
+            <label><input type="checkbox" name="fluxo_intimar"
+                {% if 'intimar' in acoes_fluxo %}checked{% endif %}> Intimar</label>
+            <label><input type="checkbox" name="fluxo_localizador"
+                {% if 'localizador' in acoes_fluxo %}checked{% endif %}> Localizador</label>
+            <label><input type="checkbox" name="fluxo_contadoria"
+                {% if 'contadoria' in acoes_fluxo %}checked{% endif %}> Contadoria</label>
+            <label><input type="checkbox" name="fluxo_conclusao"
+                {% if 'conclusao' in acoes_fluxo %}checked{% endif %}> Conclusão</label>
+            <label><input type="checkbox" name="fluxo_mp"
+                {% if 'mp' in acoes_fluxo %}checked{% endif %}> Vistas ao MP</label>
+            <div class="ajuda">
+                Essas ações ficam pré-selecionadas quando a certidão for
+                gerada pela fila de movimentações.
+            </div>
+        </div>
+
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="submit" class="btn btn-green">💾 Criar RAG e modelo</button>
+            <a href="{% url 'projudi:rag_certidoes' %}" class="btn btn-outline">Cancelar</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

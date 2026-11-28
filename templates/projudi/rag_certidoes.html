@@ -44,10 +44,11 @@
         </p>
     </div>
     <div class="rag-actions">
+        <a href="{% url 'projudi:rag_certidao_nova' %}" class="btn" style="background:#0f766e; color:#fff;">➕ Nova RAG de certidão</a>
         <a href="{% url 'projudi:certidao_dashboard' %}" class="btn btn-outline">📄 Certidões</a>
         <a href="{% url 'projudi:movimentacoes' %}" class="btn btn-outline">📋 Movimentações Projudi</a>
         {% if is_staff %}
-        <a href="{% url 'admin:processes_ragexample_add' %}" class="btn btn-outline">➕ Nova RAG</a>
+        <a href="{% url 'admin:processes_ragexample_add' %}" class="btn btn-outline">Admin</a>
         {% endif %}
     </div>
 </div>

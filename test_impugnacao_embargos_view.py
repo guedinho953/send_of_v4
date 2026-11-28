@@ -118,7 +118,7 @@ class ImpugnacaoEmbargosViewTest(TestCase):
     @patch('projudi.services.ProjudiService._get_session_from_cookies',
            return_value=(object(), {}))
     def test_sugestao_usa_campos_da_rag(self, _sessao, buscar, _texto):
-        from processes.models import Process, RAGExample
+        from processes.models import DocumentTemplate, Process, RAGExample
         from projudi.certidao_sugestao import sugerir_certidao
 
         from accounts.models import Tenant
@@ -142,11 +142,19 @@ class ImpugnacaoEmbargosViewTest(TestCase):
             juiz_conclusao='41201',
             active=True,
         )
+        template = DocumentTemplate.objects.create(
+            name='Modelo RAG de teste',
+            template_type='certidao',
+            html_template='<p>{{ processo }}</p>',
+            active=True,
+        )
+        rag.suggested_templates.add(template)
         buscar.return_value = [{'id': rag.id}]
         dados = sugerir_certidao(
             self.user, proc.number, 'https://projudi/documento')
         self.assertEqual(
             dados['tipo_certidao'], 'impugnacao_embargos_execucao')
+        self.assertEqual(dados['template_id'], template.id)
         self.assertTrue(dados['rag_encontrada'])
         self.assertEqual(dados['origem_sugestao'], 'rag')
         self.assertEqual(dados['tipo_localizador'], '15286')

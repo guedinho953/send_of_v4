@@ -169,6 +169,9 @@ def sugerir_certidao(user, processo, documento_url, processo_url=''):
         'tipo_conclusao': '18',
         'tipo_conclusao_label': CONCLUSAO_LABELS['18'],
         'juiz_conclusao': '41201',
+        'acoes_fluxo': [],
+        'template_id': None,
+        'template_nome': '',
         'mensagem': '',
         'url_form': '',
     }
@@ -221,6 +224,10 @@ def sugerir_certidao(user, processo, documento_url, processo_url=''):
     )
     tipo_localizador, localizador = (
         _localizadores_da_rag(rag) if rag else ('', ''))
+    template = None
+    if rag:
+        template = rag.suggested_templates.filter(
+            template_type='certidao', active=True).first()
 
     resultado.update({
         'tipo_certidao': tipo,
@@ -238,6 +245,11 @@ def sugerir_certidao(user, processo, documento_url, processo_url=''):
             'Embargos de Execução'),
         'juiz_conclusao': (
             getattr(rag, 'juiz_conclusao', '') or '41201') if rag else '41201',
+        'acoes_fluxo': (
+            list(getattr(rag, 'acoes_fluxo', []) or [])
+            if rag else []),
+        'template_id': template.id if template else None,
+        'template_nome': template.name if template else '',
     })
 
     if tipo == 'impugnacao_embargos_execucao':
