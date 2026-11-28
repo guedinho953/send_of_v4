@@ -92,9 +92,11 @@
                               data-url="{{ m.link_processo|default:'' }}">analisando…</span>
                     </td>
                     <td>
-                        <a class="btn btn-sm"
-                           href="{% url 'projudi:certidao_impugnacao_embargos' %}?processo={{ m.processo|urlencode }}&url={{ m.link_processo|urlencode }}">
-                            Formulário completo
+                        <a class="btn btn-sm link-form-completo"
+                           id="link-form-{{ forloop.counter }}"
+                           style="display:none;"
+                           href="#">
+                            Formulário completo (impugnação)
                         </a>
                         <form method="post"
                               action="{% url 'projudi:movimentacao_criar_rag' %}"
@@ -516,6 +518,17 @@ document.querySelectorAll('.sugestao-certidao').forEach(async function (el) {
                         caixa.checked = dados.acoes_fluxo.includes(
                             caixa.name.replace('fluxo_', ''));
                     });
+            }
+            const sufixo = form.id.replace('form-mov-', '');
+            const linkForm = document.getElementById(
+                'link-form-' + sufixo);
+            if (linkForm) {
+                if (dados.url_form) {
+                    linkForm.href = dados.url_form;
+                    linkForm.style.display = 'inline-block';
+                } else {
+                    linkForm.style.display = 'none';
+                }
             }
         }
         el.textContent = '';

@@ -213,15 +213,31 @@ def sugerir_certidao(user, processo, documento_url, processo_url=''):
     tipo = ''
     rag = None
     origem = ''
+    candidatas = []
     for similar in similares:
         candidata = RAGExample.objects.filter(id=similar['id']).first()
         if not candidata:
             continue
         if candidata.tipo_certidao:
-            tipo = candidata.tipo_certidao
-            rag = candidata
-            origem = 'rag'
-            break
+            candidatas.append(candidata)
+    if candidatas:
+        # Quando o mesmo despacho tem várias RAGs (duplicatas antigas), a
+        # ordem de similaridade pode devolver primeiro uma RAG genérica.
+        # Prioriza a que tem evento do despacho + modelo vinculado e, no
+        # empate, a mais recente.
+        candidatas.sort(
+            key=lambda r: (
+                bool(r.evento_despacho),
+                bool(r.evento_intimacao),
+                bool(r.suggested_templates.filter(
+                    template_type='certidao', active=True).exists()),
+                r.id,
+            ),
+            reverse=True,
+        )
+        rag = candidatas[0]
+        tipo = rag.tipo_certidao
+        origem = 'rag'
     if not tipo:
         tipo = _tipo_por_texto(texto)
         if tipo:
