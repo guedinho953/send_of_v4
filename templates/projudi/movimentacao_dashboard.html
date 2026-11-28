@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+
+{% block title %}Movimentações — Send of v4{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .stat-card { background: #fff; border-radius: 10px; padding: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.06); border-left: 4px solid; text-align: center; }
+    .stat-card h4 { margin: 0; font-size: 27px; color: #1e3a5f; font-weight: 700; }
+    .stat-card p { margin: 4px 0 0; font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-card.total { border-left-color: #2563eb; }
+    .stat-card.pendentes { border-left-color: #d97706; }
+    .stat-card.processando { border-left-color: #7c3aed; }
+    .stat-card.cumpridos { border-left-color: #059669; }
+    .stat-card.falhas { border-left-color: #dc2626; }
+    .stat-card.dispensados { border-left-color: #6b21a8; }
+
+    .bulk-bar { background: #f3f4f6; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .filtro-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .filtro-btn { padding: 6px 14px; border-radius: 20px; font-size: 13px; border: 1px solid #e5e7eb; background: #fff; color: #374151; cursor: pointer; text-decoration: none; }
+    .filtro-btn.active { background: #2563eb; color: white; border-color: #2563eb; }
+    .filtro-btn:hover:not(.active) { background: #f9fafb; }
+
+    .mov-card { background: #fff; border-radius: 8px; padding: 14px 16px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border-left: 4px solid #d97706; transition: transform 0.1s; }
+    .mov-card:hover { transform: translateX(4px); }
+    .mov-card.cumprido { border-left-color: #059669; }
+    .mov-card.processando { border-left-color: #7c3aed; }
+    .mov-card.falha { border-left-color: #dc2626; }
+    .mov-card.dispensado { border-left-color: #6b21a8; }
+    .mov-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+    .mov-processo { font-size: 15px; font-weight: 600; color: #1e3a5f; font-family: monospace; }
+    .mov-ato { font-size: 13px; color: #374151; margin-top: 4px; }
+    .mov-meta { font-size: 11px; color: #9ca3af; margin-top: 5px; }
+    .mov-obs { font-size: 12px; color: #6b7280; margin-top: 8px; background: #f9fafb; padding: 8px 10px; border-radius: 6px; }
+    .mov-actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+    .tag-status { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; white-space: nowrap; }
+    .tag-pendente { background: #fef3c7; color: #92400e; }
+    .tag-processando { background: #ede9fe; color: #5b21b6; }
+    .tag-cumprido { background: #d1fae5; color: #065f46; }
+    .tag-falha { background: #fee2e2; color: #991b1b; }
+    .tag-dispensado { background: #f3e8ff; color: #6b21a8; }
+    .btn-sm { padding: 5px 12px; font-size: 12px; border-radius: 5px; }
+    .btn-green { background: #059669; color: white; }
+    .btn-green:hover { background: #047857; }
+    .btn-orange { background: #ea580c; color: white; }
+    .btn-orange:hover { background: #c2410c; }
+    .btn-outline { background: transparent; border: 1px solid #d1d5db; color: #374151; }
+    .btn-outline:hover { background: #f3f4f6; }
+    .empty-state { text-align: center; padding: 40px 20px; color: #6b7280; background: #fff; border-radius: 8px; }
+    .log-entry { font-size: 11px; padding: 5px 8px; border-radius: 5px; margin-top: 4px; }
+    .log-info { background: #eff6ff; border-left: 3px solid #3b82f6; }
+    .log-execucao { background: #f0fdf4; border-left: 3px solid #22c55e; }
+    .log-erro { background: #fef2f2; border-left: 3px solid #ef4444; }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1 class="section-title" style="font-size:22px; margin-bottom:6px;">🔄 Movimentações</h1>
+<p style="font-size:13px; color:#6b7280; margin:0 0 18px;">
+    Atos internos do Projudi (Mov581). As tarefas de certidão específicas ficam na área de Certidões.
+</p>
+
+{% if not session_active %}
+<div class="alert alert-warning">
+    ⚠️ Sessão do Projudi não está ativa.
+    <a href="{% url 'projudi:sync_session' %}">Clique aqui para sincronizar</a>
+    antes de executar movimentações.
+</div>
+{% endif %}
+
+<div class="stats-grid">
+    <div class="stat-card total"><h4>{{ total }}</h4><p>Total</p></div>
+    <div class="stat-card pendentes"><h4>{{ pendentes }}</h4><p>Pendentes</p></div>
+    <div class="stat-card processando"><h4>{{ processando }}</h4><p>Processando</p></div>
+    <div class="stat-card cumpridos"><h4>{{ cumpridos }}</h4><p>Cumpridas</p></div>
+    <div class="stat-card falhas"><h4>{{ falhas }}</h4><p>Falhas</p></div>
+    <div class="stat-card dispensados"><h4>{{ dispensados }}</h4><p>Dispensadas</p></div>
+</div>
+
+<div class="bulk-bar">
+    <form method="post" action="{% url 'projudi:movimentacao_sync' %}" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-orange">🔄 Sincronizar Movimentações</button>
+        <button type="submit" name="hoje" value="1" class="btn btn-outline">📅 Sincronizar somente hoje</button>
+    </form>
+    {% if pendentes_hoje %}
+    <form method="post" action="{% url 'projudi:movimentacao_batch' %}" style="display:inline;"
+          onsubmit="return confirm('Executar somente as movimentações pendentes de hoje?');">
+        {% csrf_token %}
+        <input type="hidden" name="hoje" value="1">
+        <button type="submit" class="btn btn-green">▶️ Executar pendentes de hoje ({{ pendentes_hoje }})</button>
+    </form>
+    {% endif %}
+    <a href="{% url 'projudi:movimentacao_fila' %}" class="btn" style="background:#0891b2; color:white;">📥 Fila de Movimentações</a>
+    <a href="{% url 'projudi:movimentacoes' %}" class="btn btn-outline">📋 Movimentações Projudi (RAG)</a>
+    <a href="{% url 'projudi:movimentacao_list' %}" class="btn btn-outline">📋 Ver Lista Completa</a>
+    <a href="{% url 'projudi:certidao_dashboard' %}" class="btn" style="background:#7c3aed; color:white;">📄 Certidões</a>
+    <a href="{% url 'projudi:cumprimento_dashboard' %}" class="btn btn-outline">📬 Cumprimentos</a>
+</div>
+
+{% if categorias %}
+<div class="filtro-bar">
+    <a href="?{% if request.GET.status %}status={{ request.GET.status }}{% endif %}"
+       class="filtro-btn {% if not request.GET.categoria %}active{% endif %}">Todas as categorias</a>
+    {% for chave, dados in categorias.items %}
+    <a href="?categoria={{ chave }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}"
+       class="filtro-btn {% if request.GET.categoria == chave %}active{% endif %}">
+        {{ dados.label }} ({{ dados.count }})
+    </a>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="filtro-bar">
+    <a href="?{% if request.GET.categoria %}categoria={{ request.GET.categoria }}{% endif %}"
+       class="filtro-btn {% if not request.GET.status and data_atual != 'hoje' %}active{% endif %}">Todos os status</a>
+    <a href="?data=hoje{% if request.GET.categoria %}&categoria={{ request.GET.categoria }}{% endif %}"
+       class="filtro-btn {% if data_atual == 'hoje' %}active{% endif %}">📅 Hoje</a>
+    <a href="?status=pendente{% if request.GET.categoria %}&categoria={{ request.GET.categoria }}{% endif %}"
+       class="filtro-btn {% if request.GET.status == 'pendente' %}active{% endif %}">⏳ Pendentes</a>
+    <a href="?status=cumprido{% if request.GET.categoria %}&categoria={{ request.GET.categoria }}{% endif %}"
+       class="filtro-btn {% if request.GET.status == 'cumprido' %}active{% endif %}">✅ Cumpridas</a>
+    <a href="?status=falha{% if request.GET.categoria %}&categoria={{ request.GET.categoria }}{% endif %}"
+       class="filtro-btn {% if request.GET.status == 'falha' %}active{% endif %}">❌ Falhas</a>
+    <a href="?status=dispensado{% if request.GET.categoria %}&categoria={{ request.GET.categoria }}{% endif %}"
+       class="filtro-btn {% if request.GET.status == 'dispensado' %}active{% endif %}">🚫 Dispensadas</a>
+</div>
+
+{% if movimentacoes %}
+    {% for m in movimentacoes %}
+    <div class="mov-card {{ m.status }}">
+        <div class="mov-header">
+            <div>
+                <div class="mov-processo">{{ m.numero_processo_cnj|default:m.processo }}</div>
+                <div class="mov-ato">
+                    {% if m.act_verb %}<strong>{{ m.act_verb }}</strong>{% endif %}
+                    {% if m.descricao_movimentacao %} — {{ m.descricao_movimentacao }}{% endif %}
+                </div>
+                <div class="mov-meta">
+                    {{ m.get_categoria_display }}
+                    {% if m.parte_nome %} | 👤 {{ m.parte_nome }}{% endif %}
+                    {% if m.data_movimentacao %} | 📅 {{ m.data_movimentacao|date:"d/m/Y" }}{% endif %}
+                    | 🕒 {{ m.created_at|date:"d/m/Y H:i" }}
+                </div>
+            </div>
+            <span class="tag-status tag-{{ m.status }}">{{ m.get_status_display }}</span>
+        </div>
+
+        {% if m.observacao %}
+        <div class="mov-obs">{{ m.observacao|striptags|truncatechars:260 }}</div>
+        {% endif %}
+
+        <div class="mov-actions">
+            <a href="{% url 'projudi:movimentacao_detail' m.pk %}" class="btn btn-sm btn-outline">🔍 Detalhes</a>
+            {% if m.pode_executar %}
+            <form method="post" action="{% url 'projudi:movimentacao_executar' m.pk %}" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-green">▶️ Executar</button>
+            </form>
+            {% endif %}
+            {% if not m.dispensado %}
+            <form method="post" action="{% url 'projudi:movimentacao_dispensar' m.pk %}" style="display:inline;"
+                  onsubmit="return confirm('Dispensar esta movimentação?');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-outline" style="color:#6b21a8;">🚫 Dispensar</button>
+            </form>
+            {% endif %}
+            {% if m.url_processo %}
+            <a href="{{ m.url_processo }}" target="_blank" class="btn btn-sm btn-outline">🔗 Processo</a>
+            {% endif %}
+        </div>
+
+        {% if m.logs.all %}
+        <div style="margin-top:8px;">
+            {% for log in m.logs.all|slice:":2" %}
+            <div class="log-entry log-{{ log.tipo }}">
+                <strong>{{ log.get_tipo_display }}</strong>: {{ log.mensagem|truncatechars:140 }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+{% else %}
+<div class="empty-state">
+    📭 Nenhuma movimentação encontrada com os filtros atuais.
+</div>
+{% endif %}
+{% endblock %}

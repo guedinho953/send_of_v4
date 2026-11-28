@@ -204,7 +204,18 @@ class ProjudiClient:
             link_documento = None
             link_movimentar = None
             link_dispensar = None
-            
+            data_mov = None
+
+            # A listagem mostra a data em uma das colunas (dd/mm/aaaa).
+            for td in tds:
+                m_data = re.search(
+                    r'\b(\d{2}/\d{2}/\d{4})\b',
+                    td.get_text(' ', strip=True),
+                )
+                if m_data:
+                    data_mov = m_data.group(1)
+                    break
+
             td_tipo = tr.find('td', align='center')
             if td_tipo:
                 tipo = td_tipo.get_text(strip=True)
@@ -238,6 +249,7 @@ class ProjudiClient:
                 itens.append({
                     "processo": numero,
                     "tipo": tipo,
+                    "data": data_mov,
                     "link_processo": link_processo,
                     "link_documento": link_documento,
                     "movimentar": link_movimentar,

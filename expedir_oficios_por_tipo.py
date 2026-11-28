@@ -97,6 +97,7 @@ RPV_ALIASES = (
 # Assinantes disponíveis para o ofício.
 ASSINANTES = {
     'ivan': ('IVAN GUEDES DA SILVA', 'SECRETÁRIO EM SUBSTITUIÇÃO'),
+    'ivan_servidor': ('IVAN GUEDES DA SILVA', 'SERVIDOR DE SECRETARIA 2'),
     'mauro': (
         'MAURO EMILIO VIANA DA SILVA MOREIRA',
         'SECRETÁRIO',

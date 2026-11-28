@@ -120,6 +120,7 @@ urlpatterns = [
 
     # Aba Movimentações (NOVO — atos internos via Mov581)
     path('movimentacoes/dashboard/', movimentacao_views.MovimentacaoDashboardView.as_view(), name='movimentacao_dashboard'),
+    path('movimentacoes/fila/', movimentacao_views.MovimentacaoFilaView.as_view(), name='movimentacao_fila'),
     path('movimentacoes/lista/', movimentacao_views.MovimentacaoListView.as_view(), name='movimentacao_list'),
     path('movimentacoes/sync/', movimentacao_views.MovimentacaoSyncView.as_view(), name='movimentacao_sync'),
     path('movimentacoes/<int:pk>/', movimentacao_views.MovimentacaoDetailView.as_view(), name='movimentacao_detail'),

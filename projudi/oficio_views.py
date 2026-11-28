@@ -17,6 +17,9 @@ from app_paths import temp_file
 from .models import OficioRecord, OficioLog
 from .oficio_service import OficioService
 from .services import ProjudiService
+from .assinantes_certidao import ASSINANTES
+
+ASSINANTE_PADRAO_OFICIO = 'ivan'
 
 
 class OficioDashboardView(LoginRequiredMixin, TemplateView):
@@ -81,6 +84,12 @@ class OficioDashboardView(LoginRequiredMixin, TemplateView):
             context['planilha_configurada'] = bool(obter_servico_planilha())
         except Exception:
             context['planilha_configurada'] = False
+
+        context['assinante_padrao'] = ASSINANTE_PADRAO_OFICIO
+        context['assinantes'] = [
+            {'chave': chave, 'nome': dados[0], 'cargo': dados[1]}
+            for chave, dados in ASSINANTES.items()
+        ]
 
         # Sessao ativa?
         context['session_active'] = self._session_ativa(user)
@@ -782,9 +791,11 @@ class OficioExpedirPorTipoView(LoginRequiredMixin, View):
             limite = 20
         limite = max(1, min(limite, 100))
 
-        assinante = (request.POST.get('assinante') or 'ivan').strip().lower()
-        if assinante not in ('ivan', 'mauro'):
-            assinante = 'ivan'
+        assinante = (
+            request.POST.get('assinante') or ASSINANTE_PADRAO_OFICIO
+        ).strip().lower()
+        if assinante not in ASSINANTES:
+            assinante = ASSINANTE_PADRAO_OFICIO
 
         usar_planilha = request.POST.get('planilha') == '1'
 
@@ -828,11 +839,10 @@ class OficioExpedirPorTipoView(LoginRequiredMixin, View):
                     f'⚠️ Nenhum ofício pendente do tipo "{tipo}" foi encontrado.'
                 )
             elif result.returncode == 0:
-                signatario = (
-                    'Ivan Guedes da Silva (Secretário em Substituição)'
-                    if assinante == 'ivan'
-                    else 'Mauro Emílio (Secretário)'
+                assinante_nome, assinante_cargo = ASSINANTES.get(
+                    assinante, ASSINANTES[ASSINANTE_PADRAO_OFICIO]
                 )
+                signatario = f'{assinante_nome} ({assinante_cargo})'
                 messages.success(
                     request,
                     f'✅ Expedição por tipo concluída'

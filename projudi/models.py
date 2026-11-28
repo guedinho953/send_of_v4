@@ -519,6 +519,12 @@ class MovimentacaoRecord(TimeStampedModel):
         ('dispensado', 'Dispensado'),
     ]
 
+    ORIGEM_CHOICES = [
+        ('peticao', 'Petição'),
+        ('movimentacao', 'Movimentação'),
+        ('outro', 'Outro'),
+    ]
+
     processo = models.CharField('Processo (Interno)', max_length=30, db_index=True)
     numero_processo_cnj = models.CharField('Nº Processo (CNJ)', max_length=25, blank=True, db_index=True)
 
@@ -527,6 +533,13 @@ class MovimentacaoRecord(TimeStampedModel):
         help_text='Ex: certifique-se, arquive-se, publique-se, registre-se')
     categoria = models.CharField('Categoria', max_length=20,
         choices=CATEGORIA_CHOICES, default='outro')
+    origem = models.CharField(
+        'Origem', max_length=20, choices=ORIGEM_CHOICES,
+        default='movimentacao', db_index=True,
+        help_text='Separa certidões/procedimentos de petições e de movimentações')
+    data_movimentacao = models.DateField(
+        'Data da Movimentação', null=True, blank=True, db_index=True,
+        help_text='Data mostrada na listagem de movimentações do Projudi')
     observacao = models.TextField('Observação', blank=True,
         help_text='Texto a ser registrado como observação da movimentação')
 

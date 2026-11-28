@@ -24,7 +24,10 @@ class MovimentacaoDashboardView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
-        qs = MovimentacaoRecord.objects.filter(user=user)
+        # Certidões ficam exclusivamente no módulo de Certidões.
+        qs = MovimentacaoRecord.objects.filter(user=user).exclude(
+            categoria='certidao'
+        )
 
         context['total'] = qs.count()
         context['pendentes'] = qs.filter(status='pendente').count()
@@ -47,7 +50,17 @@ class MovimentacaoDashboardView(LoginRequiredMixin, TemplateView):
         if filtro_cat and filtro_cat in dict(MovimentacaoRecord.CATEGORIA_CHOICES):
             qs = qs.filter(categoria=filtro_cat)
 
+        from datetime import date
+        filtro_data = self.request.GET.get('data', '')
+        if filtro_data == 'hoje':
+            qs = qs.filter(data_movimentacao=date.today())
+
         context['movimentacoes'] = qs.order_by('-created_at')[:50]
+        context['data_atual'] = filtro_data
+        context['pendentes_hoje'] = qs.filter(
+            status__in=['pendente', 'falha'],
+            data_movimentacao=date.today(),
+        ).count()
         context['session_active'] = self._session_ativa(user)
         return context
 
@@ -61,19 +74,76 @@ class MovimentacaoDashboardView(LoginRequiredMixin, TemplateView):
         return False
 
 
+class MovimentacaoFilaView(LoginRequiredMixin, TemplateView):
+    """Fila de movimentações pendentes, análoga à Fila de Petições."""
+
+    template_name = 'projudi/movimentacao_fila.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from datetime import date
+
+        user = self.request.user
+        # Fila operacional: inclui todos os pendentes, inclusive certidões.
+        # A separação por origem continua nos dashboards de Certidões e
+        # Movimentações.
+        qs = MovimentacaoRecord.objects.filter(
+            user=user,
+            status__in=['pendente', 'falha'],
+        ).select_related('rag_example')
+
+        filtro_hoje = self.request.GET.get('data') == 'hoje'
+        if filtro_hoje:
+            qs = qs.filter(data_movimentacao=date.today())
+
+        context.update({
+            'movimentacoes': qs.order_by(
+                'data_movimentacao', 'created_at'
+            ),
+            'filtro_hoje': filtro_hoje,
+            'total_pendentes': qs.count(),
+            'total_hoje': (
+                MovimentacaoRecord.objects
+                .filter(
+                    user=user,
+                    status__in=['pendente', 'falha'],
+                    data_movimentacao=date.today(),
+                )
+                .count()
+            ),
+            'session_active': self._session_ativa(user),
+        })
+        return context
+
+    def _session_ativa(self, user):
+        try:
+            sessao = ProjudiSession.objects.filter(
+                user=user, status='active').first()
+            if sessao:
+                return ProjudiService(user).check_session()
+        except Exception:
+            pass
+        return False
+
+
 class MovimentacaoListView(LoginRequiredMixin, ListView):
     template_name = 'projudi/movimentacao_list.html'
     context_object_name = 'movimentacoes'
     paginate_by = 20
 
     def get_queryset(self):
-        qs = MovimentacaoRecord.objects.filter(user=self.request.user)
+        qs = MovimentacaoRecord.objects.filter(
+            user=self.request.user
+        ).exclude(categoria='certidao').select_related('rag_example')
         status = self.request.GET.get('status', '')
         cat = self.request.GET.get('categoria', '')
         if status and status in dict(MovimentacaoRecord.STATUS_CHOICES):
             qs = qs.filter(status=status)
         if cat and cat in dict(MovimentacaoRecord.CATEGORIA_CHOICES):
             qs = qs.filter(categoria=cat)
+        if self.request.GET.get('data') == 'hoje':
+            from datetime import date
+            qs = qs.filter(data_movimentacao=date.today())
         return qs.order_by('-created_at')
 
 
@@ -97,8 +167,10 @@ class MovimentacaoSyncView(LoginRequiredMixin, View):
     def post(self, request):
         from projudi_client import ProjudiClient
         from bs4 import BeautifulSoup
+        from .movimentacao_utils import filtrar_hoje, parse_data_mov
 
         service = MovimentacaoService(request.user)
+        somente_hoje = request.POST.get('hoje') == '1'
         try:
             result = service.projudi_service._get_session_from_cookies()
             if not result:
@@ -119,6 +191,9 @@ class MovimentacaoSyncView(LoginRequiredMixin, View):
                 if len(rp.text) > 1000:
                     sp = BeautifulSoup(rp.text, 'html.parser')
                     movs.extend(client.extrair_links_movimentacoes(sp))
+
+            if somente_hoje:
+                movs = filtrar_hoje(movs)
 
             if not movs:
                 messages.info(request, 'Nenhuma movimentação encontrada.')
@@ -160,6 +235,7 @@ class MovimentacaoSyncView(LoginRequiredMixin, View):
                             act_verb=cmd['ato'],
                             observacao=cmd['trecho'][:500],
                             categoria=self._mapear_categoria(cmd['ato']),
+                            data_movimentacao=parse_data_mov(mov.get('data')),
                             processo_cnj=proc_num,
                             url_processo=mov.get('link_processo', ''),
                         )
@@ -168,7 +244,11 @@ class MovimentacaoSyncView(LoginRequiredMixin, View):
                 except Exception:
                     continue
 
-            msg = f'Sincronizado! {importados} movimentação(ões) identificada(s).'
+            sufixo_hoje = ' de hoje' if somente_hoje else ''
+            msg = (
+                f'Sincronizado{sufixo_hoje}! '
+                f'{importados} movimentação(ões) identificada(s).'
+            )
             if importados == 0:
                 msg += ' Nenhuma movimentação interna pendente.'
             messages.success(request, msg)
@@ -228,7 +308,15 @@ class MovimentacaoBatchView(LoginRequiredMixin, View):
     def post(self, request):
         service = MovimentacaoService(request.user)
         pendentes = MovimentacaoRecord.objects.filter(
-            user=request.user, status__in=['pendente', 'falha'])
+            user=request.user, status__in=['pendente', 'falha']
+        )
+        if request.POST.get('incluir_certidoes') != '1':
+            pendentes = pendentes.exclude(categoria='certidao')
+        if request.POST.get('hoje') == '1':
+            from datetime import date
+            pendentes = pendentes.filter(
+                data_movimentacao=date.today()
+            )
         try:
             resultado = service.processar_fila(list(pendentes))
             messages.success(
