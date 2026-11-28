@@ -22,6 +22,11 @@ urlpatterns = [
         peticoes_views.CertidaoMovimentacaoFilaGerarView.as_view(),
         name='certidao_movimentacao_fila_gerar',
     ),
+    path(
+        'movimentacoes/rag/criar/',
+        certidao_views.CriarRagMovimentacaoView.as_view(),
+        name='movimentacao_criar_rag',
+    ),
     path('oficios/', views.OficiosListView.as_view(), name='oficios'),
 
     # Aba Oficios (ENVIO)

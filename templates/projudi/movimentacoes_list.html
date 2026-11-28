@@ -96,6 +96,24 @@
                            href="{% url 'projudi:certidao_impugnacao_embargos' %}?processo={{ m.processo|urlencode }}&url={{ m.link_processo|urlencode }}">
                             Formulário completo
                         </a>
+                        <form method="post"
+                              action="{% url 'projudi:movimentacao_criar_rag' %}"
+                              class="form-criar-rag"
+                              style="display:none; margin-top:6px;"
+                              onsubmit="return confirm('Gerar uma RAG a partir do texto desta movimentação?');">
+                            {% csrf_token %}
+                            <input type="hidden" name="processo" value="{{ m.processo }}">
+                            <input type="hidden" name="tipo" value="{{ m.tipo|default:'' }}">
+                            <input type="hidden" name="data" value="{{ m.data|default:'' }}">
+                            <input type="hidden" name="link_processo" value="{{ m.link_processo|default:'' }}">
+                            <input type="hidden" name="link_documento" value="{{ m.link_documento|default:'' }}">
+                            <input type="hidden" name="texto_movimentacao"
+                                   value="{{ m.tipo|default:'' }} {{ m.data|default:'' }}">
+                            <button type="submit" class="btn btn-sm"
+                                    style="background:#7c3aed; color:#fff;">
+                                🧠 Gerar RAG
+                            </button>
+                        </form>
                     </td>
                 </tr>
                 <tr class="form-row">
@@ -366,6 +384,11 @@ document.querySelectorAll('.sugestao-certidao').forEach(async function (el) {
         const linha = el.closest('tr.mov-row');
         if (linha) {
             linha.dataset.temRag = dados.rag_encontrada ? '1' : '0';
+            const criarRag = linha.querySelector('.form-criar-rag');
+            if (criarRag) {
+                criarRag.style.display = dados.rag_encontrada
+                    ? 'none' : 'block';
+            }
             if (typeof window.aplicarFiltroRag === 'function') {
                 window.aplicarFiltroRag();
             }
@@ -441,6 +464,8 @@ document.querySelectorAll('.sugestao-certidao').forEach(async function (el) {
         const linha = el.closest('tr.mov-row');
         if (linha) {
             linha.dataset.temRag = '0';
+            const criarRag = linha.querySelector('.form-criar-rag');
+            if (criarRag) criarRag.style.display = 'block';
             if (typeof window.aplicarFiltroRag === 'function') {
                 window.aplicarFiltroRag();
             }

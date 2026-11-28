@@ -5,10 +5,12 @@ from datetime import datetime
 from pathlib import Path
 
 from django.conf import settings
+from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Q
-from django.http import Http404, HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
+from django.urls import reverse
 from django.views import View
 from django.views.generic import DetailView, TemplateView
 
@@ -138,6 +140,131 @@ class CertidaoSugestaoMovimentacaoView(LoginRequiredMixin, View):
                 {'erro': 'Processo não informado.'}, status=400)
         return JsonResponse(sugerir_certidao(
             request.user, processo, documento, processo_url))
+
+
+class CriarRagMovimentacaoView(LoginRequiredMixin, View):
+    """Cria uma RAG a partir do documento/texto de uma movimentação."""
+
+    def post(self, request):
+        from base.utils import normalize_process_number
+        from processes.models import DocumentTemplate, Process, RAGExample
+        from projudi.certidao_sugestao import _texto_documento, _tipo_por_texto
+        from projudi.services import ProjudiService
+
+        processo = (request.POST.get('processo') or '').strip()
+        tipo = (request.POST.get('tipo') or '').strip()
+        data = (request.POST.get('data') or '').strip()
+        link_processo = (request.POST.get('link_processo') or '').strip()
+        link_documento = (request.POST.get('link_documento') or '').strip()
+        texto_movimentacao = (
+            request.POST.get('texto_movimentacao') or '').strip()
+
+        voltar = HttpResponseRedirect(reverse('projudi:movimentacoes'))
+        if not processo:
+            messages.error(
+                request, 'Movimentação sem processo para gerar a RAG.')
+            return voltar
+
+        resultado = ProjudiService(request.user)._get_session_from_cookies()
+        if not resultado:
+            messages.error(request, 'Sessão do Projudi não disponível.')
+            return voltar
+        session, _ = resultado
+
+        texto = (
+            _texto_documento(session, link_documento)
+            if link_documento else '')
+        usou_texto_movimentacao = False
+        if len(texto.strip()) < 30 and texto_movimentacao:
+            texto = texto_movimentacao
+            usou_texto_movimentacao = True
+        if not texto.strip():
+            messages.error(
+                request,
+                'Não há documento nem texto da movimentação para gerar a RAG.',
+            )
+            return voltar
+
+        numero = normalize_process_number(processo)
+        proc = Process.objects.filter(number_normalized=numero).first()
+        if not proc:
+            proc = Process.objects.create(
+                number=processo,
+                number_normalized=numero,
+                tenant=getattr(request.user, 'tenant', None),
+                status='analyzing',
+                projudi_url=link_processo,
+            )
+
+        existente = RAGExample.objects.filter(
+            process=proc,
+            despacho_observacao=texto,
+        ).first()
+        if existente:
+            messages.info(
+                request,
+                f'Essa movimentação já tem uma RAG cadastrada '
+                f'(#{existente.id}).',
+            )
+            if request.user.is_staff:
+                return HttpResponseRedirect(reverse(
+                    'admin:processes_ragexample_change',
+                    args=[existente.id],
+                ))
+            return voltar
+
+        tipo_certidao = _tipo_por_texto(texto)
+        documentos = []
+        if link_documento:
+            documentos.append({
+                'nome': f'Documento — {data or tipo or "movimentação"}',
+                'url': link_documento,
+            })
+        rag = RAGExample.objects.create(
+            process=proc,
+            tenant=getattr(request.user, 'tenant', None),
+            despacho_ato=(tipo or 'Movimentação')[:200],
+            despacho_observacao=texto,
+            despacho_data=data,
+            documentos=documentos,
+            tipo_certidao=tipo_certidao,
+            active=True,
+        )
+        template_por_tipo = {
+            'inominado': 'Certidão de Recurso Inominado (COJE)',
+            'decurso_pagamento': (
+                'Certidão de Decurso de Prazo para Pagamento Voluntário'
+            ),
+            'cumprimento_sentenca': 'Certidão de Prazo — Modelo Base',
+            'pagamento_impugnacao_penhora': 'Certidão de Prazo — Modelo Base',
+            'impugnacao_embargos_execucao': 'Certidão de Prazo — Modelo Base',
+            'contrarrazoes_inominado': 'Certidão de Prazo — Modelo Base',
+        }
+        template = DocumentTemplate.objects.filter(
+            name=template_por_tipo.get(tipo_certidao, ''),
+            template_type='certidao',
+            active=True,
+        ).first()
+        if template:
+            rag.suggested_templates.add(template)
+
+        messages.success(
+            request,
+            f'✅ RAG #{rag.id} criada a partir '
+            + (
+                'do texto da movimentação'
+                if usou_texto_movimentacao else 'do documento'
+            )
+            + (
+                f' com template "{template.name}" vinculado.'
+                if template else '.'
+            )
+            + ' Revise o tipo de certidão e os parâmetros no admin.',
+        )
+        if request.user.is_staff:
+            return HttpResponseRedirect(reverse(
+                'admin:processes_ragexample_change', args=[rag.id]))
+        return voltar
 
 
 class CertidaoDetailView(LoginRequiredMixin, DetailView):

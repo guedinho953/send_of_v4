@@ -337,6 +337,38 @@ class PeticaoFilaViewsTest(TestCase):
         self.assertEqual(kwargs['tipo_localizador'], '15286')
         self.assertEqual(kwargs['localizador'], '1')
 
+    @patch('projudi.services.ProjudiService._get_session_from_cookies',
+           return_value=(object(), {}))
+    @patch('projudi.certidao_sugestao._texto_documento', return_value=(
+        'Certifique-se a tempestividade dos embargos à execução e a '
+        'segurança do Juízo.'))
+    def test_criar_rag_a_partir_da_movimentacao(self, _texto, _sessao):
+        from accounts.models import Tenant
+        from processes.models import RAGExample
+
+        tenant = Tenant.objects.create(
+            name='Tenant RAG movimento', cnpj='88.888.888/0001-88')
+        self.user.tenant = tenant
+        self.user.save(update_fields=['tenant'])
+
+        resposta = self.client.post(
+            reverse('projudi:movimentacao_criar_rag'),
+            {
+                'processo': '0000001-11.2026.8.05.0191',
+                'tipo': 'Mero expediente',
+                'data': '28/11/2026',
+                'link_processo': 'https://projudi/processo',
+                'link_documento': 'https://projudi/despacho.pdf',
+                'texto_movimentacao': 'Mero expediente 28/11/2026',
+            },
+        )
+        self.assertEqual(resposta.status_code, 302)
+        rag = RAGExample.objects.get(
+            despacho_ato='Mero expediente')
+        self.assertEqual(
+            rag.tipo_certidao, 'impugnacao_embargos_execucao')
+        self.assertIn('Certifique-se', rag.despacho_observacao)
+
     @patch('projudi.peticoes_views.DecursoPagamentoService.analisar')
     def test_decurso_nao_gera_antes_do_prazo(self, analisar):
         resultado = resultado_decurso()
