@@ -290,6 +290,91 @@ class CriarRagMovimentacaoView(LoginRequiredMixin, View):
         return voltar
 
 
+class RagCertidaoListView(LoginRequiredMixin, TemplateView):
+    """Tabela das RAGs que geram certidão, separadas por origem."""
+
+    template_name = 'projudi/rag_certidoes.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from django.db.models import Q
+        from processes.models import RAGExample
+        from projudi.certidao_sugestao import _normalizar, _tipo_por_texto
+        from projudi.peticoes_inominado import TIPOS_CERTIDAO
+
+        tipos_peticao = {'inominado', 'contrarrazoes_inominado'}
+        labels = {t['valor']: t['label'] for t in TIPOS_CERTIDAO}
+
+        busca = (self.request.GET.get('q') or '').strip()
+        origem = (self.request.GET.get('origem') or '').strip()
+        if origem not in ('peticao', 'movimentacao'):
+            origem = ''
+
+        qs = (
+            RAGExample.objects
+            .select_related('process')
+            .prefetch_related('suggested_templates')
+            .filter(active=True)
+        )
+        if busca:
+            qs = qs.filter(
+                Q(process__number__icontains=busca)
+                | Q(despacho_ato__icontains=busca)
+                | Q(despacho_observacao__icontains=busca)
+            )
+
+        registros = []
+        contagem = {'peticao': 0, 'movimentacao': 0}
+        for rag in qs.order_by('-created_at'):
+            templates = [
+                t.name for t in rag.suggested_templates.all()
+                if t.template_type == 'certidao'
+            ]
+            tipo = rag.tipo_certidao or ''
+            if not tipo:
+                tipo = _tipo_por_texto(
+                    f'{rag.despacho_ato or ""} '
+                    f'{rag.despacho_observacao or ""}'
+                )
+            if not tipo and not templates:
+                continue
+            if tipo in tipos_peticao:
+                origem_rag = 'peticao'
+            elif tipo:
+                origem_rag = 'movimentacao'
+            else:
+                nomes = _normalizar(' '.join(templates))
+                origem_rag = (
+                    'peticao'
+                    if ('RECURSO INOMINADO' in nomes
+                        or 'CONTRARRAZOES' in nomes)
+                    else 'movimentacao'
+                )
+
+            rag.origem_certidao = origem_rag
+            rag.origem_certidao_label = (
+                'Petições' if origem_rag == 'peticao' else 'Movimentações'
+            )
+            rag.tipo_certidao_label = labels.get(
+                tipo, templates[0] if templates else 'Sem certidão')
+            rag.templates_nomes = templates
+            contagem[origem_rag] += 1
+            if origem and origem_rag != origem:
+                continue
+            registros.append(rag)
+
+        context.update({
+            'registros': registros,
+            'busca': busca,
+            'origem_filtro': origem,
+            'total': contagem['peticao'] + contagem['movimentacao'],
+            'total_peticoes': contagem['peticao'],
+            'total_movimentacoes': contagem['movimentacao'],
+            'is_staff': self.request.user.is_staff,
+        })
+        return context
+
+
 class CertidaoDetailView(LoginRequiredMixin, DetailView):
     model = PrazoDjenRecord
     template_name = 'projudi/certidao_detail.html'

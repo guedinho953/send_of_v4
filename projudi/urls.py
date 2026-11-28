@@ -9,6 +9,7 @@ from . import decurso_views
 from . import impugnacao_embargos_views
 from . import juntar_views
 from . import peticoes_views
+from . import certidao_modelo_views
 
 app_name = 'projudi'
 
@@ -114,6 +115,41 @@ urlpatterns = [
         'certidoes/movimentacoes/sugerir/',
         certidao_views.CertidaoSugestaoMovimentacaoView.as_view(),
         name='certidao_sugestao_movimentacao',
+    ),
+    path(
+        'certidoes/modelos/',
+        certidao_modelo_views.CertidaoModeloListView.as_view(),
+        name='certidao_modelos',
+    ),
+    path(
+        'certidoes/modelos/novo/',
+        certidao_modelo_views.CertidaoModeloCreateView.as_view(),
+        name='certidao_modelo_novo',
+    ),
+    path(
+        'certidoes/modelos/<int:pk>/editar/',
+        certidao_modelo_views.CertidaoModeloUpdateView.as_view(),
+        name='certidao_modelo_editar',
+    ),
+    path(
+        'certidoes/modelos/<int:pk>/preview/',
+        certidao_modelo_views.CertidaoModeloPreviewView.as_view(),
+        name='certidao_modelo_preview',
+    ),
+    path(
+        'certidoes/modelos/<int:pk>/duplicar/',
+        certidao_modelo_views.CertidaoModeloDuplicarView.as_view(),
+        name='certidao_modelo_duplicar',
+    ),
+    path(
+        'certidoes/modelos/<int:pk>/toggle/',
+        certidao_modelo_views.CertidaoModeloToggleView.as_view(),
+        name='certidao_modelo_toggle',
+    ),
+    path(
+        'certidoes/rags/',
+        certidao_views.RagCertidaoListView.as_view(),
+        name='rag_certidoes',
     ),
     path('certidoes/<int:pk>/', certidao_views.CertidaoDetailView.as_view(), name='certidao_detail'),
     path(

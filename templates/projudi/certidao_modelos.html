@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}Modelos de Certidões — Send of v4{% endblock %}
+
+{% block extra_css %}
+<style>
+    .modelo-card { background: #fff; border-radius: 8px; padding: 14px 16px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.06); border-left: 4px solid #0891b2; }
+    .modelo-card.inativo { border-left-color: #9ca3af; opacity: .78; }
+    .modelo-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+    .modelo-nome { font-size: 15px; font-weight: 600; color: #1e3a5f; }
+    .modelo-desc { font-size: 12px; color: #6b7280; margin-top: 4px; }
+    .modelo-meta { font-size: 11px; color: #9ca3af; margin-top: 6px; }
+    .modelo-actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+    .tag-status { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; white-space: nowrap; }
+    .tag-ativo { background: #d1fae5; color: #065f46; }
+    .tag-inativo { background: #f3f4f6; color: #6b7280; }
+    .btn-sm { padding: 5px 12px; font-size: 12px; border-radius: 5px; }
+    .btn-outline { background: transparent; border: 1px solid #d1d5db; color: #374151; }
+    .btn-outline:hover { background: #f3f4f6; }
+    .empty-state { text-align: center; padding: 40px 20px; color: #6b7280; background: #fff; border-radius: 8px; }
+    .rag-chip { display: inline-block; background: #ede9fe; color: #5b21b6; border-radius: 10px; padding: 2px 8px; font-size: 10px; margin-right: 4px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:16px;">
+    <div>
+        <h1 class="section-title" style="font-size:22px; margin:0;">🧩 Modelos de Certidões</h1>
+        <p style="font-size:13px; color:#6b7280; margin:4px 0 0;">
+            Cadastro dos modelos HTML usados pelas certidões e pelas RAGs.
+        </p>
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <a href="{% url 'projudi:certidao_dashboard' %}" class="btn btn-outline">← Certidões</a>
+        <a href="{% url 'projudi:certidao_modelo_novo' %}" class="btn" style="background:#0891b2; color:white;">＋ Novo modelo</a>
+    </div>
+</div>
+
+<div style="display:flex; gap:16px; margin-bottom:16px; flex-wrap:wrap;">
+    <div style="background:#fff; border-radius:8px; padding:12px 18px; box-shadow:0 1px 3px rgba(0,0,0,.06);">
+        <strong style="font-size:22px; color:#1e3a5f;">{{ total }}</strong>
+        <span style="font-size:12px; color:#6b7280;"> modelo(s)</span>
+    </div>
+    <div style="background:#fff; border-radius:8px; padding:12px 18px; box-shadow:0 1px 3px rgba(0,0,0,.06);">
+        <strong style="font-size:22px; color:#059669;">{{ ativos }}</strong>
+        <span style="font-size:12px; color:#6b7280;"> ativo(s)</span>
+    </div>
+</div>
+
+<div style="background:#eff6ff; border-left:4px solid #2563eb; border-radius:6px; padding:10px 12px; margin-bottom:16px; font-size:12px; color:#1e40af;">
+    O modelo criado aqui fica disponível como <strong>template_type='certidao'</strong>.
+    Para aparecer em <strong>Gerar certidão via RAG</strong>, vincule-o a uma RAG em
+    <strong>suggested_templates</strong>.
+</div>
+
+{% if modelos %}
+    {% for m in modelos %}
+    <div class="modelo-card {% if not m.active %}inativo{% endif %}">
+        <div class="modelo-header">
+            <div>
+                <div class="modelo-nome">{{ m.name }}</div>
+                {% if m.description %}
+                <div class="modelo-desc">{{ m.description|truncatechars:220 }}</div>
+                {% endif %}
+                <div class="modelo-meta">
+                    {% if m.rag_examples.all %}
+                    RAGs:
+                    {% for rag in m.rag_examples.all|slice:":5" %}
+                    <span class="rag-chip">#{{ rag.id }} {{ rag.despacho_ato|truncatechars:35 }}</span>
+                    {% endfor %}
+                    {% else %}
+                    Nenhuma RAG vinculada.
+                    {% endif %}
+                    | Atualizado em {{ m.updated_at|date:"d/m/Y H:i" }}
+                </div>
+            </div>
+            <span class="tag-status {% if m.active %}tag-ativo{% else %}tag-inativo{% endif %}">
+                {% if m.active %}Ativo{% else %}Inativo{% endif %}
+            </span>
+        </div>
+        <div class="modelo-actions">
+            <a href="{% url 'projudi:certidao_modelo_editar' m.pk %}" class="btn btn-sm btn-outline">✏️ Editar</a>
+            <a href="{% url 'projudi:certidao_modelo_preview' m.pk %}" class="btn btn-sm btn-outline">👁 Prévia</a>
+            <form method="post" action="{% url 'projudi:certidao_modelo_duplicar' m.pk %}" style="display:inline;"
+                  onsubmit="return confirm('Criar uma cópia inativa deste modelo?');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-outline">📑 Duplicar</button>
+            </form>
+            <form method="post" action="{% url 'projudi:certidao_modelo_toggle' m.pk %}" style="display:inline;"
+                  onsubmit="return confirm('Alterar o status ativo/inativo deste modelo?');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-outline">
+                    {% if m.active %}🚫 Desativar{% else %}✅ Ativar{% endif %}
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+<div class="empty-state">
+    📭 Nenhum modelo de certidão cadastrado.
+    <br><br>
+    <a href="{% url 'projudi:certidao_modelo_novo' %}" class="btn" style="background:#0891b2; color:white;">＋ Criar o primeiro modelo</a>
+</div>
+{% endif %}
+{% endblock %}
