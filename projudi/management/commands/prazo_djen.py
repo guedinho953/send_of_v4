@@ -679,7 +679,7 @@ class Command(BaseCommand):
             res, protocolo, info)
 
         pagina = f"""<!doctype html>
-<html lang="pt-BR"><head><meta charset="utf-8">
+<html lang="pt-BR"><head><meta charset="iso-8859-1">
 <title>Preview certidão — {ctx['processo']}</title>
 <style>body{{background:#eee;padding:20px;}}
 .folha{{background:#fff;padding:40px;max-width:850px;margin:0 auto;
@@ -691,7 +691,8 @@ border:1px solid #f59e0b;font-family:Arial,sans-serif;font-size:13px;}}
 Template: {nome_template}. {cabecalho}</div>
 <div class="folha">{html}</div>
 </body></html>"""
-        saida.write_text(pagina, encoding='utf-8')
+        from projudi.arquivo_texto import escrever_certidao
+        escrever_certidao(saida, pagina)
 
         self.stdout.write('')
         self.stdout.write(self.style.SUCCESS(f'Preview: {saida}'))

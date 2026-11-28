@@ -40,11 +40,13 @@ DETALHES_DECURSO = '''<div style="font-size:10pt; font-family:'Courier New',mono
       <td>-</td>
       <td>{{ processo }}</td>
     </tr>
+    {% if parte %}
     <tr>
       <td><strong>PARTE</strong></td>
       <td>-</td>
       <td>{{ parte }}</td>
     </tr>
+    {% endif %}
     <tr>
       <td><strong>INTIMAÇÃO</strong></td>
       <td>-</td>

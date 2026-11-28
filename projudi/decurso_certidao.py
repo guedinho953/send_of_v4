@@ -126,7 +126,7 @@ def gerar_preview(resultado, servidor, servidor_cargo, saida=None):
     caminho.parent.mkdir(parents=True, exist_ok=True)
 
     pagina = f"""<!doctype html>
-<html lang="pt-BR"><head><meta charset="utf-8">
+<html lang="pt-BR"><head><meta charset="iso-8859-1">
 <title>Preview certidão — {resultado['processo']}</title>
 <style>
 body{{background:#eee;padding:20px;}}
@@ -140,7 +140,8 @@ font-size:13px;}}
 Template: {NOME_TEMPLATE}. {texto_certidao(resultado)}</div>
 <div class="folha">{html_certidao}</div>
 </body></html>"""
-    caminho.write_text(pagina, encoding='utf-8')
+    from projudi.arquivo_texto import escrever_certidao
+    escrever_certidao(caminho, pagina)
     return html_certidao, str(caminho)
 
 

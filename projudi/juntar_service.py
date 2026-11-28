@@ -34,7 +34,8 @@ def _html_certidao(registro) -> str:
     pasta_var = (Path(settings.BASE_DIR) / 'var').resolve()
     if pasta_var not in resolvido.parents:
         return ''
-    html = resolvido.read_text(encoding='utf-8')
+    from .arquivo_texto import ler_certidao
+    html = ler_certidao(resolvido)
     soup = BeautifulSoup(html, 'html.parser')
     folha = soup.find('div', class_='folha')
     if folha:

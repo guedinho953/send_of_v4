@@ -1043,7 +1043,15 @@ class CertidaoPreviewView(LoginRequiredMixin, View):
             raise Http404(
                 'Preview fora da pasta var/ ou arquivo inexistente.')
 
+        from .arquivo_texto import ler_certidao
+        html = ler_certidao(caminho)
+        # O arquivo em disco é Latin-1; esta resposta é servida em UTF-8.
+        html = html.replace(
+            'charset="iso-8859-1"', 'charset="utf-8"'
+        ).replace(
+            "charset='iso-8859-1'", "charset='utf-8'"
+        )
         return HttpResponse(
-            caminho.read_text(encoding='utf-8'),
+            html,
             content_type='text/html; charset=utf-8',
         )
