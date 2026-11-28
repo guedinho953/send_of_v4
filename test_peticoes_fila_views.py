@@ -350,7 +350,7 @@ class PeticaoFilaViewsTest(TestCase):
             'validação do documento: abc123.'
         )
         limpo = limpar_texto_despacho(texto)
-        self.assertTrue(limpo.startswith('Existindo comando judicial'))
+        self.assertTrue(limpo.startswith('DESPACHO Existindo comando judicial'))
         self.assertNotIn('PODER JUDICIÁRIO', limpo)
         self.assertNotIn('MARTINHO', limpo)
         self.assertNotIn('Documento Assinado', limpo)

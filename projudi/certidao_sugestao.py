@@ -58,7 +58,9 @@ def limpar_texto_despacho(texto):
         re.I,
     )
     if inicio:
-        texto = texto[inicio.end():]
+        # Mantém o título do ato (DESPACHO/DECISÃO/SENTENÇA), que ajuda a
+        # identificar o tipo na RAG; remove apenas o cabeçalho do tribunal.
+        texto = texto[inicio.start():]
 
     # Corta a assinatura e os dados de validação.
     assinatura = re.search(
