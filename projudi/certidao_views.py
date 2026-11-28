@@ -343,10 +343,15 @@ class RagCertidaoCreateView(LoginRequiredMixin, View):
     template_name = 'projudi/certidao_rag_form.html'
 
     def _contexto(self, **extra):
+        from processes.models import DocumentTemplate
         from projudi.peticoes_inominado import TIPOS_CERTIDAO
 
         context = {
             'tipos_certidao': TIPOS_CERTIDAO,
+            'modelos_base': DocumentTemplate.objects.filter(
+                template_type='certidao', active=True,
+            ).order_by('name'),
+            'modelo_base': '',
             'processo': '',
             'processo_url': '',
             'evento_despacho': '',
@@ -370,6 +375,19 @@ class RagCertidaoCreateView(LoginRequiredMixin, View):
         return context
 
     def get(self, request):
+        from processes.models import DocumentTemplate
+
+        modelo_base = (request.GET.get('modelo_base') or '').strip()
+        texto_certidao = (
+            request.GET.get('texto_certidao') or '').strip()
+        nome_modelo = ''
+        if modelo_base.isdigit():
+            base = DocumentTemplate.objects.filter(
+                pk=int(modelo_base), template_type='certidao', active=True,
+            ).first()
+            if base:
+                texto_certidao = base.html_template
+                nome_modelo = f'{base.name} (cópia)'
         return render(
             request,
             self.template_name,
@@ -382,6 +400,9 @@ class RagCertidaoCreateView(LoginRequiredMixin, View):
                     request.GET.get('texto_despacho') or '').strip(),
                 tipo_certidao=(
                     request.GET.get('tipo_certidao') or '').strip(),
+                texto_certidao=texto_certidao,
+                nome_modelo=nome_modelo,
+                modelo_base=modelo_base,
             ),
         )
 

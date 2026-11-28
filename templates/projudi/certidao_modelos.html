@@ -81,6 +81,7 @@
         <div class="modelo-actions">
             <a href="{% url 'projudi:certidao_modelo_editar' m.pk %}" class="btn btn-sm btn-outline">✏️ Editar</a>
             <a href="{% url 'projudi:certidao_modelo_preview' m.pk %}" class="btn btn-sm btn-outline">👁 Prévia</a>
+            <a href="{% url 'projudi:rag_certidao_nova' %}?modelo_base={{ m.pk }}" class="btn btn-sm btn-outline">🧠 Usar como base para RAG</a>
             <form method="post" action="{% url 'projudi:certidao_modelo_duplicar' m.pk %}" style="display:inline;"
                   onsubmit="return confirm('Criar uma cópia inativa deste modelo?');">
                 {% csrf_token %}

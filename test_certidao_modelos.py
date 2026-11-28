@@ -66,6 +66,14 @@ class CertidaoModelosTest(TestCase):
         self.assertContains(resposta, 'Nova RAG de Certidão')
         self.assertContains(resposta, 'Texto da certidão')
 
+    def test_rag_carrega_texto_de_modelo_existente(self):
+        resposta = self.client.get(
+            reverse('projudi:rag_certidao_nova')
+            + f'?modelo_base={self.modelo.pk}')
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'Certifico {{ processo }}.')
+        self.assertContains(resposta, 'Certidão de Teste (cópia)')
+
     @patch('projudi.certidao_views._texto_do_evento')
     def test_cria_rag_por_processo_e_evento(self, texto_evento):
         from datetime import date
