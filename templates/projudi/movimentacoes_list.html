@@ -229,6 +229,15 @@
 
                                 <div class="params-grid">
                                     <div class="campo">
+                                        <label>Depois de gerar</label>
+                                        <select name="proximo">
+                                            <option value="detalhe">Só gerar e conferir (padrão)</option>
+                                            <option value="juntar">Gerar e abrir Juntar/Intimar</option>
+                                        </select>
+                                        <small>A juntada só ocorre na tela seguinte,
+                                            com confirmação.</small>
+                                    </div>
+                                    <div class="campo">
                                         <label>Assinatura da certidão</label>
                                         <select name="assinante" class="assinante-select">
                                             {% for a in assinantes %}

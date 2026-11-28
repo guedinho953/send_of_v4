@@ -327,6 +327,9 @@ class CertidaoPeticaoFilaGerarView(LoginRequiredMixin, View):
                 f'Certidão gerada e registrada em '
                 f'{self.origem_label} (#{registro.id}).',
             )
+            if request.POST.get('proximo') == 'juntar':
+                return redirect(
+                    'projudi:certidao_juntar_intimar', pk=registro.id)
             return redirect('projudi:certidao_detail', pk=registro.id)
 
         messages.warning(
